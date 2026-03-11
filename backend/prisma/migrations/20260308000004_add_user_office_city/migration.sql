@@ -1,0 +1,2 @@
+ALTER TABLE "User" ADD COLUMN "office" TEXT;
+ALTER TABLE "User" ADD COLUMN "city"   TEXT;

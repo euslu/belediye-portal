@@ -1,0 +1,425 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
+
+// ─── SVG ikonlar ─────────────────────────────────────────────────────────────
+function HomeIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 3l9 6.75V21a.75.75 0 01-.75.75H15v-6h-6v6H3.75A.75.75 0 013 21V9.75z" /></svg>; }
+function TicketIcon()  { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>; }
+function TaskIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>; }
+function PersonIcon()  { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
+function GroupIcon()   { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm5-4v2m8-2v2M3 11h18" /></svg>; }
+function ProfileIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>; }
+function TagIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>; }
+function SettingsIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
+function SyncIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>; }
+function ServerIcon()   { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>; }
+function ClipboardIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>; }
+function SearchIcon()  { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>; }
+function ChartIcon()   { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>; }
+function NewTicketIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>; }
+function ListIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6m-6 4h4" /></svg>; }
+function BellIcon()    { return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>; }
+function ChevronIcon({ open }) {
+  return (
+    <svg
+      className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+      fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+// ─── Nav yapısı ───────────────────────────────────────────────────────────────
+// item.roles → sadece belirtilen roller görebilir; yoksa herkes görebilir
+// section.roles → tüm bölüm o rollere özel
+const NAV_SECTIONS = [
+  {
+    label: 'Genel',
+    items: [
+      { label: 'Anasayfa',             icon: HomeIcon,      to: '/'                                                   },
+      { label: 'Talep / Arıza Bildir', icon: NewTicketIcon, to: '/itsm/new'                                           },
+      { label: 'Onay Bekleyenler',     icon: ClipboardIcon, to: '/pending-approvals', roles: ['admin', 'manager'], approvalBadge: true },
+      { label: 'Taleplerim',           icon: ListIcon,      to: '/my-tickets'                                         },
+      { label: 'Görevlerim',           icon: TaskIcon,      to: '/my-tasks',          roles: ['admin', 'manager']     },
+    ],
+  },
+  {
+    label: 'Araçlar',
+    roles: ['admin', 'manager'],
+    items: [
+      {
+        label: 'Personel',
+        icon: PersonIcon,
+        accordion: true,
+        storageKey: 'sidebar_personel_open',
+        children: [
+          { label: 'Tüm Personel',            icon: PersonIcon, to: '/admin/users'      },
+          { label: 'Gruplar',                 icon: GroupIcon,  to: '/admin/groups'     },
+          { label: 'Personel Değişiklikleri', icon: SyncIcon,   to: '/admin/ad-changes', badge: true, adminOnly: true },
+        ],
+      },
+      { label: 'Envanter',     icon: ServerIcon,  to: '/admin/envanter' },
+      { label: 'Tüm Talepler', icon: TicketIcon,  to: '/itsm'           },
+    ],
+  },
+  {
+    label: 'Destek',
+    items: [
+      { label: 'Profil', icon: ProfileIcon, to: '/profile' },
+    ],
+  },
+];
+
+const ADMIN_ITEMS = [
+  { label: 'Birim Raporu',     icon: ChartIcon,     to: '/manager-dashboard'                 },
+  { label: 'Başvuru Konuları', icon: TagIcon,        to: '/admin/categories', adminOnly: true },
+  { label: 'Ayarlar',          icon: SettingsIcon,   to: '/admin/settings',   adminOnly: true },
+];
+
+// ─── Accordion Nav Öğesi ──────────────────────────────────────────────────────
+function AccordionNavItem({ item, adBadge = 0, userRole = 'user' }) {
+  const location = useLocation();
+  const visibleChildren = item.children.filter(c => !c.adminOnly || ['admin', 'manager'].includes(userRole));
+  const childPaths = visibleChildren.map(c => c.to);
+  const anyChildActive = childPaths.some(p => location.pathname.startsWith(p));
+
+  const [open, setOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(item.storageKey);
+      // Eğer kayıt yoksa ama aktif child varsa açık başla
+      return saved !== null ? saved === 'true' : anyChildActive;
+    } catch {
+      return anyChildActive;
+    }
+  });
+
+  const toggle = () => {
+    setOpen(v => {
+      const next = !v;
+      try { localStorage.setItem(item.storageKey, String(next)); } catch {}
+      return next;
+    });
+  };
+
+  // Aktif child varsa ama accordion kapıysa görsel olarak ana öğeyi vurgula
+  const parentActive = anyChildActive && !open;
+
+  return (
+    <div>
+      {/* Ana öğe */}
+      <button
+        onClick={toggle}
+        className={`flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium transition
+          ${open || anyChildActive
+            ? 'bg-indigo-50 text-indigo-700'
+            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}
+      >
+        <span className="shrink-0"><item.icon /></span>
+        <span className="flex-1 text-left">{item.label}</span>
+        <ChevronIcon open={open} />
+      </button>
+
+      {/* Alt menüler — animasyonlu */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out
+          ${open ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}
+      >
+        <div className="mt-0.5 ml-3 pl-4 border-l border-gray-100 space-y-0.5 py-1">
+          {visibleChildren.map(child => (
+            <NavLink
+              key={child.to}
+              to={child.to}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium transition
+                ${isActive
+                  ? 'bg-indigo-100 text-indigo-700'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`
+              }
+            >
+              <span className="shrink-0 opacity-70"><child.icon /></span>
+              <span className="flex-1">{child.label}</span>
+              {child.badge && adBadge > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none rounded-full bg-red-500 text-white min-w-[18px]">
+                  {adBadge > 99 ? '99+' : adBadge}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── UserDropdown ─────────────────────────────────────────────────────────────
+const USER_MENU_ITEMS = [
+  { label: 'Hesabım',          icon: ProfileIcon,   path: '/profile',           roles: ['admin', 'manager'] },
+  { label: 'Görevlerim',       icon: TaskIcon,      path: '/my-tasks',          roles: ['admin'] },
+  { label: 'Onay Bekleyenler', icon: ClipboardIcon, path: '/pending-approvals', roles: ['manager'] },
+];
+
+function UserDropdown({ user, logout, align = 'up' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const go = (path) => { setOpen(false); navigate(path); };
+  const initial = (user?.displayName || user?.username || '?')[0].toUpperCase();
+  const dropdownPos = align === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 right-0';
+  const visibleItems = USER_MENU_ITEMS.filter(item => item.roles.includes(user?.role));
+
+  return (
+    <div ref={ref} className="relative">
+      {align === 'up' ? (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-3 w-full rounded-xl hover:bg-gray-50 px-2 py-2 transition"
+        >
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {initial}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{user?.displayName || user?.username}</p>
+            <p className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">
+              {user?.role === 'admin' ? 'Yönetici' : user?.role === 'manager' ? 'Müdür' : 'Kullanıcı'}
+            </p>
+          </div>
+          <svg className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 transition px-2 py-1.5 rounded-xl hover:bg-indigo-50"
+        >
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {initial}
+          </div>
+          <span className="font-medium">{user?.displayName?.split(' ')[0] || user?.username}</span>
+          <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+
+      {open && (
+        <div className={`absolute ${dropdownPos} w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 py-1.5 overflow-hidden`}>
+          {visibleItems.map(item => (
+            <button key={item.path} onClick={() => go(item.path)}
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+              <item.icon /> {item.label}
+            </button>
+          ))}
+          {visibleItems.length > 0 && <div className="my-1 border-t border-gray-100" />}
+          <button
+            onClick={() => { setOpen(false); logout(); navigate('/login', { replace: true }); }}
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Çıkış Yap
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Ana bileşen ──────────────────────────────────────────────────────────────
+export default function Dashboard() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [search, setSearch]               = useState('');
+  const [adBadge, setAdBadge]             = useState(0);
+  const [approvalBadge, setApprovalBadge] = useState(0);
+
+  // AD değişiklik badge'i (admin için)
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    const load = () =>
+      fetch(`${API}/api/admin/ad-sync/changes/unnotified-count`, { headers: authHeaders() })
+        .then((r) => r.ok ? r.json() : { count: 0 })
+        .then((d) => setAdBadge(d.count || 0))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [user]);
+
+  // Onay bekleyen talep badge'i (admin + manager)
+  useEffect(() => {
+    if (!['admin', 'manager'].includes(user?.role)) return;
+    const load = () =>
+      fetch(`${API}/api/tickets/pending-approval/count`, { headers: authHeaders() })
+        .then((r) => r.ok ? r.json() : { count: 0 })
+        .then((d) => setApprovalBadge(d.count || 0))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 30_000); // her 30 saniye
+    return () => clearInterval(id);
+  }, [user]);
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+
+      {/* ── Sol Sidebar ───────────────────────────────────────────────────── */}
+      <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
+
+        {/* Logo */}
+        <div
+          className="flex items-center gap-3 px-4 h-16 border-b border-gray-100 cursor-pointer shrink-0"
+          onClick={() => navigate('/')}
+        >
+          <img
+            src="/mugla-logo.svg"
+            alt="Muğla Büyükşehir Belediyesi"
+            className="w-10 h-10 object-contain shrink-0"
+          />
+          <div className="leading-tight min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">Muğla</p>
+            <p className="text-[11px] text-gray-500 truncate">Uygulama Portalı</p>
+          </div>
+        </div>
+
+        {/* Navigasyon */}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
+          {NAV_SECTIONS
+            .filter(s => !s.roles || s.roles.includes(user?.role))
+            .map(section => {
+              const visibleItems = section.items.filter(
+                item => !item.roles || item.roles.includes(user?.role)
+              );
+              if (visibleItems.length === 0) return null;
+              return (
+                <div key={section.label}>
+                  <p className="px-3 mb-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                    {section.label}
+                  </p>
+                  <div className="space-y-0.5">
+                    {visibleItems.map(item =>
+                      item.accordion ? (
+                        <AccordionNavItem key={item.label} item={item} adBadge={adBadge} userRole={user?.role} />
+                      ) : (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.to === '/'}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition
+                            ${isActive
+                              ? 'bg-indigo-50 text-indigo-700'
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`
+                          }
+                        >
+                          <span className="shrink-0"><item.icon /></span>
+                          <span className="flex-1">{item.label}</span>
+                          {item.approvalBadge && approvalBadge > 0 && (
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none rounded-full bg-amber-500 text-white min-w-[18px]">
+                              {approvalBadge > 99 ? '99+' : approvalBadge}
+                            </span>
+                          )}
+                        </NavLink>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+          {/* Yönetim bölümü (admin + manager) */}
+          {['admin', 'manager'].includes(user?.role) && (
+            <div>
+              <p className="px-3 mb-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                Yönetim
+              </p>
+              <div className="space-y-0.5">
+                {ADMIN_ITEMS
+                  .filter(item => !item.adminOnly || user?.role === 'admin')
+                  .map(item => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition
+                        ${isActive
+                          ? 'bg-indigo-50 text-indigo-700'
+                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`
+                      }
+                    >
+                      <span className="shrink-0"><item.icon /></span>
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && adBadge > 0 && (
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none rounded-full bg-red-500 text-white min-w-[18px]">
+                          {adBadge > 99 ? '99+' : adBadge}
+                        </span>
+                      )}
+                      {item.approvalBadge && approvalBadge > 0 && (
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none rounded-full bg-amber-500 text-white min-w-[18px]">
+                          {approvalBadge > 99 ? '99+' : approvalBadge}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))}
+              </div>
+            </div>
+          )}
+        </nav>
+
+        {/* Alt kullanıcı */}
+        <div className="px-3 py-4 border-t border-gray-100 shrink-0">
+          <UserDropdown user={user} logout={logout} align="up" />
+        </div>
+      </aside>
+
+      {/* ── Ana içerik ────────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0">
+
+        {/* Üst bar */}
+        <header className="bg-white border-b border-gray-100 px-6 h-16 flex items-center justify-between shrink-0">
+          <div className="relative w-72">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <SearchIcon />
+            </span>
+            <input
+              type="text"
+              placeholder="Ara..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-100 rounded-xl
+                focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300
+                placeholder-gray-400 transition"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button className="relative w-9 h-9 flex items-center justify-center text-gray-400
+              hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition">
+              <BellIcon />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+            </button>
+            <div className="w-px h-6 bg-gray-100 mx-1" />
+            <UserDropdown user={user} logout={logout} align="down" />
+          </div>
+        </header>
+
+        {/* Sayfa içeriği */}
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

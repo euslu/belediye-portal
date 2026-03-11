@@ -1,0 +1,14 @@
+{
+  "name": "belediye-portal",
+  "version": "1.0.0",
+  "description": "Mugla Buyuksehir Belediyesi - Uygulama Portali",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && node server.js",
+    "migrate": "cd backend && npx prisma migrate deploy",
+    "seed": "cd backend && node ./prisma/seed.js"
+  }
+}

@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Lokasyon ─────────────────────────────────────────────────────────────────
+model Location {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  city      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users   User[]   @relation("UserLocation")
+  devices Device[]
+}
+
+// ─── Envanter Cihazı (kişisel + ortak) ────────────────────────────────────────
+model Device {
+  id           Int          @id @default(autoincrement())
+  name         String
+  type         DeviceType
+  brand        String?
+  model        String?
+  serialNumber String?
+  ipAddress    String?
+  macAddress   String?
+  purchaseDate DateTime?
+  warrantyEnd  DateTime?
+  status       DeviceStatus @default(ACTIVE)
+  isShared     Boolean      @default(false)  // true → ortak cihaz (lokasyona bağlı)
+  locationId   Int?
+  location     Location?    @relation(fields: [locationId], references: [id])
+  assignedTo   String?      // username; null ise ortak cihaz
+  assignedUser User?        @relation("UserDevices", fields: [assignedTo], references: [username])
+  directorate  String?
+  department   String?
+  notes        String?
+  active       Boolean      @default(true)
+  lastSyncAt   DateTime?    // Son AD senkronizasyon zamanı
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  changeLogs   DeviceChangeLog[]
+}
+
+// ─── Kullanıcı ───────────────────────────────────────────────────────────────
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  displayName String
+  email       String?
+  department  String?
+  directorate String?
+  title       String?
+  office      String?  // physicalDeliveryOfficeName (ofis/lokasyon)
+  city        String?  // l (ilçe)
+  role        String   @default("user") // "admin" | "manager" | "user"
+  locationId  Int?
+  location    Location? @relation("UserLocation", fields: [locationId], references: [id])
+  createdAt   DateTime @default(now())
+
+  devices     Device[]         @relation("UserDevices")
+  tickets     Ticket[]         @relation("CreatedBy")
+  assigned    Ticket[]         @relation("AssignedTo")
+  groups      UserGroup[]
+  activities  TicketActivity[]
+}
+
+// ─── Grup ────────────────────────────────────────────────────────────────────
+model Group {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique
+  description String?
+  email       String?
+  department  String?
+  createdAt   DateTime    @default(now())
+
+  members         UserGroup[]
+  tickets         Ticket[]
+  subjectDefaults Subject[]  @relation("SubjectDefaultGroup")
+}
+
+// ─── Grup Üyeliği (many-to-many) ─────────────────────────────────────────────
+model UserGroup {
+  userId  Int
+  groupId Int
+  role    String @default("member") // "member" | "leader"
+
+  user    User  @relation(fields: [userId], references: [id])
+  group   Group @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+}
+
+// ─── Başvuru Tipi (1. katman: Arıza / Hizmet Talebi) ─────────────────────────
+model SubmitType {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  key         String     @unique
+  icon        String?
+  color       String?    @default("indigo")
+  description String?
+  active      Boolean    @default(true)
+  order       Int        @default(0)
+
+  categories  Category[]
+}
+
+// ─── Kategori (2. katman: kullanıcıya dostça) ────────────────────────────────
+model Category {
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  icon       String?
+  active     Boolean     @default(true)
+  typeId     Int?
+  submitType SubmitType? @relation(fields: [typeId], references: [id])
+
+  subjects   Subject[]
+  tickets    Ticket[]
+}
+
+// ─── Konu (3. katman: teknik, grup yönlendirmeli) ────────────────────────────
+model Subject {
+  id             Int      @id @default(autoincrement())
+  name           String
+  categoryId     Int
+  category       Category @relation(fields: [categoryId], references: [id])
+  defaultGroupId Int?
+  defaultGroup   Group?   @relation("SubjectDefaultGroup", fields: [defaultGroupId], references: [id])
+  active         Boolean  @default(true)
+
+  tickets Ticket[]
+}
+
+// ─── Destek Talebi ───────────────────────────────────────────────────────────
+model Ticket {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String
+  status      TicketStatus @default(OPEN)
+  type        TicketType   @default(INCIDENT)
+  priority    Priority     @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  closedAt    DateTime?
+
+  createdById  Int
+  createdBy    User      @relation("CreatedBy", fields: [createdById], references: [id])
+
+  assignedToId Int?
+  assignedTo   User?     @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  groupId      Int?
+  group        Group?    @relation(fields: [groupId], references: [id])
+
+  categoryId   Int?
+  category     Category? @relation(fields: [categoryId], references: [id])
+
+  subjectId    Int?
+  subject      Subject?  @relation(fields: [subjectId], references: [id])
+
+  // Onay sistemi
+  approvalStatus String?   // PENDING_APPROVAL | APPROVED | REJECTED
+  approvedBy     String?   // onaylayan/reddeden kullanıcının username'i
+  approvedAt     DateTime?
+  rejectedReason String?
+
+  comments      Comment[]
+  activities    TicketActivity[]
+  notifications NotificationQueue[]
+  attachments   Attachment[]
+}
+
+// ─── Yorum ───────────────────────────────────────────────────────────────────
+model Comment {
+  id         Int      @id @default(autoincrement())
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  ticketId   Int
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  authorId   Int
+}
+
+// ─── Aktivite / Audit Log ────────────────────────────────────────────────────
+model TicketActivity {
+  id          Int            @id @default(autoincrement())
+  ticketId    Int
+  ticket      Ticket         @relation(fields: [ticketId], references: [id])
+  userId      Int?
+  user        User?          @relation(fields: [userId], references: [id])
+  action      ActivityAction
+  description String?
+  fromValue   String?
+  toValue     String?
+  comment     String?
+  createdAt   DateTime       @default(now())
+}
+
+// ─── Bildirim Kuyruğu ────────────────────────────────────────────────────────
+model NotificationQueue {
+  id        Int      @id @default(autoincrement())
+  type      String
+  payload   Json
+  sent      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  ticketId  Int?
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
+}
+
+// ─── Dosya Ekleri ─────────────────────────────────────────────────────────────
+model Attachment {
+  id           Int      @id @default(autoincrement())
+  ticketId     Int
+  ticket       Ticket   @relation(fields: [ticketId], references: [id])
+  filename     String
+  originalName String
+  mimetype     String
+  size         Int
+  uploadedBy   String
+  createdAt    DateTime @default(now())
+}
+
+// ─── Sistem Ayarları (key-value) ──────────────────────────────────────────────
+model Setting {
+  key   String @id
+  value String
+}
+
+// ─── Cihaz Değişiklik Logu ───────────────────────────────────────────────────
+model DeviceChangeLog {
+  id         Int      @id @default(autoincrement())
+  deviceId   Int
+  device     Device   @relation(fields: [deviceId], references: [id])
+  field      String   // Değişen alan: name, ipAddress, notes, assignedTo, vb.
+  oldValue   String?
+  newValue   String?
+  changeType String   // AD_SYNC | MANUAL
+  changedBy  String?  // username
+  createdAt  DateTime @default(now())
+}
+
+// ─── AD Değişiklik Logu ───────────────────────────────────────────────────────
+model AdChangeLog {
+  id          Int      @id @default(autoincrement())
+  username    String
+  displayName String
+  changeType  String   // DEPARTMENT_CHANGE | LEFT_COMPANY | TITLE_CHANGE
+  oldValue    String?
+  newValue    String?
+  detectedAt  DateTime @default(now())
+  notified    Boolean  @default(false)
+}
+
+// ─── Kullanıcı Cihazları (eski, geriye dönük uyumluluk) ───────────────────────
+model UserDevice {
+  id           Int      @id @default(autoincrement())
+  username     String
+  deviceName   String
+  deviceType   String   @default("DIGER")
+  serialNumber String?
+  assignedAt   DateTime @default(now())
+  active       Boolean  @default(true)
+}
+
+// ─── Enum'lar ─────────────────────────────────────────────────────────────────
+enum TicketStatus {
+  OPEN
+  PENDING_APPROVAL
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketType {
+  INCIDENT
+  REQUEST
+  CHANGE
+}
+
+enum ActivityAction {
+  CREATED
+  ASSIGNED
+  REASSIGNED
+  STATUS_CHANGED
+  COMMENTED
+  PRIORITY_CHANGED
+  GROUP_CHANGED
+  APPROVED
+  REJECTED
+}
+
+enum DeviceType {
+  BILGISAYAR
+  DIZUSTU
+  IPAD_TABLET
+  IP_TELEFON
+  MONITOR
+  YAZICI
+  SWITCH
+  ACCESS_POINT
+  SUNUCU
+  UPS
+  DIGER
+}
+
+enum DeviceStatus {
+  ACTIVE
+  PASSIVE
+  BROKEN
+  TRANSFERRED
+}
