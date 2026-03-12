@@ -26,11 +26,12 @@ router.get('/categories', async (req, res) => {
 
 // ─── GET /api/tickets ─────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  const { status, priority, categoryId, createdBy, assignedTo, directorate, limit } = req.query;
+  const { status, priority, categoryId, createdBy, assignedTo, directorate, limit, source } = req.query;
 
   const where = {};
   if (status)     where.status     = status;
   if (priority)   where.priority   = priority;
+  if (source)     where.source     = source;
   if (categoryId) where.categoryId = parseInt(categoryId);
   if (directorate) where.createdBy = { directorate };
 
@@ -175,7 +176,7 @@ router.get('/:id', async (req, res) => {
 
 // ─── POST /api/tickets ────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { title, description, priority, type, categoryId, subjectId, dueDate } = req.body;
+  const { title, description, priority, type, categoryId, subjectId, dueDate, source } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({ error: 'Başlık ve açıklama zorunludur' });
@@ -237,6 +238,7 @@ router.post('/', async (req, res) => {
         groupId:       resolvedType === 'REQUEST' ? null : autoGroupId,
         status:        initialStatus,
         approvalStatus: resolvedType === 'REQUEST' ? 'PENDING_APPROVAL' : null,
+        source:        source || 'PORTAL',
         createdById:   user.id,
       },
       include: {

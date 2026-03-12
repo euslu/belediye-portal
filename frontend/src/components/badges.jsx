@@ -48,3 +48,23 @@ export function PriorityBadge({ priority }) {
 export function TypeBadge({ type }) {
   return <Badge label={TYPE_LABELS[type] || type} cls={TYPE_STYLES[type] || 'bg-gray-100 text-gray-500'} />;
 }
+
+const SOURCE_STYLES = {
+  PORTAL:    'bg-indigo-50 text-indigo-600',
+  EMAIL:     'bg-sky-50 text-sky-600',
+  PHONE:     'bg-emerald-50 text-emerald-600',
+  IN_PERSON: 'bg-amber-50 text-amber-600',
+  API:       'bg-gray-100 text-gray-600',
+};
+const SOURCE_LABELS = {
+  PORTAL:    '🌐 Portal',
+  EMAIL:     '📧 E-posta',
+  PHONE:     '📞 Telefon',
+  IN_PERSON: '👤 Yüz yüze',
+  API:       '⚡ API',
+};
+
+export function SourceBadge({ source }) {
+  if (!source) return null;
+  return <Badge label={SOURCE_LABELS[source] || source} cls={SOURCE_STYLES[source] || 'bg-gray-100 text-gray-500'} />;
+}

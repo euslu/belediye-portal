@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTicket, uploadAttachments } from '../../api/tickets';
 import { getSubmitTypes } from '../../api/settings';
+import { useAuth } from '../../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 function authFetch(path) {
@@ -176,13 +177,23 @@ function Step2CategorySelect({ submitType, onSelect, onBack }) {
 }
 
 // ─── ADIM 3: Konu & Form ──────────────────────────────────────────────────────
+const SOURCE_OPTIONS = [
+  { value: 'PORTAL',    label: '🌐 Portal (çevrimiçi)' },
+  { value: 'PHONE',     label: '📞 Telefon'            },
+  { value: 'IN_PERSON', label: '👤 Yüz yüze'          },
+  { value: 'EMAIL',     label: '📧 E-posta'            },
+  { value: 'API',       label: '⚡ API'                 },
+];
+
 function Step3Form({ submitType, category, onBack }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const c = tc(submitType.color);
+  const isPrivileged = ['admin', 'manager'].includes(user?.role);
 
   const [subjects, setSubjects]     = useState([]);
   const [selectedSubj, setSelectedSubj] = useState(null);
-  const [form, setForm]             = useState({ title: '', description: '', priority: 'MEDIUM' });
+  const [form, setForm]             = useState({ title: '', description: '', priority: 'MEDIUM', source: 'PORTAL' });
   const [files, setFiles]           = useState([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
@@ -211,6 +222,7 @@ function Step3Form({ submitType, category, onBack }) {
         type:        isRequest ? 'REQUEST' : 'INCIDENT',
         categoryId:  category.id,
         subjectId:   selectedSubj.id,
+        source:      form.source || 'PORTAL',
       });
       if (files.length > 0) await uploadAttachments(ticket.id, files).catch(() => {});
       setSubmitted({ ticket, isRequest });
@@ -371,6 +383,29 @@ function Step3Form({ submitType, category, onBack }) {
             })}
           </div>
         </div>
+
+        {/* Kaynak — sadece admin/manager görebilir */}
+        {isPrivileged && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Başvuru Kaynağı</h3>
+            <p className="text-xs text-gray-400 mb-3">Başvuru telefon, yüz yüze vb. kanaldan geldiyse seçin.</p>
+            <div className="flex flex-wrap gap-2">
+              {SOURCE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('source', opt.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm border-2 transition
+                    ${form.source === opt.value
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Ekler */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">

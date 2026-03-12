@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTickets } from '../../api/tickets';
-import { StatusBadge, PriorityBadge, TypeBadge } from '../../components/badges';
+import { StatusBadge, PriorityBadge, TypeBadge, SourceBadge } from '../../components/badges';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
 const STATUSES   = ['', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
 const PRIORITIES = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const SOURCES    = ['', 'PORTAL', 'EMAIL', 'PHONE', 'IN_PERSON', 'API'];
 const STATUS_LABELS   = { '': 'Tüm Durumlar', OPEN: 'Açık', ASSIGNED: 'Atandı', IN_PROGRESS: 'İşlemde', RESOLVED: 'Çözüldü', CLOSED: 'Kapalı' };
 const PRIORITY_LABELS = { '': 'Tüm Öncelikler', LOW: 'Düşük', MEDIUM: 'Orta', HIGH: 'Yüksek', CRITICAL: 'Kritik' };
+const SOURCE_LABELS   = { '': 'Tüm Kaynaklar', PORTAL: 'Portal', EMAIL: 'E-posta', PHONE: 'Telefon', IN_PERSON: 'Yüz yüze', API: 'API' };
 
 function formatDate(str) {
   if (!str) return '—';
@@ -44,7 +46,7 @@ export default function TicketList() {
   const [tickets, setTickets]           = useState([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState('');
-  const [filters, setFilters]           = useState({ status: '', priority: '', directorate: '' });
+  const [filters, setFilters]           = useState({ status: '', priority: '', directorate: '', source: '' });
   const [directorates, setDirectorates] = useState([]);
 
   // Daire başkanlıklarını çek (filtre dropdown için)
@@ -107,6 +109,13 @@ export default function TicketList() {
             <option key={d.name} value={d.name}>{d.name}</option>
           ))}
         </select>
+        <select
+          value={filters.source}
+          onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+        >
+          {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABELS[s]}</option>)}
+        </select>
       </div>
 
       {/* SLA açıklaması */}
@@ -133,7 +142,7 @@ export default function TicketList() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['#', 'Başlık', 'Daire', 'Lokasyon', 'Öncelik', 'Durum', 'Son Tarih'].map((h) => (
+                {['#', 'Başlık', 'Daire', 'Lokasyon', 'Kaynak', 'Öncelik', 'Durum', 'Son Tarih'].map((h) => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -169,6 +178,7 @@ export default function TicketList() {
                         <span className="text-xs text-gray-500 truncate block">{location}</span>
                       ) : <span className="text-gray-300">—</span>}
                     </td>
+                    <td className="px-4 py-3"><SourceBadge source={t.source} /></td>
                     <td className="px-4 py-3"><PriorityBadge priority={t.priority} /></td>
                     <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                     <td className="px-4 py-3">

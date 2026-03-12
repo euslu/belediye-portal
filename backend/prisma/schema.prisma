@@ -183,6 +183,9 @@ model Ticket {
   subjectId    Int?
   subject      Subject?  @relation(fields: [subjectId], references: [id])
 
+  // Talep kaynağı
+  source       TicketSource @default(PORTAL)
+
   // Onay sistemi
   approvalStatus String?   // PENDING_APPROVAL | APPROVED | REJECTED
   approvedBy     String?   // onaylayan/reddeden kullanıcının username'i
@@ -351,6 +354,14 @@ model UserDevice {
 }
 
 // ─── Enum'lar ─────────────────────────────────────────────────────────────────
+enum TicketSource {
+  PORTAL
+  EMAIL
+  PHONE
+  IN_PERSON
+  API
+}
+
 enum TicketStatus {
   OPEN
   PENDING_APPROVAL

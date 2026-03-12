@@ -333,6 +333,30 @@ export default function Settings() {
       </Field>
 
       <div className="border-t border-gray-100 my-5" />
+      <h3 className="text-base font-semibold text-gray-800 mb-1">IMAP — E-posta ile Ticket Oluşturma</h3>
+      <p className="text-xs text-gray-400 mb-4">Belirtilen posta kutusunu 5 dakikada bir tarar, okunmamış e-postalardan otomatik ticket oluşturur.</p>
+      <Field label="IMAP Aktif">
+        <Toggle value={get('imap_enabled', 'false') === 'true'} onChange={v => set('imap_enabled', v ? 'true' : 'false')} label={get('imap_enabled', 'false') === 'true' ? 'Aktif' : 'Pasif'} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="IMAP Host">
+          <Input value={get('imap_host')} onChange={v => set('imap_host', v)} placeholder="imap.mugla.bel.tr" />
+        </Field>
+        <Field label="Port">
+          <Input value={get('imap_port', '993')} onChange={v => set('imap_port', v)} type="number" placeholder="993" />
+        </Field>
+      </div>
+      <Field label="Kullanıcı Adı (e-posta)">
+        <Input value={get('imap_user')} onChange={v => set('imap_user', v)} placeholder="destek@mugla.bel.tr" />
+      </Field>
+      <Field label="Şifre">
+        <PasswordInput value={get('imap_pass')} onChange={v => set('imap_pass', v)} placeholder="••••••••" />
+      </Field>
+      <Field label="Klasör">
+        <Input value={get('imap_mailbox', 'INBOX')} onChange={v => set('imap_mailbox', v)} placeholder="INBOX" />
+      </Field>
+
+      <div className="border-t border-gray-100 my-5" />
       <h4 className="text-sm font-semibold text-gray-700 mb-3">Test Maili Gönder</h4>
       <div className="flex gap-2">
         <input value={testEmail} onChange={e => setTestEmail(e.target.value)}

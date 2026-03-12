@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getTicket, updateTicket, addComment, getAttachments, uploadAttachments, getDownloadUrl } from '../../api/tickets';
 import { getGroups, getGroupMembers, assignTicket, searchUsers } from '../../api/groups';
 import { useAuth } from '../../context/AuthContext';
-import { StatusBadge, PriorityBadge, TypeBadge } from '../../components/badges';
+import { StatusBadge, PriorityBadge, TypeBadge, SourceBadge } from '../../components/badges';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 function authPost(path, body) {
@@ -781,6 +781,7 @@ export default function TicketDetail() {
             <h2 className="text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">Talep Bilgileri</h2>
             {[
               { label: 'Tip',         value: <TypeBadge type={ticket.type} /> },
+              { label: 'Kaynak',      value: <SourceBadge source={ticket.source} /> },
               { label: 'Öncelik',     value: <PriorityBadge priority={ticket.priority} /> },
               { label: 'Durum',       value: <StatusBadge status={ticket.status} /> },
               { label: 'Başvuru Konusu', value: ticket.category?.name || '—' },
