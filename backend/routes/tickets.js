@@ -492,6 +492,80 @@ router.post('/:id/reject', async (req, res) => {
   }
 });
 
+// ─── POST /api/tickets/:id/transfer ──────────────────────────────────────────
+router.post('/:id/transfer', async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  const { targetDeptId, targetGroupId, note } = req.body;
+  if (!targetDeptId) return res.status(400).json({ error: 'Hedef daire zorunludur' });
+
+  try {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { department: true, group: true },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+
+    const actor = await prisma.user.upsert({
+      where:  { username: req.user.username },
+      update: {},
+      create: { username: req.user.username, displayName: req.user.displayName, role: req.user.role },
+    });
+
+    const targetDept = await prisma.department.findUnique({ where: { id: parseInt(targetDeptId) } });
+    if (!targetDept) return res.status(404).json({ error: 'Hedef daire bulunamadı' });
+
+    // Transfer log yaz
+    if (ticket.departmentId) {
+      await prisma.ticketTransferLog.create({
+        data: {
+          ticketId:   id,
+          fromDeptId: ticket.departmentId,
+          toDeptId:   parseInt(targetDeptId),
+          fromGroupId: ticket.groupId  || null,
+          toGroupId:   targetGroupId   ? parseInt(targetGroupId) : null,
+          note:        note?.trim()    || null,
+          transferBy:  req.user.username,
+        },
+      });
+    }
+
+    // Ticket güncelle
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: {
+        departmentId: parseInt(targetDeptId),
+        targetDeptId: parseInt(targetDeptId),
+        transferNote: note?.trim() || null,
+        transferAt:   new Date(),
+        transferBy:   req.user.username,
+        ...(targetGroupId ? { groupId: parseInt(targetGroupId), status: 'ASSIGNED' } : {}),
+      },
+      include: {
+        department: true,
+        group:      { select: { id: true, name: true } },
+        createdBy:  { select: { id: true, displayName: true, username: true } },
+      },
+    });
+
+    await logActivity({
+      ticketId:    id,
+      userId:      actor.id,
+      action:      'GROUP_CHANGED',
+      fromValue:   ticket.department?.name || 'Belirsiz',
+      toValue:     targetDept.name,
+      description: `${actor.displayName} tarafından "${targetDept.name}" dairesine aktarıldı${note ? ': ' + note.trim() : ''}`,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Aktarma yapılamadı' });
+  }
+});
+
 // ─── DELETE /api/tickets/:id ──────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   const id = parseInt(req.params.id);

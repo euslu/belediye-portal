@@ -467,8 +467,17 @@ export default function TicketDetail() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSaving, setRejectSaving] = useState(false);
 
-  const canAssign  = ['admin', 'manager'].includes(user?.role);
-  const canApprove = ['admin', 'manager'].includes(user?.role);
+  // Transfer state
+  const [transferModal, setTransferModal]   = useState(false);
+  const [transferDepts, setTransferDepts]   = useState([]);
+  const [transferGroups, setTransferGroups] = useState([]);
+  const [transferForm, setTransferForm]     = useState({ targetDeptId: '', targetGroupId: '', note: '' });
+  const [transferring, setTransferring]     = useState(false);
+  const [transferError, setTransferError]   = useState('');
+
+  const canAssign   = ['admin', 'manager'].includes(user?.role);
+  const canApprove  = ['admin', 'manager'].includes(user?.role);
+  const canTransfer = ['admin', 'manager'].includes(user?.role);
 
   useEffect(() => {
     getTicket(id)
@@ -497,6 +506,42 @@ export default function TicketDetail() {
       alert(err.message);
     } finally {
       setApproving(false);
+    }
+  }
+
+  async function openTransferModal() {
+    setTransferForm({ targetDeptId: '', targetGroupId: '', note: '' });
+    setTransferError('');
+    // Daireleri yükle
+    const r = await fetch(`${API}/api/departments`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    if (r.ok) setTransferDepts(await r.json());
+    // Grupları yükle
+    const gr = await fetch(`${API}/api/groups`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    if (gr.ok) setTransferGroups(await gr.json());
+    setTransferModal(true);
+  }
+
+  async function handleTransfer(e) {
+    e.preventDefault();
+    if (!transferForm.targetDeptId) { setTransferError('Hedef daire seçiniz'); return; }
+    setTransferring(true);
+    setTransferError('');
+    try {
+      await authPost(`/api/tickets/${id}/transfer`, {
+        targetDeptId:  parseInt(transferForm.targetDeptId),
+        targetGroupId: transferForm.targetGroupId ? parseInt(transferForm.targetGroupId) : undefined,
+        note:          transferForm.note.trim() || undefined,
+      });
+      setTransferModal(false);
+      getTicket(id).then(setTicket).catch(() => {});
+    } catch (err) {
+      setTransferError(err.message);
+    } finally {
+      setTransferring(false);
     }
   }
 
@@ -592,6 +637,71 @@ export default function TicketDetail() {
         </div>
       )}
 
+      {/* Transfer Modal */}
+      {transferModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Daireye Aktar</h3>
+            <form onSubmit={handleTransfer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Hedef Daire <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={transferForm.targetDeptId}
+                  onChange={e => setTransferForm(p => ({ ...p, targetDeptId: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Daire seçin</option>
+                  {transferDepts.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Hedef Grup (opsiyonel)
+                </label>
+                <select
+                  value={transferForm.targetGroupId}
+                  onChange={e => setTransferForm(p => ({ ...p, targetGroupId: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Grup seçin (opsiyonel)</option>
+                  {transferGroups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Transfer Notu</label>
+                <textarea
+                  rows={3}
+                  value={transferForm.note}
+                  onChange={e => setTransferForm(p => ({ ...p, note: e.target.value }))}
+                  placeholder="Transfer gerekçesini açıklayın..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 resize-none"
+                />
+              </div>
+              {transferError && (
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{transferError}</p>
+              )}
+              <div className="flex gap-2 justify-end pt-1">
+                <button type="button"
+                  onClick={() => setTransferModal(false)}
+                  className="text-sm text-gray-500 border border-gray-200 rounded-lg px-4 py-2 hover:bg-gray-50 transition">
+                  İptal
+                </button>
+                <button type="submit" disabled={transferring || !transferForm.targetDeptId}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+                  {transferring ? 'Aktarılıyor...' : 'Aktar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Red Modal */}
       {rejectModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -643,19 +753,25 @@ export default function TicketDetail() {
           </div>
         </div>
 
-        {nextStatuses.length > 0 && (
-          <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-            {nextStatuses.map((s) => (
-              <button
-                key={s.value}
-                onClick={() => handleStatusChange(s.value)}
-                className="text-sm font-semibold px-4 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition"
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+          {nextStatuses.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => handleStatusChange(s.value)}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition"
+            >
+              {s.label}
+            </button>
+          ))}
+          {canTransfer && !['CLOSED', 'REJECTED'].includes(ticket.status) && (
+            <button
+              onClick={openTransferModal}
+              className="text-sm font-semibold px-4 py-2 rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 transition"
+            >
+              Daireye Aktar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-5">

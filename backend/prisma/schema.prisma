@@ -111,14 +111,32 @@ model SubmitType {
   categories  Category[]
 }
 
+// ─── Daire / Birim ────────────────────────────────────────────────────────────
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  shortCode   String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  managerId   String?  // AD username
+  createdAt   DateTime @default(now())
+
+  categories    Category[]
+  tickets       Ticket[]
+  transfersFrom TicketTransferLog[] @relation("TransferFrom")
+  transfersTo   TicketTransferLog[] @relation("TransferTo")
+}
+
 // ─── Kategori (2. katman: kullanıcıya dostça) ────────────────────────────────
 model Category {
-  id         Int         @id @default(autoincrement())
-  name       String      @unique
-  icon       String?
-  active     Boolean     @default(true)
-  typeId     Int?
-  submitType SubmitType? @relation(fields: [typeId], references: [id])
+  id           Int          @id @default(autoincrement())
+  name         String       @unique
+  icon         String?
+  active       Boolean      @default(true)
+  typeId       Int?
+  submitType   SubmitType?  @relation(fields: [typeId], references: [id])
+  departmentId Int?
+  department   Department?  @relation(fields: [departmentId], references: [id])
 
   subjects   Subject[]
   tickets    Ticket[]
@@ -171,10 +189,35 @@ model Ticket {
   approvedAt     DateTime?
   rejectedReason String?
 
+  // Çok birimli yapı
+  departmentId Int?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  targetDeptId Int?        // cross-transfer hedef daire
+  transferNote String?
+  transferAt   DateTime?
+  transferBy   String?
+
   comments      Comment[]
   activities    TicketActivity[]
   notifications NotificationQueue[]
   attachments   Attachment[]
+  transferLogs  TicketTransferLog[]
+}
+
+// ─── Daire Aktarma Logu ───────────────────────────────────────────────────────
+model TicketTransferLog {
+  id          Int        @id @default(autoincrement())
+  ticketId    Int
+  ticket      Ticket     @relation(fields: [ticketId], references: [id])
+  fromDeptId  Int
+  fromDept    Department @relation("TransferFrom", fields: [fromDeptId], references: [id])
+  toDeptId    Int
+  toDept      Department @relation("TransferTo", fields: [toDeptId], references: [id])
+  fromGroupId Int?
+  toGroupId   Int?
+  note        String?
+  transferBy  String
+  transferAt  DateTime   @default(now())
 }
 
 // ─── Yorum ───────────────────────────────────────────────────────────────────
@@ -231,6 +274,44 @@ model Attachment {
 model Setting {
   key   String @id
   value String
+}
+
+// ─── Kapsamlı Sistem Ayarları (kategorili) ───────────────────────────────────
+model SystemSetting {
+  id        Int      @id @default(autoincrement())
+  category  String   // AD | SMTP | PDKS | FLEXCITY | GENERAL | ITSM
+  key       String   @unique
+  value     String?
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// ─── Dashboard Widget Tanımları ───────────────────────────────────────────────
+model DashboardWidget {
+  id          Int     @id @default(autoincrement())
+  key         String  @unique
+  name        String
+  description String?
+  icon        String?
+  roles       String  // CSV: "admin,manager" veya "admin,manager,user"
+  defaultOn   Boolean @default(true)
+}
+
+// ─── Kullanıcı Dashboard Konfigürasyonu ──────────────────────────────────────
+model UserDashboardConfig {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  widgets   String   // aktif widget key listesi JSON
+  layout    String?  // grid pozisyon bilgisi JSON
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Rol Bazlı Dashboard Konfigürasyonu ──────────────────────────────────────
+model RoleDashboardConfig {
+  id      Int    @id @default(autoincrement())
+  role    String @unique
+  widgets String // varsayılan widget listesi JSON
 }
 
 // ─── Cihaz Değişiklik Logu ───────────────────────────────────────────────────

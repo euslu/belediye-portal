@@ -14,7 +14,10 @@ const adSyncRoutes     = require('./routes/adSync');
 const deviceRoutes     = require('./routes/devices');
 const locationRoutes   = require('./routes/locations');
 const inventoryRoutes  = require('./routes/inventory');
-const dashboardRoutes  = require('./routes/dashboard');
+const dashboardRoutes       = require('./routes/dashboard');
+const departmentRoutes      = require('./routes/departments');
+const dashboardConfigRoutes = require('./routes/dashboardConfig');
+const systemSettingsRoutes  = require('./routes/systemSettings');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
@@ -41,6 +44,9 @@ app.use('/api/devices',         deviceRoutes);
 app.use('/api/locations',       locationRoutes);
 app.use('/api/inventory',       inventoryRoutes);
 app.use('/api/dashboard',       dashboardRoutes);
+app.use('/api/dashboard',       dashboardConfigRoutes);
+app.use('/api/system-settings', systemSettingsRoutes);
+app.use('/api/departments',     departmentRoutes);
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 
