@@ -64,11 +64,13 @@ model User {
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])
   createdAt   DateTime @default(now())
 
-  devices     Device[]         @relation("UserDevices")
-  tickets     Ticket[]         @relation("CreatedBy")
-  assigned    Ticket[]         @relation("AssignedTo")
-  groups      UserGroup[]
-  activities  TicketActivity[]
+  devices           Device[]         @relation("UserDevices")
+  tickets           Ticket[]         @relation("CreatedBy")
+  assigned          Ticket[]         @relation("AssignedTo")
+  groups            UserGroup[]
+  activities        TicketActivity[]
+  workOrdersCreated WorkOrder[]      @relation("WOCreatedBy")
+  workOrdersAssigned WorkOrder[]     @relation("WOAssignedTo")
 }
 
 // ─── Grup ────────────────────────────────────────────────────────────────────
@@ -82,7 +84,8 @@ model Group {
 
   members         UserGroup[]
   tickets         Ticket[]
-  subjectDefaults Subject[]  @relation("SubjectDefaultGroup")
+  subjectDefaults Subject[]   @relation("SubjectDefaultGroup")
+  workOrders      WorkOrder[]
 }
 
 // ─── Grup Üyeliği (many-to-many) ─────────────────────────────────────────────
@@ -123,6 +126,7 @@ model Department {
 
   categories    Category[]
   tickets       Ticket[]
+  workOrders    WorkOrder[]
   transfersFrom TicketTransferLog[] @relation("TransferFrom")
   transfersTo   TicketTransferLog[] @relation("TransferTo")
 }
@@ -205,6 +209,36 @@ model Ticket {
   notifications NotificationQueue[]
   attachments   Attachment[]
   transferLogs  TicketTransferLog[]
+  workOrders    WorkOrder[]
+}
+
+// ─── İş Emri ──────────────────────────────────────────────────────────────────
+model WorkOrder {
+  id             Int             @id @default(autoincrement())
+  title          String
+  description    String?
+  status         WorkOrderStatus @default(TODO)
+  priority       Priority        @default(MEDIUM)
+  estimatedHours Float?
+  dueDate        DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  createdById  Int
+  createdBy    User        @relation("WOCreatedBy",   fields: [createdById],  references: [id])
+
+  assignedToId Int?
+  assignedTo   User?       @relation("WOAssignedTo",  fields: [assignedToId], references: [id])
+
+  groupId      Int?
+  group        Group?      @relation(fields: [groupId], references: [id])
+
+  departmentId Int?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  ticketId     Int?
+  ticket       Ticket?     @relation(fields: [ticketId], references: [id])
 }
 
 // ─── Daire Aktarma Logu ───────────────────────────────────────────────────────
@@ -354,6 +388,15 @@ model UserDevice {
 }
 
 // ─── Enum'lar ─────────────────────────────────────────────────────────────────
+// ─── İş Emri Durumu ───────────────────────────────────────────────────────────
+enum WorkOrderStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
 enum TicketSource {
   PORTAL
   EMAIL

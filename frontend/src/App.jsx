@@ -20,6 +20,7 @@ import ManagerDashboard     from './pages/manager/ManagerDashboard';
 import NewManagerDashboard  from './pages/ManagerDashboard';
 import MyTickets            from './pages/MyTickets';
 import Departments          from './pages/admin/Departments';
+import WorkOrders           from './pages/WorkOrders';
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="admin/ad-changes"  element={<AdChanges />} />
             <Route path="admin/envanter"     element={<Envanter />} />
             <Route path="admin/departments" element={<Departments />} />
+            <Route path="work-orders"       element={<WorkOrders />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
             <Route path="*"               element={<Navigate to="/" replace />} />
