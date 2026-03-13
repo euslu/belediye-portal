@@ -1,0 +1,7 @@
+[
+  {
+    "install": "npm install && cd backend && npm install && npx prisma generate && cd ../frontend && npm install",
+    "start": "npm run dev:frontend",
+    "resourceSize": "medium"
+  }
+]
