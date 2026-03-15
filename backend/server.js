@@ -20,14 +20,23 @@ const dashboardRoutes       = require('./routes/dashboard');
 const departmentRoutes      = require('./routes/departments');
 const dashboardConfigRoutes = require('./routes/dashboardConfig');
 const systemSettingsRoutes  = require('./routes/systemSettings');
+const ulakbellRoutes        = require('./routes/ulakbell');
+const pdksRoutes            = require('./routes/pdks');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
 
 const app = express();
 
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',').map(o => o.trim());
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    // same-origin (nginx proxy) veya listede varsa izin ver
+    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+    cb(new Error(`CORS: ${origin} izin verilmedi`));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -51,6 +60,8 @@ app.use('/api/dashboard',       dashboardRoutes);
 app.use('/api/dashboard',       dashboardConfigRoutes);
 app.use('/api/system-settings', systemSettingsRoutes);
 app.use('/api/departments',     departmentRoutes);
+app.use('/api/ulakbell',        ulakbellRoutes);
+app.use('/api/pdks',            pdksRoutes);
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 

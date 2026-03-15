@@ -20,7 +20,7 @@ function Toast({ message, type = 'success', onClose }) {
   );
 }
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` };

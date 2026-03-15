@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getTickets } from '../../api/tickets';
 import { StatusBadge, PriorityBadge, TypeBadge, SourceBadge } from '../../components/badges';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
 const STATUSES   = ['', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];

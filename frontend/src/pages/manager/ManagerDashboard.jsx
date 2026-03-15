@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
 async function approveTicket(id) {

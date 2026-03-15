@@ -165,22 +165,18 @@ router.post('/test/smtp', ADMIN_ONLY, async (req, res) => {
 
 // ─── POST /api/system-settings/test/pdks ──────────────────────────────────────
 router.post('/test/pdks', ADMIN_ONLY, async (req, res) => {
-  const { pdks_url, pdks_username, pdks_password } = req.body;
-  if (!pdks_url) return res.json({ success: false, message: 'PDKS URL girilmedi' });
-
+  const { pdks_db_type, pdks_host, pdks_port, pdks_db, pdks_user, pdks_password } = req.body;
+  if (!pdks_host) return res.json({ success: false, message: 'Host girilmedi' });
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const r = await fetch(pdks_url, {
-      signal: controller.signal,
-      headers: pdks_username ? {
-        'Authorization': 'Basic ' + Buffer.from(`${pdks_username}:${pdks_password}`).toString('base64'),
-      } : {},
+    const { testConnection } = require('../services/pdks');
+    const result = await testConnection({
+      type: pdks_db_type || 'mssql', host: pdks_host,
+      port: parseInt(pdks_port) || 1433, database: pdks_db,
+      user: pdks_user, password: pdks_password,
     });
-    clearTimeout(timeout);
-    res.json({ success: r.ok, message: r.ok ? `Bağlantı başarılı (HTTP ${r.status})` : `HTTP ${r.status} hatası` });
+    res.json({ success: true, message: `Bağlantı başarılı — ${result.tableCount} tablo bulundu` });
   } catch (err) {
-    res.json({ success: false, message: err.message.includes('abort') ? 'Bağlantı zaman aşımı (8s)' : err.message });
+    res.json({ success: false, message: err.message });
   }
 });
 

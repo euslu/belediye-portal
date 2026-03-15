@@ -39,7 +39,8 @@ router.get('/', async (req, res) => {
     }
   } else {
     // Admin: query param filtreleri geçerli
-    if (directorate) where.AND.push({ directorate });
+    // directorate veya department ile filtrele (COALESCE mantığı: birinde varsa göster)
+    if (directorate) where.AND.push({ OR: [{ directorate }, { AND: [{ directorate: null }, { department: directorate }] }] });
     if (department)  where.AND.push({ department });
   }
 
@@ -75,32 +76,39 @@ router.get('/', async (req, res) => {
 
 // GET /api/users/directorates
 // Admin → tüm daireler | Diğerleri → sadece kendi dairesi
+// directorate boşsa department fallback olarak kullanılır
 router.get('/directorates', async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
-    const baseWhere = [...BASE_WHERE, { directorate: { not: null } }];
 
-    if (!isAdmin) {
-      const myDir = await getMyDirectorate(req.user.username);
-      if (myDir) {
-        baseWhere.push({ directorate: myDir });
-      } else {
-        return res.json([]); // directorate'i bilinmiyorsa boş döndür
-      }
+    // Raw query: COALESCE(directorate, department) ile gruplama
+    let rows;
+    if (isAdmin) {
+      rows = await prisma.$queryRaw`
+        SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS count
+        FROM "User"
+        WHERE (directorate IS NOT NULL OR department IS NOT NULL)
+        GROUP BY COALESCE(directorate, department)
+        ORDER BY name ASC
+      `;
+    } else {
+      const myUser = await prisma.user.findUnique({
+        where:  { username: req.user.username },
+        select: { directorate: true, department: true },
+      });
+      const myDir = myUser?.directorate || myUser?.department;
+      if (!myDir) return res.json([]);
+
+      rows = await prisma.$queryRaw`
+        SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS count
+        FROM "User"
+        WHERE COALESCE(directorate, department) = ${myDir}
+        GROUP BY COALESCE(directorate, department)
+        ORDER BY name ASC
+      `;
     }
 
-    const grouped = await prisma.user.groupBy({
-      by:      ['directorate'],
-      where:   { AND: baseWhere },
-      _count:  { directorate: true },
-      orderBy: { directorate: 'asc' },
-    });
-
-    res.json(
-      grouped
-        .filter((d) => d.directorate)
-        .map((d) => ({ name: d.directorate, count: d._count.directorate }))
-    );
+    res.json(rows.map(r => ({ name: r.name, count: Number(r.count) })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Daireler alınamadı' });

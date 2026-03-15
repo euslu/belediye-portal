@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}` };
 }
@@ -814,56 +814,277 @@ function UserDeviceRow({ user, userRole }) {
 }
 
 // ─── Sekme 2: Kişisel Cihazlar ────────────────────────────────────────────────
-function PersonalDevicesTab({ userRole }) {
-  const [users, setUsers]       = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [search, setSearch]     = useState('');
-  const [searched, setSearched] = useState(false);
+// ─── Cihaz Detay Modal ────────────────────────────────────────────────────────
+function DeviceDetailModal({ device, onClose }) {
+  if (!device) return null;
+  const rows = [
+    ['Cihaz Adı',    device.name],
+    ['Tip',          device.type],
+    ['Marka',        device.brand],
+    ['Model / OS',   device.model],
+    ['Seri No',      device.serialNumber],
+    ['IP / DNS',     device.ipAddress],
+    ['MAC',          device.macAddress],
+    ['Durum',        device.status],
+    ['Daire',        device.directorate],
+    ['Şube',         device.department],
+    ['Atanan',       device.assignedUser?.displayName || device.assignedTo],
+    ['Lokasyon',     device.location?.name],
+    ['Notlar',       device.notes],
+    ['Son Sync',     device.lastSyncAt ? new Date(device.lastSyncAt).toLocaleString('tr-TR') : null],
+    ['Alım Tarihi',  device.purchaseDate ? new Date(device.purchaseDate).toLocaleDateString('tr-TR') : null],
+    ['Garanti Sonu', device.warrantyEnd  ? new Date(device.warrantyEnd).toLocaleDateString('tr-TR')  : null],
+  ].filter(([, v]) => v);
 
-  async function doSearch() {
-    if (!search.trim()) return;
-    setLoading(true); setSearched(true);
-    try {
-      const r = await fetch(
-        `${API}/api/users?search=${encodeURIComponent(search)}&limit=50`,
-        { headers: authHeaders() }
-      );
-      const d = await r.json();
-      setUsers(d.users || []);
-    } finally {
-      setLoading(false);
-    }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 bg-indigo-600 text-white">
+          <div>
+            <p className="font-bold text-base">{device.name}</p>
+            <p className="text-xs text-indigo-200">{device.type}</p>
+          </div>
+          <button onClick={onClose} className="text-indigo-200 hover:text-white text-xl font-bold">✕</button>
+        </div>
+        <dl className="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
+          {rows.map(([label, val]) => (
+            <div key={label} className="flex items-start px-6 py-2.5">
+              <dt className="text-xs text-gray-400 w-28 shrink-0 pt-0.5">{label}</dt>
+              <dd className="text-sm text-gray-800 font-medium">{val}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cihazlar Sekmesi — Daire bazlı, önce daire seç ──────────────────────────
+const ALL_TYPES    = ['BILGISAYAR', 'DIZUSTU', 'SUNUCU', 'IPAD_TABLET', 'IP_TELEFON', 'MONITOR', 'YAZICI', 'UPS', 'SWITCH', 'ACCESS_POINT', 'DIGER'];
+const ALL_STATUSES = ['ACTIVE', 'PASSIVE', 'BROKEN', 'TRANSFERRED'];
+const STATUS_LABELS = { ACTIVE: 'Aktif', PASSIVE: 'Pasif', BROKEN: 'Arızalı', TRANSFERRED: 'Devredildi' };
+const STATUS_COLORS = { ACTIVE: 'bg-green-100 text-green-700', PASSIVE: 'bg-gray-100 text-gray-500', BROKEN: 'bg-red-100 text-red-700', TRANSFERRED: 'bg-amber-100 text-amber-700' };
+const TYPE_COLORS   = { BILGISAYAR: 'bg-blue-100 text-blue-700', DIZUSTU: 'bg-indigo-100 text-indigo-700', SUNUCU: 'bg-purple-100 text-purple-700', IP_TELEFON: 'bg-green-100 text-green-700', IPAD_TABLET: 'bg-pink-100 text-pink-700', MONITOR: 'bg-amber-100 text-amber-700', YAZICI: 'bg-orange-100 text-orange-700', SWITCH: 'bg-teal-100 text-teal-700', ACCESS_POINT: 'bg-cyan-100 text-cyan-700', UPS: 'bg-red-100 text-red-600', DIGER: 'bg-gray-100 text-gray-600' };
+
+// ─── Stats Paneli ─────────────────────────────────────────────────────────────
+function StatsPanel() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/api/inventory/stats`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(setStats)
+      .catch(() => {});
+  }, []);
+
+  if (!stats) {
+    return (
+      <div className="grid grid-cols-5 gap-3 mb-6">
+        {Array(5).fill(0).map((_, i) => (
+          <div key={i} className="h-20 bg-gray-100 rounded-2xl animate-pulse" />
+        ))}
+      </div>
+    );
   }
+
+  const t = stats.totalByType || {};
+  const cards = [
+    { label: 'Bilgisayar',    value: (t.BILGISAYAR || 0), icon: '🖥️',  color: 'border-blue-100' },
+    { label: 'Dizüstü',       value: (t.DIZUSTU || 0),    icon: '💻',  color: 'border-indigo-100' },
+    { label: 'IP Telefon',    value: (t.IP_TELEFON || 0), icon: '☎️',  color: 'border-green-100' },
+    { label: 'Yazıcı',        value: (t.YAZICI || 0),     icon: '🖨️',  color: 'border-amber-100' },
+    { label: 'Bugün Eklenen', value: (stats.addedToday || 0), icon: '➕', color: 'border-emerald-100', prefix: '+' },
+  ];
+
+  return (
+    <div className="grid grid-cols-5 gap-3 mb-6">
+      {cards.map(c => (
+        <div key={c.label} className={`bg-white border ${c.color} rounded-2xl p-4 shadow-sm`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">{c.icon}</span>
+            <p className="text-xs text-gray-400">{c.label}</p>
+          </div>
+          <p className="text-2xl font-bold text-gray-800 tabular-nums">
+            {c.prefix || ''}{c.value.toLocaleString('tr-TR')}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DevicesTab({ user }) {
+  const isAdmin = user?.role === 'admin' || (user?.groups || []).includes('int_bislem');
+
+  const [directorates, setDirs]   = useState([]);
+  const [selectedDir, setSelectedDir] = useState('');
+  const [devices, setDevices]     = useState([]);
+  const [total, setTotal]         = useState(0);
+  const [loading, setLoading]     = useState(false);
+  const [detail, setDetail]       = useState(null);
+
+  const [search, setSearch]           = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType]   = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [page, setPage]               = useState(1);
+  const LIMIT = 50;
+
+  // Daire listesini çek
+  useEffect(() => {
+    fetch(`${API}/api/inventory/directorates`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(dirs => {
+        setDirs(dirs);
+        // manager → sadece kendi dairesi, otomatik seç
+        if (!isAdmin && user?.directorate) {
+          setSelectedDir(user.directorate);
+        } else if (!isAdmin && dirs.length === 1) {
+          setSelectedDir(dirs[0]);
+        }
+      })
+      .catch(() => {});
+  }, [isAdmin, user?.directorate]);
+
+  // Daire seçili olunca veri çek
+  useEffect(() => {
+    if (!selectedDir) { setDevices([]); setTotal(0); return; }
+
+    let cancelled = false;
+    setLoading(true);
+
+    const params = new URLSearchParams({ directorate: selectedDir, page: String(page), limit: String(LIMIT) });
+    if (searchQuery)  params.set('search', searchQuery);
+    if (filterType)   params.set('type', filterType);
+    if (filterStatus) params.set('status', filterStatus);
+
+    fetch(`${API}/api/inventory?${params}`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => { if (!cancelled) { setDevices(d.devices || []); setTotal(d.total || 0); } })
+      .catch(() => { if (!cancelled) setDevices([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [selectedDir, searchQuery, filterType, filterStatus, page]);
+
+  function handleSearch(e) { e.preventDefault(); setPage(1); setSearchQuery(search); }
+  function handleDirChange(e) { setSelectedDir(e.target.value); setPage(1); setSearchQuery(''); setSearch(''); }
+
+  const pages = Math.ceil(total / LIMIT);
+  const selectCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white';
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <input
-          type="text" value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && doSearch()}
-          placeholder="Personel adı veya kullanıcı adı ara..."
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        />
-        <button onClick={doSearch}
-          className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition font-medium">
-          Ara
-        </button>
+      {/* Filtre satırı */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <select
+          value={selectedDir}
+          onChange={handleDirChange}
+          className={`${selectCls} min-w-[220px] font-medium cursor-pointer`}
+        >
+          <option value="">— Daire Başkanlığı Seçin —</option>
+          {directorates.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+
+        <select value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1); }} className={`${selectCls} cursor-pointer`}>
+          <option value="">Tüm Tipler</option>
+          {ALL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }} className={`${selectCls} cursor-pointer`}>
+          <option value="">Tüm Durumlar</option>
+          {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+        </select>
+
+        <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-52">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Cihaz adı, seri no, kullanıcı..."
+            className={`${selectCls} flex-1`}
+          />
+          <button type="submit"
+            className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+            Ara
+          </button>
+        </form>
+
+        {selectedDir && <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{total} cihaz</span>}
       </div>
 
-      {loading ? (
-        <div className="py-12 text-center text-sm text-gray-400">Aranıyor...</div>
-      ) : !searched ? (
-        <div className="py-12 text-center text-sm text-gray-400">Personel aramak için ad girin</div>
-      ) : users.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">Sonuç bulunamadı</div>
+      {/* İçerik */}
+      {!selectedDir ? (
+        <div className="py-24 flex flex-col items-center gap-3 text-center">
+          <span className="text-5xl">🏢</span>
+          <p className="text-base font-medium text-gray-500">Listelemek için daire başkanlığı seçin</p>
+          <p className="text-sm text-gray-400">Soldaki açılır menüden bir daire başkanlığı seçerek cihazları listeleyin</p>
+        </div>
+      ) : loading ? (
+        <div className="py-16 text-center text-sm text-gray-400">Yükleniyor...</div>
+      ) : devices.length === 0 ? (
+        <div className="py-16 text-center text-sm text-gray-400">Bu daire için cihaz bulunamadı</div>
       ) : (
-        <div className="space-y-2">
-          {users.map((u) => (
-            <UserDeviceRow key={u.id} user={u} userRole={userRole} />
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-xs text-gray-500">
+                <th className="text-left px-4 py-3 font-medium">Cihaz Adı</th>
+                <th className="text-left px-3 py-3 font-medium">Tip</th>
+                <th className="text-left px-3 py-3 font-medium">Kullanıcı</th>
+                <th className="text-left px-3 py-3 font-medium">Müdürlük</th>
+                <th className="text-left px-3 py-3 font-medium">IP / Hostname</th>
+                <th className="text-left px-3 py-3 font-medium">OS</th>
+                <th className="text-left px-3 py-3 font-medium">Durum</th>
+                <th className="px-3 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {devices.map(d => (
+                <tr key={d.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium text-gray-800">{d.name}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[d.type] || TYPE_COLORS.DIGER}`}>
+                      {d.type}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-gray-600 text-xs">
+                    {d.assignedUser
+                      ? <span>{d.assignedUser.displayName}<span className="text-gray-400 ml-1">({d.assignedTo})</span></span>
+                      : d.assignedTo || <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={d.department}>{d.department || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 text-xs font-mono">{d.ipAddress || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[150px] truncate" title={d.model}>{d.model || '—'}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[d.status] || ''}`}>
+                      {STATUS_LABELS[d.status] || d.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => setDetail(d)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:underline">
+                      Detay
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Sayfalama */}
+      {pages > 1 && selectedDir && (
+        <div className="flex justify-center gap-1">
+          {Array.from({ length: Math.min(pages, 10) }, (_, i) => i + 1).map(p => (
+            <button key={p} onClick={() => setPage(p)}
+              className={`px-3 py-1 rounded text-sm ${p === page ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {p}
+            </button>
           ))}
         </div>
       )}
+
+      {detail && <DeviceDetailModal device={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
@@ -928,12 +1149,7 @@ function SyncResultModal({ result, onClose }) {
   );
 }
 
-// ─── Değişiklik Geçmişi Sekmesi ───────────────────────────────────────────────
-const FIELD_LABELS = {
-  name: 'Cihaz Adı', ipAddress: 'IP Adresi', notes: 'Notlar',
-  assignedTo: 'Atanan Kullanıcı', status: 'Durum', type: 'Tip',
-};
-
+// ─── Değişiklik Geçmişi (kaldırıldı) ─────────────────────────────────────────
 function ChangeLogsTab() {
   const [logs, setLogs]           = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -1066,7 +1282,7 @@ function ChangeLogsTab() {
 // ─── Ana Sayfa ────────────────────────────────────────────────────────────────
 export default function Envanter() {
   const { user } = useAuth();
-  const [tab, setTab]             = useState('locations');
+  const [tab, setTab]             = useState('devices');
   const [syncing, setSyncing]     = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState('');
@@ -1103,7 +1319,7 @@ export default function Envanter() {
           <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          {syncing ? 'Senkronize ediliyor...' : 'Verileri Güncelle'}
+          {syncing ? 'Senkronize ediliyor...' : 'AD\'den Senkronize Et'}
         </button>
       </div>
 
@@ -1113,12 +1329,14 @@ export default function Envanter() {
         </div>
       )}
 
+      {/* Stats her zaman görünür */}
+      <StatsPanel />
+
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
         {[
+          { key: 'devices',   label: 'Cihazlar' },
           { key: 'locations', label: 'Lokasyonlar' },
-          { key: 'personal',  label: 'Kişisel Cihazlar' },
-          { key: 'changelogs', label: 'Değişiklik Geçmişi' },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-5 py-2 text-sm font-medium rounded-lg transition
@@ -1130,9 +1348,8 @@ export default function Envanter() {
         ))}
       </div>
 
-      {tab === 'locations'  && <LocationsTab userRole={user?.role} />}
-      {tab === 'personal'   && <PersonalDevicesTab userRole={user?.role} />}
-      {tab === 'changelogs' && <ChangeLogsTab />}
+      {tab === 'devices'   && <DevicesTab user={user} />}
+      {tab === 'locations' && <LocationsTab userRole={user?.role} />}
 
       <SyncResultModal result={syncResult} onClose={() => setSyncResult(null)} />
     </div>

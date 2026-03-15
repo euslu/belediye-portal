@@ -21,6 +21,8 @@ import NewManagerDashboard  from './pages/ManagerDashboard';
 import MyTickets            from './pages/MyTickets';
 import Departments          from './pages/admin/Departments';
 import WorkOrders           from './pages/WorkOrders';
+import UlakbellIncidents    from './pages/UlakbellIncidents';
+import PDKSDashboard        from './pages/PDKSDashboard';
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -39,7 +41,7 @@ function IndexRoute() {
   const { user } = useAuth();
   if (!user) return null;
   if (['admin', 'manager'].includes(user.role)) return <NewManagerDashboard />;
-  return <UserDashboard />;
+  return <Navigate to="/home" replace />;
 }
 
 // Zaten giriş yapılmışsa ana sayfaya yönlendir
@@ -80,7 +82,10 @@ export default function App() {
             <Route path="admin/ad-changes"  element={<AdChanges />} />
             <Route path="admin/envanter"     element={<Envanter />} />
             <Route path="admin/departments" element={<Departments />} />
-            <Route path="work-orders"       element={<WorkOrders />} />
+            <Route path="home"              element={<UserDashboard />} />
+            <Route path="work-orders"           element={<WorkOrders />} />
+            <Route path="ulakbell-incidents"    element={<UlakbellIncidents />} />
+            <Route path="pdks"                  element={<PDKSDashboard />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
             <Route path="*"               element={<Navigate to="/" replace />} />

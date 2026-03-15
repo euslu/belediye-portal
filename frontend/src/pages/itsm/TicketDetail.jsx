@@ -5,20 +5,207 @@ import { getGroups, getGroupMembers, assignTicket, searchUsers } from '../../api
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge, PriorityBadge, TypeBadge, SourceBadge } from '../../components/badges';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
+function authToken() { return localStorage.getItem('token'); }
 function authPost(path, body) {
   return fetch(`${API}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
     body: JSON.stringify(body),
   }).then(async r => {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'İşlem başarısız');
     return data;
   });
+}
+function authFetch(path) {
+  return fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${authToken()}` } }).then(r => r.json());
+}
+
+// ─── ulakBELL Bilgi Kartı ─────────────────────────────────────────────────────
+function UlakbellCard({ ticket, isPrivileged, onRefresh }) {
+  const [status, setStatus]   = useState(ticket.ulakbellStatus || null);
+  const [loading, setLoading] = useState(false);
+  const [modal,   setModal]   = useState(false);  // "İlet" modalı
+  const [syncing, setSyncing] = useState(false);
+  const [syncErr, setSyncErr] = useState('');
+
+  // Adres kaskad state (modal için)
+  const [ilceler,    setIlceler]    = useState([]);
+  const [mahalleler, setMahalleler] = useState([]);
+  const [sokaklar,   setSokaklar]   = useState([]);
+  const [binalar,    setBinalar]    = useState([]);
+  const [daireler,   setDaireler]   = useState([]);
+  const [addr, setAddr_]   = useState({ ilce_id: '', mahalle_id: '', sokak_id: '', bina_no: '', adres_no: '' });
+  const [addrLd, setAddrLd] = useState('');
+  const [phone, setPhone]   = useState('');
+  const [ubType, setUbType] = useState('incident');
+
+  useEffect(() => {
+    if (!modal || ilceler.length > 0) return;
+    setAddrLd('ilce');
+    authFetch('/api/ulakbell/ilceler').then(d => setIlceler(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setAddrLd(''));
+  }, [modal, ilceler.length]);
+
+  function setAddr(field, value) {
+    setAddr_(p => {
+      const n = { ...p, [field]: value };
+      if (field === 'ilce_id')    { n.mahalle_id=''; n.sokak_id=''; n.bina_no=''; n.adres_no=''; setMahalleler([]); setSokaklar([]); setBinalar([]); setDaireler([]); }
+      if (field === 'mahalle_id') { n.sokak_id=''; n.bina_no=''; n.adres_no=''; setSokaklar([]); setBinalar([]); setDaireler([]); }
+      if (field === 'sokak_id')   { n.bina_no=''; n.adres_no=''; setBinalar([]); setDaireler([]); }
+      if (field === 'bina_no')    { n.adres_no=''; setDaireler([]); }
+      return n;
+    });
+    if (field==='ilce_id'    && value) { setAddrLd('mahalle'); authFetch(`/api/ulakbell/mahalleler?ilce_id=${value}`).then(d=>setMahalleler(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setAddrLd('')); }
+    if (field==='mahalle_id' && value) { setAddrLd('sokak');   authFetch(`/api/ulakbell/sokaklar?mahalle_id=${value}`).then(d=>setSokaklar(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setAddrLd('')); }
+    if (field==='sokak_id'   && value) { setAddrLd('bina');    authFetch(`/api/ulakbell/binalar?sokak_id=${value}`).then(d=>setBinalar(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setAddrLd('')); }
+    if (field==='bina_no'    && value) { setAddrLd('daire');   authFetch(`/api/ulakbell/daireler?bina_no=${value}`).then(d=>setDaireler(Array.isArray(d)?d:[])).catch(()=>{}).finally(()=>setAddrLd('')); }
+  }
+
+  async function refreshStatus() {
+    setLoading(true);
+    try {
+      const d = await authFetch(`/api/ulakbell/incident-status/${ticket.id}`);
+      if (d.ok) setStatus(d.ulakbellStatus);
+    } catch {}
+    setLoading(false);
+  }
+
+  async function syncNow() {
+    setSyncing(true); setSyncErr('');
+    try {
+      const res = await fetch(`${API}/api/ulakbell/sync-incident/${ticket.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+        body: JSON.stringify({
+          mobile_phone: phone || undefined,
+          incident_type: ubType,
+          ...(addr.ilce_id    ? { ilce_id:    +addr.ilce_id }    : {}),
+          ...(addr.mahalle_id ? { mahalle_id: +addr.mahalle_id } : {}),
+          ...(addr.sokak_id   ? { sokak_id:   +addr.sokak_id }   : {}),
+          ...(addr.bina_no    ? { bina_no:    +addr.bina_no }    : {}),
+          ...(addr.adres_no   ? { adres_no:   +addr.adres_no }   : {}),
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) { setModal(false); onRefresh(); }
+      else setSyncErr(d.error || 'Gönderilemedi');
+    } catch (e) { setSyncErr(e.message); }
+    setSyncing(false);
+  }
+
+  const fmtDate = (d) => d ? new Date(d).toLocaleString('tr-TR', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+  // Kart: ulakbell numarası var
+  if (ticket.ulakbellNumber || ticket.ulakbellToken) {
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔗</span>
+            <div>
+              <p className="text-sm font-semibold text-blue-800">ulakBELL'e İletildi</p>
+              {ticket.ulakbellNumber && (
+                <p className="text-xs text-blue-600">Başvuru No: <span className="font-bold">#{ticket.ulakbellNumber}</span></p>
+              )}
+              <p className="text-xs text-blue-500">Gönderildi: {fmtDate(ticket.ulakbellSentAt)}</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full
+              ${status === 'Gönderildi' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+              {status || 'Beklemede'}
+            </span>
+            <button onClick={refreshStatus} disabled={loading}
+              className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-50">
+              <span className={loading ? 'animate-spin' : ''}>🔄</span> Durumu Yenile
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Kart: ulakbell numarası yok — admin/manager için "İlet" butonu
+  if (!isPrivileged) return null;
+
+  return (<>
+    <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-4 flex items-center justify-between">
+      <div className="flex items-center gap-2 text-gray-500">
+        <span>🔗</span>
+        <span className="text-sm">ulakBELL'e henüz iletilmedi</span>
+      </div>
+      <button onClick={() => setModal(true)}
+        className="text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition font-medium">
+        ulakBELL'e İlet
+      </button>
+    </div>
+
+    {/* Modal */}
+    {modal && (
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="p-5 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">🔗 ulakBELL'e İlet</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Ticket #{ticket.id} — {ticket.title}</p>
+          </div>
+          <div className="p-5 space-y-4">
+            {/* Başvuru Tipi */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Başvuru Tipi</label>
+              <div className="flex flex-wrap gap-2">
+                {[['incident','🔧 Arıza'],['demand','📋 İstek'],['complaint','😠 Şikayet'],['thanks','🙏 Teşekkür'],['notice','📢 İhbar']].map(([v,l]) => (
+                  <button key={v} type="button" onClick={() => setUbType(v)}
+                    className={`px-2.5 py-1 rounded-lg text-xs border-2 transition
+                      ${ubType===v ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Telefon */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Vatandaş Telefonu <span className="text-gray-400">(opsiyonel)</span></label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="5__ ___ __ __"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+            {/* Adres */}
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-600">📍 Adres <span className="text-gray-400">(opsiyonel)</span></label>
+              {[
+                { field:'ilce_id',    label:'İlçe',   list:ilceler,    keyF:'ilce_key',        lblF:'ilce_title',         depOn:true,              ldKey:'ilce' },
+                { field:'mahalle_id', label:'Mahalle', list:mahalleler, keyF:'mahalle_key',     lblF:'mahalle_title',      depOn:!!addr.ilce_id,    ldKey:'mahalle' },
+                { field:'sokak_id',   label:'Sokak',   list:sokaklar,   keyF:'sokak_cadde_id',  lblF:'sokak_cadde_title',  depOn:!!addr.mahalle_id, ldKey:'sokak' },
+                { field:'bina_no',    label:'Bina',    list:binalar,    keyF:'id',              lblF:'title',              depOn:!!addr.sokak_id,   ldKey:'bina' },
+                { field:'adres_no',   label:'Daire',   list:daireler,   keyF:'id',              lblF:'title',              depOn:!!addr.bina_no,    ldKey:'daire' },
+              ].map(({ field, label, list, keyF, lblF, depOn, ldKey }) => (
+                <div key={field}>
+                  <label className="block text-[11px] text-gray-500 mb-0.5">{label}</label>
+                  <select value={addr[field]} onChange={e => setAddr(field, e.target.value)}
+                    disabled={!depOn || addrLd === ldKey}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm disabled:opacity-60 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="">{addrLd===ldKey ? '⟳ Yükleniyor…' : depOn ? '— Seçin —' : `Önce ${label.toLowerCase()}`}</option>
+                    {list.map(item => <option key={item[keyF]} value={item[keyF]}>{item[lblF]}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            {syncErr && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{syncErr}</p>}
+          </div>
+          <div className="p-5 border-t border-gray-100 flex gap-3">
+            <button onClick={syncNow} disabled={syncing}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition disabled:opacity-60">
+              {syncing ? '⟳ Gönderiliyor…' : '🔗 Gönder'}
+            </button>
+            <button onClick={() => { setModal(false); setSyncErr(''); }}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+              İptal
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>);
 }
 
 // ITIL akışına göre izin verilen durum geçişleri (onay akışı ayrıca ele alınıyor)
@@ -827,6 +1014,13 @@ export default function TicketDetail() {
             <h2 className="text-sm font-semibold text-gray-700 mb-3">Açıklama</h2>
             <p className="text-sm text-gray-600 whitespace-pre-wrap">{ticket.description}</p>
           </div>
+
+          {/* ulakBELL Bilgi Kartı */}
+          <UlakbellCard
+            ticket={ticket}
+            isPrivileged={['admin','manager'].includes(user?.role)}
+            onRefresh={() => getTicket(ticket.id).then(setTicket).catch(() => {})}
+          />
 
           {/* Aktivite Zaman Çizelgesi */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">

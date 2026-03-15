@@ -204,6 +204,17 @@ model Ticket {
   transferAt   DateTime?
   transferBy   String?
 
+  // ulakBELL entegrasyonu
+  ulakbellToken  String?   // public_token from ulakBELL
+  ulakbellNumber Int?      // başvuru numarası
+  ulakbellSentAt DateTime? // gönderim zamanı
+  ulakbellStatus String?   // son bilinen durum
+  ilceId         Int?
+  mahalleId      Int?
+  sokakId        Int?
+  binaId         Int?
+  adresId        Int?      // bağımsız bölüm (daire)
+
   comments      Comment[]
   activities    TicketActivity[]
   notifications NotificationQueue[]
@@ -403,6 +414,9 @@ enum TicketSource {
   PHONE
   IN_PERSON
   API
+  MUHTAR
+  VATANDAS
+  DIGER
 }
 
 enum TicketStatus {

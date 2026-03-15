@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}` };
@@ -84,6 +84,74 @@ function DeviceModal({ user, onClose }) {
   );
 }
 
+// ─── Personel satırı ────────────────────────────────────────────────────────
+function PersonelRow({ u, canViewDevices, onDeviceClick }) {
+  return (
+    <div className="flex items-center gap-3 px-6 py-2 hover:bg-gray-50">
+      <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+        {u.displayName[0]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-800 font-medium truncate">{u.displayName}</p>
+        <p className="text-xs text-gray-400 truncate">{u.username}</p>
+      </div>
+      {u.title && (
+        <span className="text-xs text-gray-400 shrink-0 truncate max-w-[160px]">{u.title}</span>
+      )}
+      {canViewDevices && (
+        <button
+          onClick={() => onDeviceClick(u)}
+          className="ml-2 p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+          title="Cihazları görüntüle"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Şube Müdürlüğü accordion (Level 2) ────────────────────────────────────
+function SubeAccordion({ name, users, canViewDevices, onDeviceClick }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-t border-gray-100">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full flex items-center gap-2 px-5 py-2.5 text-left transition
+          ${open ? 'bg-indigo-50' : 'bg-gray-50 hover:bg-gray-100'}`}
+      >
+        <span className="text-xs select-none">📂</span>
+        <span className="flex-1 text-xs font-semibold text-gray-700">
+          {name}
+          <span className="font-normal text-gray-400 ml-1.5">({users.length})</span>
+        </span>
+        <svg
+          className={`w-3.5 h-3.5 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="divide-y divide-gray-50">
+          {users.map((u) => (
+            <PersonelRow
+              key={u.id}
+              u={u}
+              canViewDevices={canViewDevices}
+              onDeviceClick={onDeviceClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 async function fetchDirectorates() {
   const res = await fetch(`${API}/api/users/directorates`, { headers: authHeaders() });
   return res.ok ? res.json() : [];
@@ -96,15 +164,28 @@ async function fetchUsersByDirectorate(directorate) {
   return data.users || [];
 }
 
+// Kullanıcıları department'a göre grupla; null/boş → "Diğer"
+function groupByDept(users) {
+  const groups = {};
+  for (const u of users) {
+    const key = u.department || 'Diğer';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(u);
+  }
+  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'tr'));
+}
+
 export default function Personel() {
   const { user: currentUser } = useAuth();
   const [directorates, setDirectorates] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [search, setSearch]             = useState('');
-  const [openDir, setOpenDir]           = useState(null);    // currently expanded directorate name
-  const [dirUsers, setDirUsers]         = useState({});      // name → users[]
-  const [loadingDir, setLoadingDir]     = useState(null);    // name being loaded
-  const [deviceModal, setDeviceModal]   = useState(null);    // user object
+  const [openDir, setOpenDir]           = useState(null);
+  const [dirUsers, setDirUsers]         = useState({});
+  const [loadingDir, setLoadingDir]     = useState(null);
+  const [deviceModal, setDeviceModal]   = useState(null);
+
+  const canViewDevices = ['admin', 'manager'].includes(currentUser?.role);
 
   useEffect(() => {
     fetchDirectorates()
@@ -115,7 +196,7 @@ export default function Personel() {
   async function toggleDir(name) {
     if (openDir === name) { setOpenDir(null); return; }
     setOpenDir(name);
-    if (dirUsers[name]) return; // already loaded
+    if (dirUsers[name]) return;
     setLoadingDir(name);
     try {
       const users = await fetchUsersByDirectorate(name);
@@ -145,7 +226,7 @@ export default function Personel() {
           placeholder="Daire ara..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
 
@@ -156,24 +237,25 @@ export default function Personel() {
       ) : (
         <div className="space-y-2">
           {filtered.map((d) => {
-            const isOpen      = openDir === d.name;
-            const users       = dirUsers[d.name] || [];
-            const isLoading   = loadingDir === d.name;
+            const isOpen    = openDir === d.name;
+            const users     = dirUsers[d.name] || [];
+            const isLoading = loadingDir === d.name;
+            const subeGroups = isOpen && !isLoading ? groupByDept(users) : [];
 
             return (
               <div key={d.name} className="border border-gray-200 rounded-xl overflow-hidden">
-                {/* Daire başlığı — tıklanabilir */}
+                {/* Level 1: Daire başlığı */}
                 <button
                   onClick={() => toggleDir(d.name)}
                   className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition
                     ${isOpen
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-indigo-600 text-white'
                       : 'bg-white text-gray-800 hover:bg-gray-50'}`}
                 >
                   <span className="text-base select-none">🏢</span>
                   <span className="flex-1 font-semibold text-sm">
                     {d.name}
-                    <span className={`font-normal ml-1.5 ${isOpen ? 'text-blue-200' : 'text-gray-400'}`}>
+                    <span className={`font-normal ml-1.5 ${isOpen ? 'text-indigo-200' : 'text-gray-400'}`}>
                       ({d.count})
                     </span>
                   </span>
@@ -185,45 +267,36 @@ export default function Personel() {
                   </svg>
                 </button>
 
-                {/* Personel listesi */}
+                {/* Level 2+3: Şube → Personel */}
                 {isOpen && (
-                  <div className="border-t border-gray-100 bg-white">
+                  <div className="bg-white">
                     {isLoading ? (
                       <div className="py-6 text-center text-sm text-gray-400">Yükleniyor...</div>
                     ) : users.length === 0 ? (
                       <div className="py-6 text-center text-sm text-gray-400">Personel bulunamadı</div>
-                    ) : (
+                    ) : subeGroups.length === 1 && subeGroups[0][0] === 'Diğer' ? (
+                      // Şube ayrımı yoksa doğrudan listele
                       <div className="divide-y divide-gray-50">
                         {users.map((u) => (
-                          <div key={u.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50">
-                            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
-                              {u.displayName[0]}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-800 font-medium truncate">{u.displayName}</p>
-                              {u.department && (
-                                <p className="text-xs text-gray-400 truncate">{u.department}</p>
-                              )}
-                            </div>
-                            {u.title && (
-                              <span className="text-xs text-gray-400 shrink-0 truncate max-w-[160px]">
-                                {u.title}
-                              </span>
-                            )}
-                            {['admin', 'manager'].includes(currentUser?.role) && (
-                              <button
-                                onClick={() => setDeviceModal(u)}
-                                className="ml-2 p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
-                                title="Cihazları görüntüle"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
+                          <PersonelRow
+                            key={u.id}
+                            u={u}
+                            canViewDevices={canViewDevices}
+                            onDeviceClick={setDeviceModal}
+                          />
                         ))}
                       </div>
+                    ) : (
+                      // Şube accordion
+                      subeGroups.map(([subeName, subeUsers]) => (
+                        <SubeAccordion
+                          key={subeName}
+                          name={subeName}
+                          users={subeUsers}
+                          canViewDevices={canViewDevices}
+                          onDeviceClick={setDeviceModal}
+                        />
+                      ))
                     )}
                   </div>
                 )}

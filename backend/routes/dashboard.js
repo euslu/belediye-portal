@@ -262,6 +262,46 @@ router.get('/manager-stats', async (req, res) => {
   }
 });
 
+// ─── GET /api/dashboard/my-stats ──────────────────────────────────────────────
+router.get('/my-stats', async (req, res) => {
+  try {
+    const me = await prisma.user.findUnique({
+      where:  { username: req.user.username },
+      select: { id: true },
+    });
+    if (!me) return res.json({ openTickets: 0, resolvedThisMonth: 0, myTasks: 0, slaRisk: 0 });
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const slaRiskDeadline = new Date(Date.now() + 2 * 3600 * 1000);
+
+    const [openTickets, resolvedThisMonth, myTasks, slaRisk] = await Promise.all([
+      prisma.ticket.count({
+        where: { createdById: me.id, status: { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] } },
+      }),
+      prisma.ticket.count({
+        where: { createdById: me.id, status: { in: ['RESOLVED', 'CLOSED'] }, updatedAt: { gte: monthStart } },
+      }),
+      prisma.ticket.count({
+        where: { assignedToId: me.id, status: { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] } },
+      }),
+      prisma.ticket.count({
+        where: {
+          assignedToId: me.id,
+          dueDate:      { not: null, lt: slaRiskDeadline },
+          status:       { notIn: ['RESOLVED', 'CLOSED'] },
+        },
+      }),
+    ]);
+
+    res.json({ openTickets, resolvedThisMonth, myTasks, slaRisk });
+  } catch (err) {
+    console.error('[my-stats]', err);
+    res.status(500).json({ error: 'İstatistikler alınamadı' });
+  }
+});
+
 // ─── GET /api/dashboard/my-devices ────────────────────────────────────────────
 router.get('/my-devices', async (req, res) => {
   try {

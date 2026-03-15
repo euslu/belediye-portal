@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import AdminCategoriesPage from './SubjectManager';
+import AdChangesPage from './AdChanges';
 import { useAuth } from '../../context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || '';
 
 function authFetch(url, opts = {}) {
   const token = localStorage.getItem('token');
@@ -83,14 +85,136 @@ function SaveButton({ onClick, loading }) {
 
 // ─── Sekmeler ─────────────────────────────────────────────────────────────────
 
+// ─── ulakBELL Entegrasyon Tabı ───────────────────────────────────────────────
+
+function UlakbellTab() {
+  const [cfg, setCfg] = useState({ url: '', token: '', sync: false });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    fetch(`${API}/api/settings?category=ulakbell`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(rows => {
+        const m = Object.fromEntries((rows || []).map(r => [r.key, r.value]));
+        setCfg({
+          url:   m.ulakbell_url   || '',
+          token: m.ulakbell_token || '',
+          sync:  m.ulakbell_sync === 'true',
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    const token = localStorage.getItem('token');
+    const entries = [
+      ['ulakbell_url',   cfg.url],
+      ['ulakbell_token', cfg.token],
+      ['ulakbell_sync',  String(cfg.sync)],
+    ];
+    await Promise.all(entries.map(([key, value]) =>
+      fetch(`${API}/api/settings/${key}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ value }),
+      })
+    ));
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const testConn = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res  = await fetch(`${API}/api/ulakbell/test`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setTestResult(await res.json());
+    } catch (err) {
+      setTestResult({ ok: false, error: err.message });
+    }
+    setTesting(false);
+  };
+
+  if (loading) return <div className="text-sm text-gray-400 p-2">Yükleniyor…</div>;
+
+  return (
+    <div className="max-w-lg">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xl">🔔</span>
+        <h3 className="text-base font-semibold text-gray-800">ulakBELL Entegrasyonu</h3>
+      </div>
+      <p className="text-sm text-gray-500 mb-5">ulakBELL platformu ile bağlantı yapılandırması.</p>
+
+      <Field label="Ulakbell Aktif">
+        <Toggle label="Otomatik gönderim aktif" value={cfg.sync} onChange={v => setCfg(p => ({ ...p, sync: v }))} />
+        <p className="text-xs text-gray-400 mt-1">Açıkken yeni arıza bildirimleri ulakBELL'e otomatik iletilir.</p>
+      </Field>
+
+      <Field label="API URL" hint="Örn: https://mugla.ulakbell.com">
+        <Input value={cfg.url} onChange={v => setCfg(p => ({ ...p, url: v }))} placeholder="https://______.ulakbell.com" />
+      </Field>
+
+      <Field label="API Token (Bearer)">
+        <PasswordInput value={cfg.token} onChange={v => setCfg(p => ({ ...p, token: v }))} placeholder="Token bilginizi girin…" />
+      </Field>
+
+      <div className="flex items-center gap-3 flex-wrap mt-2">
+        <button onClick={save} disabled={saving}
+          className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+          {saving ? 'Kaydediliyor…' : '💾 Kaydet'}
+        </button>
+        <button onClick={testConn} disabled={testing}
+          className="px-5 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-60 transition-colors">
+          {testing ? '⟳ Test ediliyor…' : '🔌 Bağlantıyı Test Et'}
+        </button>
+        {saved && <span className="text-sm text-green-600">✓ Kaydedildi</span>}
+      </div>
+
+      {testResult && (
+        <div className={`mt-4 p-3.5 rounded-xl text-sm flex items-start gap-2
+          ${testResult.success
+            ? 'bg-green-50 text-green-800 border border-green-200'
+            : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <span className="text-base mt-0.5">{testResult.success ? '✅' : '❌'}</span>
+          <div>
+            {testResult.success
+              ? <strong>Bağlantı başarılı</strong>
+              : <><strong>Bağlantı hatası</strong> — {testResult.message}</>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab listesi ─────────────────────────────────────────────────────────────
+
 const TABS = [
-  { key: 'GENERAL',   label: 'Genel',         icon: '⚙️' },
-  { key: 'AD',        label: 'Aktif Dizin',   icon: '🔗' },
-  { key: 'SMTP',      label: 'E-Posta',       icon: '📧' },
-  { key: 'PDKS',      label: 'PDKS',          icon: '🕐' },
-  { key: 'FLEXCITY',  label: 'FlexCity',      icon: '🏛️' },
-  { key: 'DASHBOARD', label: 'Dashboard',     icon: '📊' },
-  { key: 'ITSM',      label: 'ITSM',          icon: '🎫' },
+  { key: 'GENERAL',    label: 'Genel',               icon: '⚙️' },
+  { key: 'AD',         label: 'Aktif Dizin',         icon: '🔗' },
+  { key: 'SMTP',       label: 'E-Posta',             icon: '📧' },
+  { key: 'PDKS',       label: 'PDKS',                icon: '🕐' },
+  { key: 'FLEXCITY',   label: 'FlexCity',            icon: '🏛️' },
+  { key: 'DASHBOARD',  label: 'Dashboard',           icon: '📊' },
+  // ── ITSM grubu ──────────────────────────
+  { key: 'ITSM',       label: 'ITSM / SLA',         icon: '🎫', separator: true },
+  { key: 'SUBJECTS',   label: 'Başvuru Konuları',    icon: '📋' },
+  // ── AD Değişiklikleri ────────────────────
+  { key: 'AD_CHANGES', label: 'AD Değişiklikleri',  icon: '🔄', separator: true },
+  // ── Entegrasyonlar ───────────────────────
+  { key: 'ULAKBELL',   label: 'ulakBELL',           icon: '🔔', separator: true },
 ];
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
@@ -200,7 +324,7 @@ export default function Settings() {
   const testPdks = async () => {
     setTesting(true); setTestResult(null);
     try {
-      const r = await authFetch(`${API}/api/system-settings/test/pdks`, { method: 'POST', body: JSON.stringify(data.PDKS || {}) });
+      const r = await authFetch(`${API}/api/pdks/test`, { method: 'POST', body: JSON.stringify(data.PDKS || {}) });
       setTestResult(await r.json());
     } catch (e) { setTestResult({ success: false, message: e.message }); }
     finally { setTesting(false); }
@@ -392,21 +516,36 @@ export default function Settings() {
 
   const renderPdks = () => (
     <div className="max-w-lg">
-      <h3 className="text-base font-semibold text-gray-800 mb-5">PDKS Entegrasyonu</h3>
+      <h3 className="text-base font-semibold text-gray-800 mb-5">PDKS Veritabanı Entegrasyonu</h3>
       <Field label="PDKS Aktif">
         <Toggle value={get('pdks_enabled', 'false') === 'true'} onChange={v => set('pdks_enabled', v ? 'true' : 'false')} label={get('pdks_enabled', 'false') === 'true' ? 'Aktif' : 'Pasif'} />
       </Field>
-      <Field label="Sunucu URL">
-        <Input value={get('pdks_url')} onChange={v => set('pdks_url', v)} placeholder="http://pdks.mugla.bel.tr/api" />
+      <Field label="Veritabanı Tipi">
+        <select
+          value={get('pdks_db_type', 'mssql')}
+          onChange={e => set('pdks_db_type', e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="mssql">MSSQL (SQL Server)</option>
+          <option value="mysql">MySQL / MariaDB</option>
+          <option value="postgres">PostgreSQL</option>
+        </select>
+      </Field>
+      <Field label="Host / Sunucu">
+        <Input value={get('pdks_host')} onChange={v => set('pdks_host', v)} placeholder="10.0.0.50 veya pdks.mugla.bel.tr" />
+      </Field>
+      <Field label="Port">
+        <Input value={get('pdks_port', get('pdks_db_type', 'mssql') === 'mssql' ? '1433' : get('pdks_db_type') === 'mysql' ? '3306' : '5432')}
+          onChange={v => set('pdks_port', v)} placeholder="1433" />
+      </Field>
+      <Field label="Veritabanı Adı">
+        <Input value={get('pdks_db')} onChange={v => set('pdks_db', v)} placeholder="PDKS" />
       </Field>
       <Field label="Kullanıcı Adı">
-        <Input value={get('pdks_username')} onChange={v => set('pdks_username', v)} placeholder="api_user" />
+        <Input value={get('pdks_user')} onChange={v => set('pdks_user', v)} placeholder="sa" />
       </Field>
       <Field label="Şifre">
         <PasswordInput value={get('pdks_password')} onChange={v => set('pdks_password', v)} placeholder="••••••••" />
-      </Field>
-      <Field label="API Key" hint="Bazı PDKS sistemlerinde ek API anahtarı gerekebilir">
-        <PasswordInput value={get('pdks_api_key')} onChange={v => set('pdks_api_key', v)} placeholder="••••••••" />
       </Field>
       <div className="flex items-center gap-3 pt-2">
         <button onClick={testPdks} disabled={testing}
@@ -417,6 +556,10 @@ export default function Settings() {
         {saved && <span className="text-sm text-green-600">✓ Kaydedildi</span>}
       </div>
       <TestResult result={testResult} />
+      <p className="text-xs text-gray-400 mt-4">
+        Not: Bağlantı başarılı olsa bile devam verilerinin doğru gelmesi için
+        PDKS veritabanı şemasının servisimizle uyumlu olması gerekir.
+      </p>
     </div>
   );
 
@@ -506,28 +649,42 @@ export default function Settings() {
     </div>
   );
 
-  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm };
+  const renderUlakbell = () => <UlakbellTab />;
+
+  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell };
+
+  // Bazı sekmeler kendi padding'ini yönetir
+  const FULL_PAGE_TABS = ['SUBJECTS', 'AD_CHANGES'];
 
   return (
     <div className="flex h-full min-h-screen bg-gray-50">
       {/* Sol dikey sekmeler */}
-      <aside className="w-48 shrink-0 bg-white border-r border-gray-200 pt-6">
+      <aside className="w-52 shrink-0 bg-white border-r border-gray-200 pt-6">
         <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Ayarlar</p>
-        <nav className="space-y-0.5 px-2">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left
-                ${activeTab === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-              <span>{t.icon}</span>
-              <span>{t.label}</span>
-            </button>
+        <nav className="px-2">
+          {TABS.map((t, i) => (
+            <div key={t.key}>
+              {t.separator && (
+                <div className="mx-1 my-2 border-t border-gray-100" />
+              )}
+              <button
+                onClick={() => setActiveTab(t.key)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left
+                  ${activeTab === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <span>{t.icon}</span>
+                <span>{t.label}</span>
+              </button>
+            </div>
           ))}
         </nav>
       </aside>
 
       {/* İçerik */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        {RENDERERS[activeTab]?.()}
+      <main className="flex-1 overflow-y-auto">
+        {activeTab === 'SUBJECTS'   ? <AdminCategoriesPage /> :
+         activeTab === 'AD_CHANGES' ? <AdChangesPage /> :
+         <div className="p-8">{RENDERERS[activeTab]?.()}</div>}
       </main>
     </div>
   );

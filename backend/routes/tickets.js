@@ -7,6 +7,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { logActivity } = require('../lib/activity');
 const { notifyTicketCreated, notifyTicketAssigned, notifyTicketResolved } = require('../lib/notifications');
 const upload  = require('../lib/upload');
+const ulakbell = require('../services/ulakbell');
 
 router.use(authMiddleware);
 
@@ -176,7 +177,8 @@ router.get('/:id', async (req, res) => {
 
 // ─── POST /api/tickets ────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { title, description, priority, type, categoryId, subjectId, dueDate, source } = req.body;
+  const { title, description, priority, type, categoryId, subjectId, dueDate, source,
+          ilceId, mahalleId, sokakId, binaId } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({ error: 'Başlık ve açıklama zorunludur' });
@@ -239,6 +241,10 @@ router.post('/', async (req, res) => {
         status:        initialStatus,
         approvalStatus: resolvedType === 'REQUEST' ? 'PENDING_APPROVAL' : null,
         source:        source || 'PORTAL',
+        ilceId:        ilceId     ? parseInt(ilceId)    : null,
+        mahalleId:     mahalleId  ? parseInt(mahalleId) : null,
+        sokakId:       sokakId    ? parseInt(sokakId)   : null,
+        binaId:        binaId     ? parseInt(binaId)    : null,
         createdById:   user.id,
       },
       include: {
@@ -279,6 +285,24 @@ router.post('/', async (req, res) => {
       { ...ticket, createdBy: { ...ticket.createdBy, email: user.email } },
       autoGroupName
     ).catch(() => {});
+
+    // ulakBELL otomatik gönderim (ULAKBELL_SYNC=true ise)
+    if (process.env.ULAKBELL_SYNC === 'true') {
+      ulakbell.createIncident(
+        { ...ticket, ilceId, mahalleId, sokakId, binaId },
+        { displayName: user.displayName, email: user.email, phone: user.phone }
+      ).then(async (publicToken) => {
+        if (publicToken) {
+          await prisma.ticket.update({
+            where: { id: ticket.id },
+            data: { ulakbellToken: publicToken },
+          });
+          console.log(`[ulakBELL] Ticket #${ticket.id} → token: ${publicToken}`);
+        }
+      }).catch((err) => {
+        console.error(`[ulakBELL] Hata Ticket #${ticket.id}:`, err.message);
+      });
+    }
 
     res.status(201).json(ticket);
   } catch (err) {

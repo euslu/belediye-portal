@@ -4,7 +4,7 @@ import { createTicket, uploadAttachments } from '../../api/tickets';
 import { getSubmitTypes } from '../../api/settings';
 import { useAuth } from '../../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || '';
 function authFetch(path) {
   return fetch(`${API_URL}${path}`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -183,7 +183,13 @@ const SOURCE_OPTIONS = [
   { value: 'IN_PERSON', label: '👤 Yüz yüze'          },
   { value: 'EMAIL',     label: '📧 E-posta'            },
   { value: 'API',       label: '⚡ API'                 },
+  { value: 'MUHTAR',    label: '🏘️ Muhtar'             },
+  { value: 'VATANDAS',  label: '👥 Vatandaş'           },
+  { value: 'DIGER',     label: '📌 Diğer'              },
 ];
+
+// Adres girişi gerektiren kaynaklar (ulakBELL entegrasyonu)
+const ADDRESS_SOURCES = ['MUHTAR', 'VATANDAS', 'DIGER'];
 
 function Step3Form({ submitType, category, onBack }) {
   const navigate = useNavigate();
@@ -200,11 +206,81 @@ function Step3Form({ submitType, category, onBack }) {
   const [subjLoading, setSubjLoading] = useState(true);
   const [submitted, setSubmitted]   = useState(null); // { ticket, isRequest }
 
+  // ulakBELL toggle + form
+  const [ubEnabled,   setUbEnabled]   = useState(false);
+  const [ubPhone,     setUbPhone]     = useState('');
+  const [ubType,      setUbType]      = useState('incident');
+  const [ubSyncing,   setUbSyncing]   = useState(false);
+  const [ubToast,     setUbToast]     = useState(null); // { ok, msg }
+
+  // Adres kaskad state
+  const [ilceler,    setIlceler]    = useState([]);
+  const [mahalleler, setMahalleler] = useState([]);
+  const [sokaklar,   setSokaklar]   = useState([]);
+  const [binalar,    setBinalar]    = useState([]);
+  const [daireler,   setDaireler]   = useState([]);
+  const [addr, setAddr_] = useState({
+    ilce_id: '', mahalle_id: '', sokak_id: '', bina_no: '', adres_no: '',
+  });
+  const [addrLoading, setAddrLoading] = useState('');
+
+  // ulakBELL toggle otomatik aç: kaynak MUHTAR/VATANDAS/DIGER ise
+  const needsUlakbell = ADDRESS_SOURCES.includes(form.source);
+
   useEffect(() => {
     authFetch(`/api/subjects?categoryId=${category.id}`)
       .then(data => setSubjects(Array.isArray(data) ? data : []))
       .finally(() => setSubjLoading(false));
   }, [category.id]);
+
+  // İlçeleri ilk kez yükle (toggle açılınca veya kaynak değişince)
+  useEffect(() => {
+    if (!(ubEnabled || needsUlakbell) || ilceler.length > 0) return;
+    setAddrLoading('ilce');
+    authFetch('/api/ulakbell/ilceler')
+      .then(d => setIlceler(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setAddrLoading(''));
+  }, [ubEnabled, needsUlakbell, ilceler.length]);
+
+  function setAddr(field, value) {
+    setAddr_(prev => {
+      const n = { ...prev, [field]: value };
+      if (field === 'ilce_id')    { n.mahalle_id = ''; n.sokak_id = ''; n.bina_no = ''; n.adres_no = ''; setMahalleler([]); setSokaklar([]); setBinalar([]); setDaireler([]); }
+      if (field === 'mahalle_id') { n.sokak_id   = ''; n.bina_no  = ''; n.adres_no = ''; setSokaklar([]); setBinalar([]); setDaireler([]); }
+      if (field === 'sokak_id')   { n.bina_no    = ''; n.adres_no = ''; setBinalar([]); setDaireler([]); }
+      if (field === 'bina_no')    { n.adres_no   = ''; setDaireler([]); }
+      return n;
+    });
+    if (field === 'ilce_id' && value) {
+      setAddrLoading('mahalle');
+      authFetch(`/api/ulakbell/mahalleler?ilce_id=${value}`)
+        .then(d => setMahalleler(Array.isArray(d) ? d : []))
+        .catch(() => {})
+        .finally(() => setAddrLoading(''));
+    }
+    if (field === 'mahalle_id' && value) {
+      setAddrLoading('sokak');
+      authFetch(`/api/ulakbell/sokaklar?mahalle_id=${value}`)
+        .then(d => setSokaklar(Array.isArray(d) ? d : []))
+        .catch(() => {})
+        .finally(() => setAddrLoading(''));
+    }
+    if (field === 'sokak_id' && value) {
+      setAddrLoading('bina');
+      authFetch(`/api/ulakbell/binalar?sokak_id=${value}`)
+        .then(d => setBinalar(Array.isArray(d) ? d : []))
+        .catch(() => {})
+        .finally(() => setAddrLoading(''));
+    }
+    if (field === 'bina_no' && value) {
+      setAddrLoading('daire');
+      authFetch(`/api/ulakbell/daireler?bina_no=${value}`)
+        .then(d => setDaireler(Array.isArray(d) ? d : []))
+        .catch(() => {})
+        .finally(() => setAddrLoading(''));
+    }
+  }
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
 
@@ -215,6 +291,9 @@ function Step3Form({ submitType, category, onBack }) {
     setLoading(true);
     try {
       const isRequest = submitType.key !== 'ARIZA';
+      const doUlakbell = ubEnabled || needsUlakbell;
+
+      // 1. Ticket'ı DB'ye kaydet
       const ticket = await createTicket({
         title:       form.title,
         description: form.description,
@@ -223,9 +302,50 @@ function Step3Form({ submitType, category, onBack }) {
         categoryId:  category.id,
         subjectId:   selectedSubj.id,
         source:      form.source || 'PORTAL',
+        ...(doUlakbell && addr.ilce_id    ? { ilceId:    addr.ilce_id }    : {}),
+        ...(doUlakbell && addr.mahalle_id ? { mahalleId: addr.mahalle_id } : {}),
+        ...(doUlakbell && addr.sokak_id   ? { sokakId:   addr.sokak_id }   : {}),
+        ...(doUlakbell && addr.bina_no    ? { binaId:    addr.bina_no }    : {}),
+        ...(doUlakbell && addr.adres_no   ? { adresId:   addr.adres_no }   : {}),
       });
+
       if (files.length > 0) await uploadAttachments(ticket.id, files).catch(() => {});
-      setSubmitted({ ticket, isRequest });
+
+      // 2. ulakBELL senkronizasyonu
+      if (doUlakbell) {
+        setUbSyncing(true);
+        const token = localStorage.getItem('token');
+        try {
+          const syncRes = await fetch(
+            `${API_URL}/api/ulakbell/sync-incident/${ticket.id}`,
+            {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body:    JSON.stringify({
+                mobile_phone:  ubPhone || undefined,
+                incident_type: ubType,
+                ...(addr.ilce_id    ? { ilce_id:    +addr.ilce_id }    : {}),
+                ...(addr.mahalle_id ? { mahalle_id: +addr.mahalle_id } : {}),
+                ...(addr.sokak_id   ? { sokak_id:   +addr.sokak_id }   : {}),
+                ...(addr.bina_no    ? { bina_no:    +addr.bina_no }    : {}),
+                ...(addr.adres_no   ? { adres_no:   +addr.adres_no }   : {}),
+              }),
+            }
+          );
+          const syncData = await syncRes.json();
+          if (syncData.ok) {
+            setUbToast({ ok: true, msg: `ulakBELL'e iletildi${syncData.ulakbellNumber ? ` (#${syncData.ulakbellNumber})` : ''}` });
+          } else {
+            setUbToast({ ok: false, msg: 'ulakBELL iletilemedi, ticket yine de kaydedildi' });
+          }
+        } catch {
+          setUbToast({ ok: false, msg: 'ulakBELL iletilemedi, ticket yine de kaydedildi' });
+        } finally {
+          setUbSyncing(false);
+        }
+      }
+
+      setSubmitted({ ticket, isRequest, ubToast });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -252,6 +372,18 @@ function Step3Form({ submitType, category, onBack }) {
               : 'Teknik ekip talebinizi aldı ve en kısa sürede ilgilenecek.'}
           </p>
         </div>
+        {ubSyncing && (
+          <div className="text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <span className="animate-spin">⟳</span> ulakBELL'e iletiliyor…
+          </div>
+        )}
+        {ubToast && !ubSyncing && (
+          <div className={`text-sm rounded-xl px-4 py-3 border ${ubToast.ok
+            ? 'bg-green-50 text-green-700 border-green-200'
+            : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+            {ubToast.ok ? '✅' : '⚠️'} {ubToast.msg}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             onClick={() => navigate(`/itsm/${ticket.id}`)}
@@ -404,6 +536,117 @@ function Step3Form({ submitType, category, onBack }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ulakBELL Bölümü — kaynak MUHTAR/VATANDAS/DIGER ise veya toggle açıksa */}
+        {isPrivileged && (needsUlakbell || ubEnabled) && (
+          <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 p-5 space-y-4">
+            {/* Başlık + toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔗</span>
+                <h3 className="text-sm font-semibold text-blue-800">ulakBELL'e İlet</h3>
+              </div>
+              {!needsUlakbell && (
+                <button type="button" onClick={() => setUbEnabled(v => !v)}
+                  className={`relative w-10 h-6 rounded-full transition-colors ${ubEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${ubEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              )}
+            </div>
+
+            {(ubEnabled || needsUlakbell) && (<>
+              {/* Başvuru Tipi */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Başvuru Tipi</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { v: 'incident', l: '🔧 Arıza' },
+                    { v: 'demand',   l: '📋 İstek' },
+                    { v: 'complaint',l: '😠 Şikayet' },
+                    { v: 'thanks',   l: '🙏 Teşekkür' },
+                    { v: 'notice',   l: '📢 İhbar' },
+                  ].map(({ v, l }) => (
+                    <button key={v} type="button" onClick={() => setUbType(v)}
+                      className={`px-3 py-1.5 rounded-lg text-sm border-2 transition
+                        ${ubType === v ? 'border-blue-500 bg-blue-100 text-blue-700 font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vatandaş Telefonu */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Vatandaş Telefonu <span className="text-gray-400">(opsiyonel)</span></label>
+                <input type="tel" value={ubPhone} onChange={e => setUbPhone(e.target.value)}
+                  placeholder="5__ ___ __ __"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+
+              {/* Adres Kaskadı */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">📍 Adres Bilgileri <span className="text-gray-400">(opsiyonel)</span></label>
+                <div className="grid grid-cols-2 gap-2.5">
+
+                  {/* İlçe  → { ilce_key, ilce_title } */}
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">İlçe</label>
+                    <select value={addr.ilce_id} onChange={e => setAddr('ilce_id', e.target.value)}
+                      disabled={addrLoading === 'ilce'}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 bg-white">
+                      <option value="">{addrLoading === 'ilce' ? '⟳ Yükleniyor…' : '— Seçin —'}</option>
+                      {ilceler.map(i => <option key={i.ilce_key} value={i.ilce_key}>{i.ilce_title}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Mahalle → { mahalle_key, mahalle_title } */}
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">Mahalle</label>
+                    <select value={addr.mahalle_id} onChange={e => setAddr('mahalle_id', e.target.value)}
+                      disabled={!addr.ilce_id || addrLoading === 'mahalle'}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 bg-white">
+                      <option value="">{addrLoading === 'mahalle' ? '⟳ Yükleniyor…' : addr.ilce_id ? '— Seçin —' : 'Önce ilçe'}</option>
+                      {mahalleler.map(m => <option key={m.mahalle_key} value={m.mahalle_key}>{m.mahalle_title}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Sokak → { sokak_cadde_id, sokak_cadde_title } */}
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">Sokak / Cadde</label>
+                    <select value={addr.sokak_id} onChange={e => setAddr('sokak_id', e.target.value)}
+                      disabled={!addr.mahalle_id || addrLoading === 'sokak'}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 bg-white">
+                      <option value="">{addrLoading === 'sokak' ? '⟳ Yükleniyor…' : addr.mahalle_id ? '— Seçin —' : 'Önce mahalle'}</option>
+                      {sokaklar.map(s => <option key={s.sokak_cadde_id} value={s.sokak_cadde_id}>{s.sokak_cadde_title}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Bina → { id, title } */}
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">Bina No</label>
+                    <select value={addr.bina_no} onChange={e => setAddr('bina_no', e.target.value)}
+                      disabled={!addr.sokak_id || addrLoading === 'bina'}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 bg-white">
+                      <option value="">{addrLoading === 'bina' ? '⟳ Yükleniyor…' : addr.sokak_id ? '— Seçin —' : 'Önce sokak'}</option>
+                      {binalar.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Daire → { id, title } */}
+                  <div className="col-span-2">
+                    <label className="block text-[11px] text-gray-500 mb-1">Daire / İç Kapı No <span className="text-gray-400">(opsiyonel)</span></label>
+                    <select value={addr.adres_no} onChange={e => setAddr('adres_no', e.target.value)}
+                      disabled={!addr.bina_no || addrLoading === 'daire'}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60 bg-white">
+                      <option value="">{addrLoading === 'daire' ? '⟳ Yükleniyor…' : addr.bina_no ? '— Seçin —' : 'Önce bina'}</option>
+                      {daireler.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </>)}
           </div>
         )}
 

@@ -71,31 +71,70 @@ router.get('/ad-computers', async (req, res) => {
 // ─── GET /api/inventory/stats ─────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
-    const [total, byStatus, byType, shared, personal] = await Promise.all([
-      prisma.device.count({ where: { active: true } }),
-      prisma.device.groupBy({
-        by: ['status'], where: { active: true },
-        _count: { status: true },
-      }),
-      prisma.device.groupBy({
-        by: ['type'], where: { active: true },
-        _count: { type: true },
-        orderBy: { _count: { type: 'desc' } },
-      }),
-      prisma.device.count({ where: { active: true, isShared: true } }),
-      prisma.device.count({ where: { active: true, isShared: false } }),
+    const userGroups = req.user.groups || [];
+    const isAdmin = req.user.role === 'admin' || userGroups.includes('int_bislem');
+
+    const baseWhere = { active: true };
+    if (!isAdmin && req.user.directorate) {
+      baseWhere.directorate = req.user.directorate;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+
+    const [byType, addedToday, addedThisWeek, total] = await Promise.all([
+      prisma.device.groupBy({ by: ['type'], where: baseWhere, _count: { type: true } }),
+      prisma.device.count({ where: { ...baseWhere, createdAt: { gte: today } } }),
+      prisma.device.count({ where: { ...baseWhere, createdAt: { gte: monday } } }),
+      prisma.device.count({ where: baseWhere }),
     ]);
 
-    res.json({
-      total,
-      shared,
-      personal,
-      byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count.status])),
-      byType:   byType.map((r) => ({ type: r.type, count: r._count.type })),
-    });
+    const totalByType = Object.fromEntries(byType.map((r) => [r.type, r._count.type]));
+
+    res.json({ total, totalByType, addedToday, addedThisWeek });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'İstatistikler alınamadı' });
+  }
+});
+
+// ─── GET /api/inventory/directorates ─────────────────────────────────────────
+router.get('/directorates', async (req, res) => {
+  try {
+    const userGroups = req.user.groups || [];
+    const isAdmin = req.user.role === 'admin' || userGroups.includes('int_bislem');
+
+    const deviceWhere = { active: true, directorate: { not: null } };
+    if (!isAdmin && req.user.directorate) {
+      deviceWhere.directorate = req.user.directorate;
+    }
+
+    let rows = await prisma.device.findMany({
+      where:    deviceWhere,
+      select:   { directorate: true },
+      distinct: ['directorate'],
+    });
+
+    // Cihazlarda directorate yoksa User tablosundan al
+    if (rows.length === 0) {
+      const userWhere = { directorate: { not: null } };
+      if (!isAdmin && req.user.directorate) {
+        userWhere.directorate = req.user.directorate;
+      }
+      rows = await prisma.user.findMany({
+        where:    userWhere,
+        select:   { directorate: true },
+        distinct: ['directorate'],
+      });
+    }
+
+    const list = rows.map((r) => r.directorate).filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'));
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Daireler alınamadı' });
   }
 });
 
@@ -108,13 +147,27 @@ router.get('/', async (req, res) => {
     page = '1', limit = '50',
   } = req.query;
 
+  const userGroups = req.user.groups || [];
+  const isAdmin = req.user.role === 'admin' || userGroups.includes('int_bislem');
+
   const where = { active: true };
+
+  // Rol bazlı kısıtlama — admin/int_bislem hepsini görebilir
+  if (!isAdmin && req.user.directorate) {
+    where.directorate = req.user.directorate;
+  }
 
   if (type)        where.type       = type;
   if (status)      where.status     = status;
   if (locationId)  where.locationId = parseInt(locationId);
   if (assignedTo)  where.assignedTo = assignedTo === 'me' ? req.user.username : assignedTo;
-  if (directorate) where.directorate = directorate;
+  // directorate filtresi: hem device.directorate hem assignedUser.directorate'e bak
+  if (directorate && (isAdmin || directorate === req.user.directorate)) {
+    where.OR = [
+      { directorate: directorate },
+      { directorate: null, assignedTo: { not: null }, assignedUser: { directorate: directorate } },
+    ];
+  }
   if (department)  where.department  = department;
   if (isShared !== undefined) where.isShared = isShared === 'true';
 
@@ -285,7 +338,7 @@ router.post('/sync-ad', async (req, res) => {
 
   // 30sn timeout ile sarmal
   const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('AD senkronizasyonu zaman aşımına uğradı (30s)')), 30_000)
+    setTimeout(() => reject(new Error('AD senkronizasyonu zaman aşımına uğradı (120s)')), 120_000)
   );
 
   try {

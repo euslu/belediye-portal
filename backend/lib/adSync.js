@@ -2,6 +2,7 @@ const { Client } = require('ldapts');
 const prisma      = require('./prisma');
 const { sendMail } = require('./mailer');
 const { template } = require('./notifications');
+const { resolveDirectorate } = require('./directorateMap');
 
 const AD_URL      = process.env.AD_URL      || 'ldap://localhost';
 const AD_BASE_DN  = process.env.AD_BASE_DN  || 'dc=example,dc=com';
@@ -19,24 +20,31 @@ const CHANGE_LABELS = {
 
 // ─── AD'den tüm kullanıcıları çek ─────────────────────────────────────────────
 async function fetchAdUsers() {
-  const client = new Client({ url: AD_URL, tlsOptions: { rejectUnauthorized: false } });
+  const client = new Client({ url: AD_URL, strictDN: false });
   try {
-    const bindUser = AD_USERNAME.includes('@') ? AD_USERNAME : `${AD_DOMAIN}\\${AD_USERNAME}`;
+    const bindUser = AD_USERNAME.includes('@') ? AD_USERNAME : `${AD_USERNAME}@${AD_DOMAIN}`;
     await client.bind(bindUser, AD_PASSWORD);
 
     const { searchEntries } = await client.search(AD_BASE_DN, {
-      scope:  'sub',
-      filter: '(&(objectClass=user)(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
+      scope:      'sub',
+      filter:     '(&(objectClass=user)(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
       attributes: ['sAMAccountName', 'displayName', 'mail', 'department', 'title'],
+      paged:      true,
+      sizeLimit:  0,
     });
 
-    return searchEntries.map((e) => ({
-      username:    (e.sAMAccountName || '').toLowerCase(),
-      displayName: e.displayName || '',
-      email:       e.mail        || null,
-      department:  e.department  || null,
-      title:       e.title       || null,
-    })).filter((u) => u.username);
+    return searchEntries.map((e) => {
+      const raw = e.department ? String(e.department) : null;
+      const { directorate, department } = resolveDirectorate(raw);
+      return {
+        username:    (e.sAMAccountName || '').toLowerCase(),
+        displayName: e.displayName || '',
+        email:       e.mail        || null,
+        directorate,
+        department,
+        title:       e.title       || null,
+      };
+    }).filter((u) => u.username);
   } finally {
     await client.unbind().catch(() => {});
   }
@@ -180,8 +188,8 @@ async function runAdSync() {
       continue;
     }
 
-    // Departman değişikliği
-    if (adUser.department && dbUser.department !== adUser.department) {
+    // Departman değişikliği (directorate bazında karşılaştır)
+    if (adUser.directorate && dbUser.department !== adUser.department) {
       const log = await prisma.adChangeLog.create({
         data: {
           username:    dbUser.username,
@@ -193,7 +201,7 @@ async function runAdSync() {
       });
       await prisma.user.update({
         where: { username: dbUser.username },
-        data:  { department: adUser.department },
+        data:  { department: adUser.department, directorate: adUser.directorate },
       });
       const devices = await getUserDevices(dbUser.username);
       await createChangeTicket(log, devices);
@@ -218,6 +226,35 @@ async function runAdSync() {
       changes.push(log);
     }
   }
+
+  // Yeni AD kullanıcılarını DB'ye upsert et (Personel sayfası için)
+  let upserted = 0;
+  for (const adUser of adUsers) {
+    if (!adUser.username) continue;
+    try {
+      await prisma.user.upsert({
+        where:  { username: adUser.username },
+        update: {
+          displayName: adUser.displayName || adUser.username,
+          email:       adUser.email       || undefined,
+          directorate: adUser.directorate || undefined,
+          department:  adUser.department  || undefined,
+          title:       adUser.title       || undefined,
+        },
+        create: {
+          username:    adUser.username,
+          displayName: adUser.displayName || adUser.username,
+          email:       adUser.email       || null,
+          directorate: adUser.directorate || null,
+          department:  adUser.department  || null,
+          title:       adUser.title       || null,
+          role:        'user',
+        },
+      });
+      upserted++;
+    } catch { /* tek kullanıcı hatası tüm sync'i durdurmasın */ }
+  }
+  console.log(`[AD Sync] ${upserted} kullanıcı upsert edildi`);
 
   console.log(`[AD Sync] ${changes.length} değişiklik tespit edildi`);
 

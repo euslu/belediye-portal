@@ -151,12 +151,18 @@ router.post('/login', async (req, res) => {
     const entry   = searchEntries[0];
     const userDN  = entry.distinguishedName || entry.dn;
 
-    // Adım 3: Kullanıcının şifresiyle bind dene (doğrulama)
+    // Adım 3: Kullanıcının şifresiyle bind dene (UPN formatı — DN'de Türkçe karakter sorununu önler)
+    const userUPN = `${username}@${process.env.AD_DOMAIN}`;
     try {
-      await withTimeout(userClient.bind(userDN, password), AD_TIMEOUT);
+      await withTimeout(userClient.bind(userUPN, password), AD_TIMEOUT);
     } catch (bindErr) {
       if (bindErr.message.includes('yanıt vermedi')) throw bindErr;
-      return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+      // UPN başarısız olursa full DN ile tekrar dene
+      try {
+        await withTimeout(userClient.bind(userDN, password), AD_TIMEOUT);
+      } catch {
+        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+      }
     }
 
     // Adım 4: memberOf parse et → CN kısmını al
@@ -181,11 +187,15 @@ router.post('/login', async (req, res) => {
 
     console.log(`[AD] Giriş: ${username} | Rol: ${getRole(groups)} | Gruplar: ${groups.join(', ') || '(yok)'}`);
 
+    // AD'de 'department' alanı = Daire Başkanlığı adı (directorate)
+    const adDepartment = entry.department ? String(entry.department) : null;
+
     const payload = {
       username:    String(entry.sAMAccountName || username),
       displayName: String(entry.displayName    || username),
       email:       entry.mail                       ? String(entry.mail)                       : null,
-      department:  entry.department                 ? String(entry.department)                 : null,
+      directorate: adDepartment,
+      department:  adDepartment,
       title:       entry.title                      ? String(entry.title)                      : null,
       office:      entry.physicalDeliveryOfficeName ? String(entry.physicalDeliveryOfficeName) : null,
       city:        entry.l                          ? String(entry.l)                          : null,

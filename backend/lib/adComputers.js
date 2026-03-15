@@ -26,6 +26,13 @@ const AD_ATTRIBUTES = [
   'ms-Mcs-AdmPwd',  // LAPS — sadece yetki varsa döner
 ];
 
+// AD attribute güvenli okuma — array veya null gelebilir
+function adVal(val) {
+  if (val === null || val === undefined) return null;
+  if (Array.isArray(val)) return val[0] != null ? String(val[0]) : null;
+  return String(val) || null;
+}
+
 // DN'den CN kısmını al: "CN=John Doe,OU=..." → "John Doe"
 function parseCN(dn) {
   if (!dn) return null;
@@ -64,41 +71,44 @@ function parseAdDate(str) {
 }
 
 function mapEntry(e) {
-  const lastLogon   = adTimestampToDate(e.lastLogonTimestamp);
-  const daysSince   = lastLogon ? (Date.now() - lastLogon.getTime()) / 86400000 : Infinity;
+  const lastLogon = adTimestampToDate(adVal(e.lastLogonTimestamp));
+  const daysSince = lastLogon ? (Date.now() - lastLogon.getTime()) / 86400000 : Infinity;
 
   return {
-    name:         e.cn                       || '',
-    dnsName:      e.dNSHostName              || null,
-    os:           e.operatingSystem          || null,
-    osVersion:    e.operatingSystemVersion   || null,
-    osSP:         e.operatingSystemServicePack || null,
-    serialNumber: e.serialNumber             || null,
-    description:  e.description              || null,
-    managedBy:    parseCN(e.managedBy),
+    name:         adVal(e.cn)                          || '',
+    dnsName:      adVal(e.dNSHostName),
+    os:           adVal(e.operatingSystem),
+    osVersion:    adVal(e.operatingSystemVersion),
+    osSP:         adVal(e.operatingSystemServicePack),
+    serialNumber: adVal(e.serialNumber),
+    description:  adVal(e.description),
+    managedBy:    parseCN(adVal(e.managedBy)),
+    managedByDN:  adVal(e.managedBy),                  // full DN — username parse için
     lastLogon,
-    createdAt:    parseAdDate(e.whenCreated),
-    changedAt:    parseAdDate(e.whenChanged),
-    location:     e.location                 || null,
-    department:   e.department               || null,
-    ou:           parseOU(e.distinguishedName),
+    createdAt:    parseAdDate(adVal(e.whenCreated)),
+    changedAt:    parseAdDate(adVal(e.whenChanged)),
+    location:     adVal(e.location),
+    department:   adVal(e.department),
+    ou:           parseOU(adVal(e.distinguishedName)),
     inactive:     daysSince > 90,
-    alreadyInInventory: false, // enriched by caller
+    alreadyInInventory: false,
   };
 }
 
 // ─── Gerçek LDAP sorgusu ──────────────────────────────────────────────────────
 async function fetchAdComputers() {
   const { Client } = require('ldapts');
-  const client = new Client({ url: AD_URL, tlsOptions: { rejectUnauthorized: false } });
+  const client = new Client({ url: AD_URL, strictDN: false });
   try {
-    const bindUser = AD_USERNAME.includes('@') ? AD_USERNAME : `${AD_DOMAIN}\\${AD_USERNAME}`;
+    const bindUser = AD_USERNAME.includes('@') ? AD_USERNAME : `${AD_USERNAME}@${AD_DOMAIN}`;
     await client.bind(bindUser, AD_PASSWORD);
 
     const { searchEntries } = await client.search(AD_BASE_DN, {
-      scope:  'sub',
-      filter: '(&(objectClass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
+      scope:      'sub',
+      filter:     '(&(objectClass=computer)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
       attributes: AD_ATTRIBUTES,
+      paged:      true,
+      sizeLimit:  0,
     });
 
     return searchEntries.map(mapEntry);
