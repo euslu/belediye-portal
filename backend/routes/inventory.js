@@ -101,34 +101,22 @@ router.get('/stats', async (req, res) => {
 });
 
 // ─── GET /api/inventory/directorates ─────────────────────────────────────────
+// Her zaman User tablosundan çeker (cihazlar henüz daire bilgisi olmayabilir)
 router.get('/directorates', async (req, res) => {
   try {
     const userGroups = req.user.groups || [];
     const isAdmin = req.user.role === 'admin' || userGroups.includes('int_bislem');
 
-    const deviceWhere = { active: true, directorate: { not: null } };
+    const userWhere = { directorate: { not: null } };
     if (!isAdmin && req.user.directorate) {
-      deviceWhere.directorate = req.user.directorate;
+      userWhere.directorate = req.user.directorate;
     }
 
-    let rows = await prisma.device.findMany({
-      where:    deviceWhere,
+    const rows = await prisma.user.findMany({
+      where:    userWhere,
       select:   { directorate: true },
       distinct: ['directorate'],
     });
-
-    // Cihazlarda directorate yoksa User tablosundan al
-    if (rows.length === 0) {
-      const userWhere = { directorate: { not: null } };
-      if (!isAdmin && req.user.directorate) {
-        userWhere.directorate = req.user.directorate;
-      }
-      rows = await prisma.user.findMany({
-        where:    userWhere,
-        select:   { directorate: true },
-        distinct: ['directorate'],
-      });
-    }
 
     const list = rows.map((r) => r.directorate).filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'));
     res.json(list);
@@ -139,81 +127,68 @@ router.get('/directorates', async (req, res) => {
 });
 
 // ─── GET /api/inventory ───────────────────────────────────────────────────────
-// Filtreler: type, status, locationId, assignedTo, directorate, isShared
+// Raw SQL — Prisma ORM'nin LEFT JOIN + OR kısıtlamasını aşmak için
 router.get('/', async (req, res) => {
-  const {
-    type, status, locationId, assignedTo, directorate, department,
-    isShared, search,
-    page = '1', limit = '50',
-  } = req.query;
+  const { directorate, type, status, search, page = '1', limit = '50' } = req.query;
 
   const userGroups = req.user.groups || [];
-  const isAdmin = req.user.role === 'admin' || userGroups.includes('int_bislem');
-
-  const where = { active: true };
-
-  // Rol bazlı kısıtlama — manager sadece kendi dairesini görebilir
-  const roleDir = (!isAdmin && req.user.directorate) ? req.user.directorate : null;
-
-  if (type)      where.type      = type;
-  if (status)    where.status    = status;
-  if (locationId) where.locationId = parseInt(locationId);
-  if (assignedTo) where.assignedTo = assignedTo === 'me' ? req.user.username : assignedTo;
-  if (department) where.department = department;
-  if (isShared !== undefined) where.isShared = isShared === 'true';
-
-  // Daire + Arama filtreleri — OR çakışmasını AND ile çöz
-  const effectiveDir = directorate && (isAdmin || directorate === roleDir) ? directorate
-                     : roleDir;
-
-  const dirFilter = effectiveDir
-    ? { OR: [
-        { directorate: effectiveDir },
-        { directorate: null, assignedUser: { directorate: effectiveDir } },
-      ]}
-    : null;
-
-  const searchFilter = search
-    ? { OR: [
-        { name:         { contains: search, mode: 'insensitive' } },
-        { brand:        { contains: search, mode: 'insensitive' } },
-        { model:        { contains: search, mode: 'insensitive' } },
-        { serialNumber: { contains: search, mode: 'insensitive' } },
-        { ipAddress:    { contains: search, mode: 'insensitive' } },
-        { macAddress:   { contains: search, mode: 'insensitive' } },
-        { assignedTo:   { contains: search, mode: 'insensitive' } },
-      ]}
-    : null;
-
-  if (dirFilter && searchFilter) {
-    where.AND = [dirFilter, searchFilter];
-  } else if (dirFilter) {
-    where.AND = [dirFilter];
-  } else if (searchFilter) {
-    where.AND = [searchFilter];
-  }
-
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const isAdmin    = req.user.role === 'admin' || userGroups.includes('int_bislem');
+  const roleDir    = !isAdmin && req.user.directorate ? req.user.directorate : null;
+  const effDir     = directorate && (isAdmin || directorate === roleDir) ? directorate : roleDir;
 
   try {
-    const [devices, total] = await Promise.all([
-      prisma.device.findMany({
-        where,
-        include: {
-          location:     { select: { id: true, name: true, city: true } },
-          assignedUser: { select: { id: true, username: true, displayName: true, department: true } },
-        },
-        orderBy: [{ type: 'asc' }, { name: 'asc' }],
-        skip,
-        take: parseInt(limit),
-      }),
-      prisma.device.count({ where }),
+    const params = [];
+    let pi = 1;
+
+    let base = `
+      FROM "Device" d
+      LEFT JOIN "User" u ON d."assignedTo" = u.username
+      WHERE d.active = true
+    `;
+
+    if (effDir === '__unassigned__') {
+      base += ` AND d.directorate IS NULL AND d."assignedTo" IS NULL`;
+    } else if (effDir) {
+      base += ` AND (d.directorate = $${pi} OR (d.directorate IS NULL AND u.directorate = $${pi}))`;
+      params.push(effDir); pi++;
+    }
+
+    if (type && VALID_TYPES.includes(type)) {
+      base += ` AND d.type = $${pi}::"DeviceType"`;
+      params.push(type); pi++;
+    }
+
+    if (status && VALID_STATUSES.includes(status)) {
+      base += ` AND d.status = $${pi}::"DeviceStatus"`;
+      params.push(status); pi++;
+    }
+
+    if (search) {
+      const like = `%${search}%`;
+      base += ` AND (d.name ILIKE $${pi} OR d."assignedTo" ILIKE $${pi} OR d."ipAddress" ILIKE $${pi} OR d."serialNumber" ILIKE $${pi} OR u."displayName" ILIKE $${pi})`;
+      params.push(like); pi++;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [countRows, devices] = await Promise.all([
+      prisma.$queryRawUnsafe(`SELECT COUNT(*)::int AS count ${base}`, ...params),
+      prisma.$queryRawUnsafe(
+        `SELECT d.*,
+                u."displayName"  AS "userName",
+                u.directorate    AS "userDirectorate",
+                u.department     AS "userDepartment"
+         ${base}
+         ORDER BY d.name ASC
+         LIMIT $${pi} OFFSET $${pi + 1}`,
+        ...params, parseInt(limit), skip,
+      ),
     ]);
 
-    res.json({ devices, total, page: parseInt(page), limit: parseInt(limit) });
+    res.json({ devices, total: countRows[0]?.count ?? 0, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Cihazlar alınamadı' });
+    console.error('Inventory GET error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

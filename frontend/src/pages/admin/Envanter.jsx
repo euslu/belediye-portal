@@ -828,7 +828,7 @@ function DeviceDetailModal({ device, onClose }) {
     ['Durum',        device.status],
     ['Daire',        device.directorate],
     ['Şube',         device.department],
-    ['Atanan',       device.assignedUser?.displayName || device.assignedTo],
+    ['Atanan',       device.userName || device.assignedTo],
     ['Lokasyon',     device.location?.name],
     ['Notlar',       device.notes],
     ['Son Sync',     device.lastSyncAt ? new Date(device.lastSyncAt).toLocaleString('tr-TR') : null],
@@ -983,6 +983,7 @@ function DevicesTab({ user }) {
           className={`${selectCls} min-w-[220px] font-medium cursor-pointer`}
         >
           <option value="">— Daire Başkanlığı Seçin —</option>
+          <option value="__unassigned__">📋 Atanmamış / Daire Bilinmiyor</option>
           {directorates.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
@@ -1047,11 +1048,11 @@ function DevicesTab({ user }) {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-gray-600 text-xs">
-                    {d.assignedUser
-                      ? <span>{d.assignedUser.displayName}<span className="text-gray-400 ml-1">({d.assignedTo})</span></span>
+                    {d.userName
+                      ? <span>{d.userName}<span className="text-gray-400 ml-1">({d.assignedTo})</span></span>
                       : d.assignedTo || <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={d.department}>{d.department || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={d.userDepartment || d.department}>{d.userDepartment || d.department || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 text-xs font-mono">{d.ipAddress || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[150px] truncate" title={d.model}>{d.model || '—'}</td>
                   <td className="px-3 py-2.5">
