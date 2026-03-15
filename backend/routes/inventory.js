@@ -152,34 +152,45 @@ router.get('/', async (req, res) => {
 
   const where = { active: true };
 
-  // Rol bazlı kısıtlama — admin/int_bislem hepsini görebilir
-  if (!isAdmin && req.user.directorate) {
-    where.directorate = req.user.directorate;
-  }
+  // Rol bazlı kısıtlama — manager sadece kendi dairesini görebilir
+  const roleDir = (!isAdmin && req.user.directorate) ? req.user.directorate : null;
 
-  if (type)        where.type       = type;
-  if (status)      where.status     = status;
-  if (locationId)  where.locationId = parseInt(locationId);
-  if (assignedTo)  where.assignedTo = assignedTo === 'me' ? req.user.username : assignedTo;
-  // directorate filtresi: hem device.directorate hem assignedUser.directorate'e bak
-  if (directorate && (isAdmin || directorate === req.user.directorate)) {
-    where.OR = [
-      { directorate: directorate },
-      { directorate: null, assignedTo: { not: null }, assignedUser: { directorate: directorate } },
-    ];
-  }
-  if (department)  where.department  = department;
+  if (type)      where.type      = type;
+  if (status)    where.status    = status;
+  if (locationId) where.locationId = parseInt(locationId);
+  if (assignedTo) where.assignedTo = assignedTo === 'me' ? req.user.username : assignedTo;
+  if (department) where.department = department;
   if (isShared !== undefined) where.isShared = isShared === 'true';
 
-  if (search) {
-    where.OR = [
-      { name:         { contains: search, mode: 'insensitive' } },
-      { brand:        { contains: search, mode: 'insensitive' } },
-      { model:        { contains: search, mode: 'insensitive' } },
-      { serialNumber: { contains: search, mode: 'insensitive' } },
-      { ipAddress:    { contains: search, mode: 'insensitive' } },
-      { macAddress:   { contains: search, mode: 'insensitive' } },
-    ];
+  // Daire + Arama filtreleri — OR çakışmasını AND ile çöz
+  const effectiveDir = directorate && (isAdmin || directorate === roleDir) ? directorate
+                     : roleDir;
+
+  const dirFilter = effectiveDir
+    ? { OR: [
+        { directorate: effectiveDir },
+        { directorate: null, assignedUser: { directorate: effectiveDir } },
+      ]}
+    : null;
+
+  const searchFilter = search
+    ? { OR: [
+        { name:         { contains: search, mode: 'insensitive' } },
+        { brand:        { contains: search, mode: 'insensitive' } },
+        { model:        { contains: search, mode: 'insensitive' } },
+        { serialNumber: { contains: search, mode: 'insensitive' } },
+        { ipAddress:    { contains: search, mode: 'insensitive' } },
+        { macAddress:   { contains: search, mode: 'insensitive' } },
+        { assignedTo:   { contains: search, mode: 'insensitive' } },
+      ]}
+    : null;
+
+  if (dirFilter && searchFilter) {
+    where.AND = [dirFilter, searchFilter];
+  } else if (dirFilter) {
+    where.AND = [dirFilter];
+  } else if (searchFilter) {
+    where.AND = [searchFilter];
   }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
