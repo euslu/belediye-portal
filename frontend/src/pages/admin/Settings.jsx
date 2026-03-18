@@ -85,6 +85,111 @@ function SaveButton({ onClick, loading }) {
 
 // ─── Sekmeler ─────────────────────────────────────────────────────────────────
 
+// ─── ManageEngine SDP Entegrasyon Tabı ───────────────────────────────────────
+
+function ManageEngineTab() {
+  const [cfg, setCfg]           = useState({ url: 'https://epc.mugla.bel.tr:8383', apiKey: '', enabled: false });
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [testing, setTesting]   = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [showKey, setShowKey]   = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    fetch(`${API}/api/servicedesk/settings`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setCfg({ url: d.url || 'https://epc.mugla.bel.tr:8383', apiKey: d.apiKey || '', enabled: d.enabled || false }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    const token = localStorage.getItem('token');
+    await fetch(`${API}/api/servicedesk/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ sdp_url: cfg.url, sdp_api_key: cfg.apiKey, sdp_enabled: cfg.enabled }),
+    });
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const test = async () => {
+    setTesting(true); setTestResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/servicedesk/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sdp_url: cfg.url, sdp_api_key: cfg.apiKey }),
+      });
+      setTestResult(await r.json());
+    } catch (e) { setTestResult({ success: false, message: e.message }); }
+    setTesting(false);
+  };
+
+  if (loading) return <div className="text-sm text-gray-400 p-2">Yükleniyor…</div>;
+
+  return (
+    <div className="max-w-lg">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xl">🛠️</span>
+        <h3 className="text-base font-semibold text-gray-800">ManageEngine ServiceDesk Plus</h3>
+      </div>
+      <p className="text-sm text-gray-500 mb-5">SDP v3 API entegrasyonu — asset ve talep senkronizasyonu.</p>
+
+      <Field label="Aktif">
+        <Toggle label="SDP entegrasyonu aktif" value={cfg.enabled} onChange={v => setCfg(p => ({ ...p, enabled: v }))} />
+      </Field>
+      <Field label="SDP URL">
+        <Input value={cfg.url} onChange={v => setCfg(p => ({ ...p, url: v }))} placeholder="https://epc.mugla.bel.tr:8383" />
+      </Field>
+      <Field label="API Key">
+        <div className="relative">
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={cfg.apiKey}
+            onChange={e => setCfg(p => ({ ...p, apiKey: e.target.value }))}
+            placeholder="••••••••••••••••"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button type="button" onClick={() => setShowKey(v => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
+            {showKey ? '🙈' : '👁'}
+          </button>
+        </div>
+      </Field>
+
+      <div className="flex items-center gap-3 pt-2">
+        <button onClick={test} disabled={testing}
+          className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60">
+          {testing ? 'Test ediliyor…' : '🔌 Bağlantıyı Test Et'}
+        </button>
+        <button onClick={save} disabled={saving}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+          {saving ? 'Kaydediliyor…' : '💾 Kaydet'}
+        </button>
+        {saved && <span className="text-sm text-green-600">✓ Kaydedildi</span>}
+      </div>
+
+      {testResult && (
+        <div className={`mt-4 p-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <p className={`font-medium ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>
+            {testResult.success ? '✅' : '❌'} {testResult.message}
+          </p>
+        </div>
+      )}
+
+      <p className="text-xs text-gray-400 mt-4">
+        Authorization header'a API key direkt gönderilir (Bearer prefix olmadan).
+      </p>
+    </div>
+  );
+}
+
 // ─── ulakBELL Entegrasyon Tabı ───────────────────────────────────────────────
 
 function UlakbellTab() {
@@ -97,16 +202,15 @@ function UlakbellTab() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch(`${API}/api/settings?category=ulakbell`, {
+    fetch(`${API}/api/settings`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(rows => {
-        const m = Object.fromEntries((rows || []).map(r => [r.key, r.value]));
+      .then(obj => {
         setCfg({
-          url:   m.ulakbell_url   || '',
-          token: m.ulakbell_token || '',
-          sync:  m.ulakbell_sync === 'true',
+          url:   obj.ulakbell_url   || '',
+          token: obj.ulakbell_token || '',
+          sync:  obj.ulakbell_sync === 'true',
         });
       })
       .catch(() => {})
@@ -116,18 +220,15 @@ function UlakbellTab() {
   const save = async () => {
     setSaving(true); setSaved(false);
     const token = localStorage.getItem('token');
-    const entries = [
-      ['ulakbell_url',   cfg.url],
-      ['ulakbell_token', cfg.token],
-      ['ulakbell_sync',  String(cfg.sync)],
-    ];
-    await Promise.all(entries.map(([key, value]) =>
-      fetch(`${API}/api/settings/${key}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ value }),
-      })
-    ));
+    await fetch(`${API}/api/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        ulakbell_url:   cfg.url,
+        ulakbell_token: cfg.token,
+        ulakbell_sync:  String(cfg.sync),
+      }),
+    });
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -214,7 +315,8 @@ const TABS = [
   // ── AD Değişiklikleri ────────────────────
   { key: 'AD_CHANGES', label: 'AD Değişiklikleri',  icon: '🔄', separator: true },
   // ── Entegrasyonlar ───────────────────────
-  { key: 'ULAKBELL',   label: 'ulakBELL',           icon: '🔔', separator: true },
+  { key: 'ULAKBELL',      label: 'ulakBELL',        icon: '🔔', separator: true },
+  { key: 'MANAGEENGINE', label: 'ManageEngine SDP', icon: '🛠️' },
 ];
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
@@ -325,7 +427,8 @@ export default function Settings() {
     setTesting(true); setTestResult(null);
     try {
       const r = await authFetch(`${API}/api/pdks/test`, { method: 'POST', body: JSON.stringify(data.PDKS || {}) });
-      setTestResult(await r.json());
+      const json = await r.json();
+      setTestResult(json);
     } catch (e) { setTestResult({ success: false, message: e.message }); }
     finally { setTesting(false); }
   };
@@ -521,28 +624,24 @@ export default function Settings() {
         <Toggle value={get('pdks_enabled', 'false') === 'true'} onChange={v => set('pdks_enabled', v ? 'true' : 'false')} label={get('pdks_enabled', 'false') === 'true' ? 'Aktif' : 'Pasif'} />
       </Field>
       <Field label="Veritabanı Tipi">
-        <select
-          value={get('pdks_db_type', 'mssql')}
-          onChange={e => set('pdks_db_type', e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="mssql">MSSQL (SQL Server)</option>
-          <option value="mysql">MySQL / MariaDB</option>
-          <option value="postgres">PostgreSQL</option>
-        </select>
+        <div className="px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-600">
+          Microsoft SQL Server (MSSQL)
+        </div>
       </Field>
       <Field label="Host / Sunucu">
-        <Input value={get('pdks_host')} onChange={v => set('pdks_host', v)} placeholder="10.0.0.50 veya pdks.mugla.bel.tr" />
+        <Input value={get('pdks_host')} onChange={v => set('pdks_host', v)} placeholder="10.100.0.159" />
       </Field>
       <Field label="Port">
-        <Input value={get('pdks_port', get('pdks_db_type', 'mssql') === 'mssql' ? '1433' : get('pdks_db_type') === 'mysql' ? '3306' : '5432')}
-          onChange={v => set('pdks_port', v)} placeholder="1433" />
+        <Input value={get('pdks_port', '1433')} onChange={v => set('pdks_port', v)} placeholder="1433" />
+      </Field>
+      <Field label="Instance (opsiyonel)">
+        <Input value={get('pdks_instance', '')} onChange={v => set('pdks_instance', v)} placeholder="SQLEXPRESS (named instance varsa)" />
       </Field>
       <Field label="Veritabanı Adı">
         <Input value={get('pdks_db')} onChange={v => set('pdks_db', v)} placeholder="PDKS" />
       </Field>
       <Field label="Kullanıcı Adı">
-        <Input value={get('pdks_user')} onChange={v => set('pdks_user', v)} placeholder="sa" />
+        <Input value={get('pdks_user')} onChange={v => set('pdks_user', v)} placeholder="ethem.usluoglu" />
       </Field>
       <Field label="Şifre">
         <PasswordInput value={get('pdks_password')} onChange={v => set('pdks_password', v)} placeholder="••••••••" />
@@ -555,10 +654,26 @@ export default function Settings() {
         <SaveButton onClick={save} loading={saving} />
         {saved && <span className="text-sm text-green-600">✓ Kaydedildi</span>}
       </div>
-      <TestResult result={testResult} />
+      {testResult && (
+        <div className={`mt-4 p-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <p className={`font-medium ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>
+            {testResult.success ? '✅' : '❌'} {testResult.message}
+          </p>
+          {testResult.success && testResult.tables?.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-gray-600 mb-1">Bulunan tablolar ({testResult.tables.length}):</p>
+              <div className="flex flex-wrap gap-1 max-h-40 overflow-y-auto">
+                {testResult.tables.map(t => (
+                  <span key={t} className="px-2 py-0.5 bg-white border border-green-200 rounded text-xs text-gray-700 font-mono">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <p className="text-xs text-gray-400 mt-4">
-        Not: Bağlantı başarılı olsa bile devam verilerinin doğru gelmesi için
-        PDKS veritabanı şemasının servisimizle uyumlu olması gerekir.
+        Instance adı yalnızca named instance kullanıyorsanız gereklidir (örn. SQLEXPRESS).
+        Named instance kullanılırsa Port alanı göz ardı edilir.
       </p>
     </div>
   );
@@ -651,7 +766,9 @@ export default function Settings() {
 
   const renderUlakbell = () => <UlakbellTab />;
 
-  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell };
+  const renderManageengine = () => <ManageEngineTab />;
+
+  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell, MANAGEENGINE: renderManageengine };
 
   // Bazı sekmeler kendi padding'ini yönetir
   const FULL_PAGE_TABS = ['SUBJECTS', 'AD_CHANGES'];

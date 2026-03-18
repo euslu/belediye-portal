@@ -13,11 +13,12 @@ async function getPdksConfig() {
   const cfg  = Object.fromEntries(rows.map(r => [r.key, r.value]));
   return {
     enabled:  cfg.pdks_enabled === 'true',
-    type:     cfg.pdks_db_type || 'mssql',   // mssql | mysql | postgres
-    host:     cfg.pdks_host    || '',
+    type:     'mssql',
+    host:     cfg.pdks_host     || '',
     port:     parseInt(cfg.pdks_port) || 1433,
-    database: cfg.pdks_db      || '',
-    user:     cfg.pdks_user    || '',
+    instance: cfg.pdks_instance || '',
+    database: cfg.pdks_db       || '',
+    user:     cfg.pdks_user     || '',
     password: cfg.pdks_password || '',
   };
 }
@@ -25,16 +26,22 @@ async function getPdksConfig() {
 // ─── MSSQL bağlantısı ────────────────────────────────────────────────────────
 async function mssqlQuery(cfg, sql, params = []) {
   const mssql = require('mssql');
-  const pool  = await mssql.connect({
+  const connCfg = {
     server:   cfg.host,
-    port:     cfg.port,
     database: cfg.database,
     user:     cfg.user,
     password: cfg.password,
-    options:  { trustServerCertificate: true, enableArithAbort: true },
+    options: {
+      trustServerCertificate: true,
+      enableArithAbort: true,
+      encrypt: false,
+      ...(cfg.instance ? { instanceName: cfg.instance } : {}),
+    },
     connectionTimeout: 10000,
     requestTimeout:    15000,
-  });
+  };
+  if (!cfg.instance) connCfg.port = cfg.port;
+  const pool  = await mssql.connect(connCfg);
   try {
     const req = pool.request();
     params.forEach((p, i) => req.input(`p${i}`, p));
@@ -107,19 +114,41 @@ function buildSql(template, cfg) {
   return template.replace(/@\w+/g, '?');
 }
 
-// ─── Bağlantı testi ───────────────────────────────────────────────────────────
+// ─── Bağlantı testi + tablo listesi ──────────────────────────────────────────
 async function testConnection(overrideCfg = null) {
   const cfg = overrideCfg || await getPdksConfig();
   if (!cfg.host) throw new Error('Host tanımlanmamış');
 
-  let countSql;
-  if (cfg.type === 'mssql')    countSql = 'SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES';
-  else if (cfg.type === 'mysql') countSql = 'SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()';
-  else                          countSql = "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = 'public'";
+  const tablesSql = `
+    SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_TYPE = 'BASE TABLE'
+    ORDER BY TABLE_NAME
+  `;
+  const rows   = await query(cfg, tablesSql);
+  const tables = rows.map(r => r.TABLE_NAME || r.table_name);
+  return { success: true, tableCount: tables.length, tables };
+}
 
-  const rows = await query(cfg, countSql);
-  const cnt  = rows[0]?.cnt || rows[0]?.CNT || 0;
-  return { success: true, tableCount: Number(cnt) };
+// ─── Tablo yapısı keşfi ───────────────────────────────────────────────────────
+async function exploreTable(tableName, overrideCfg = null) {
+  const cfg = overrideCfg || await getPdksConfig();
+  if (!cfg.host) throw new Error('Host tanımlanmamış');
+
+  const colsSql = `
+    SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = '${tableName.replace(/'/g, "''")}'
+    ORDER BY ORDINAL_POSITION
+  `;
+  const sampleSql = `SELECT TOP 5 * FROM [${tableName.replace(/]/g, ']]')}]`;
+
+  const [columns, sample] = await Promise.all([
+    query(cfg, colsSql),
+    query(cfg, sampleSql).catch(() => []),
+  ]);
+
+  return { tableName, columns, sample };
 }
 
 // ─── Günlük devam/devamsızlık ─────────────────────────────────────────────────
@@ -213,4 +242,4 @@ async function getLeaveInfo(date) {
   return query(cfg, sql, [dateStr]);
 }
 
-module.exports = { testConnection, getDailyAttendance, getDepartmentSummary, getLeaveInfo, getPdksConfig };
+module.exports = { testConnection, exploreTable, getDailyAttendance, getDepartmentSummary, getLeaveInfo, getPdksConfig };

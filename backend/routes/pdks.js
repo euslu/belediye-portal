@@ -14,21 +14,46 @@ const ADMIN_MANAGER = (req, res, next) => {
 
 // ─── POST /api/pdks/test ──────────────────────────────────────────────────────
 router.post('/test', ADMIN_MANAGER, async (req, res) => {
-  const { pdks_db_type, pdks_host, pdks_port, pdks_db, pdks_user, pdks_password } = req.body;
+  const { pdks_host, pdks_port, pdks_instance, pdks_db, pdks_user, pdks_password } = req.body;
   if (!pdks_host) return res.json({ success: false, message: 'Host girilmedi' });
 
   try {
     const result = await pdks.testConnection({
-      type:     pdks_db_type || 'mssql',
+      type:     'mssql',
       host:     pdks_host,
       port:     parseInt(pdks_port) || 1433,
+      instance: pdks_instance || '',
       database: pdks_db,
       user:     pdks_user,
       password: pdks_password,
     });
-    res.json({ success: true, message: `Bağlantı başarılı — ${result.tableCount} tablo bulundu` });
+    res.json({
+      success: true,
+      message: `Bağlantı başarılı — ${result.tableCount} tablo bulundu`,
+      tables:  result.tables,
+    });
   } catch (err) {
     res.json({ success: false, message: err.message });
+  }
+});
+
+// ─── GET /api/pdks/explore ────────────────────────────────────────────────────
+router.get('/explore', ADMIN_MANAGER, async (req, res) => {
+  try {
+    const result = await pdks.testConnection();
+    res.json({ success: true, tables: result.tables });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── GET /api/pdks/explore/:table ─────────────────────────────────────────────
+router.get('/explore/:table', ADMIN_MANAGER, async (req, res) => {
+  try {
+    const result = await pdks.exploreTable(req.params.table);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

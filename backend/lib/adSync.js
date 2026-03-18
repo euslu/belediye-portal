@@ -2,7 +2,7 @@ const { Client } = require('ldapts');
 const prisma      = require('./prisma');
 const { sendMail } = require('./mailer');
 const { template } = require('./notifications');
-const { resolveDirectorate } = require('./directorateMap');
+const { parseDNForDirectorate } = require('./directorateMap');
 
 const AD_URL      = process.env.AD_URL      || 'ldap://localhost';
 const AD_BASE_DN  = process.env.AD_BASE_DN  || 'dc=example,dc=com';
@@ -18,6 +18,25 @@ const CHANGE_LABELS = {
   TITLE_CHANGE:      'Unvan Değişikliği',
 };
 
+// AD attribute güvenli okuma
+function adVal(val) {
+  if (val === null || val === undefined) return null;
+  if (Array.isArray(val)) return val[0] != null ? String(val[0]).trim() : null;
+  const s = String(val).trim();
+  return s || null;
+}
+
+// Department alanından "Personeli" / truncated "Persone" ekini temizle
+function cleanDept(raw) {
+  if (!raw) return null;
+  return String(raw).replace(/\s+Persone(li)?$/i, '').trim() || null;
+}
+
+// userAccountControl bit 2 = disabled
+function isActiveUser(uac) {
+  return (parseInt(adVal(uac) || '0') & 2) === 0;
+}
+
 // ─── AD'den tüm kullanıcıları çek ─────────────────────────────────────────────
 async function fetchAdUsers() {
   const client = new Client({ url: AD_URL, strictDN: false });
@@ -28,21 +47,38 @@ async function fetchAdUsers() {
     const { searchEntries } = await client.search(AD_BASE_DN, {
       scope:      'sub',
       filter:     '(&(objectClass=user)(objectCategory=person)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
-      attributes: ['sAMAccountName', 'displayName', 'mail', 'department', 'title'],
-      paged:      true,
-      sizeLimit:  0,
+      attributes: [
+        'sAMAccountName', 'displayName', 'mail', 'department', 'title',
+        'distinguishedName',
+        'extensionAttribute1',        // GSM telefon
+        'otherIpPhone',               // dahili IP telefon
+        'employeeNumber',             // sicil / çalışan no
+        'departmentNumber',           // departman no
+        'physicalDeliveryOfficeName', // ofis / lokasyon
+        'l',                          // şehir / ilçe
+      ],
+      paged:     true,
+      sizeLimit: 0,
     });
 
     return searchEntries.map((e) => {
-      const raw = e.department ? String(e.department) : null;
-      const { directorate, department } = resolveDirectorate(raw);
+      const dn = adVal(e.distinguishedName);
+      const { directorate } = parseDNForDirectorate(dn);
+      const department = cleanDept(adVal(e.department));
+
       return {
-        username:    (e.sAMAccountName || '').toLowerCase(),
-        displayName: e.displayName || '',
-        email:       e.mail        || null,
+        username:         (adVal(e.sAMAccountName) || '').toLowerCase(),
+        displayName:      adVal(e.displayName)               || '',
+        email:            adVal(e.mail),
+        title:            adVal(e.title),
         directorate,
         department,
-        title:       e.title       || null,
+        phone:            adVal(e.extensionAttribute1),
+        ipPhone:          adVal(e.otherIpPhone),
+        employeeNumber:   adVal(e.employeeNumber),
+        departmentNumber: adVal(e.departmentNumber),
+        office:           adVal(e.physicalDeliveryOfficeName),
+        city:             adVal(e.l),
       };
     }).filter((u) => u.username);
   } finally {
@@ -110,7 +146,6 @@ async function sendChangeNotification(changes) {
 
 // ─── Değişiklik için otomatik ticket ──────────────────────────────────────────
 async function createChangeTicket(change, devices) {
-  // Sistemi temsil eden admin kullanıcıyı bul veya oluştur
   const systemUser = await prisma.user.upsert({
     where:  { username: 'system' },
     update: {},
@@ -161,18 +196,17 @@ async function runAdSync() {
 
   // DB kullanıcılarını çek (sistem ve dış kullanıcılar hariç)
   const dbUsers = await prisma.user.findMany({
-    where: { username: { not: 'system' }, department: { not: 'Dış Kullanıcı' } },
+    where:  { username: { not: 'system' }, department: { not: 'Dış Kullanıcı' } },
     select: { id: true, username: true, displayName: true, department: true, title: true },
   });
 
-  const adMap = new Map(adUsers.map((u) => [u.username, u]));
+  const adMap  = new Map(adUsers.map((u) => [u.username, u]));
   const changes = [];
 
   for (const dbUser of dbUsers) {
     const adUser = adMap.get(dbUser.username);
 
     if (!adUser) {
-      // Kullanıcı AD'de yok → ayrılmış
       const log = await prisma.adChangeLog.create({
         data: {
           username:    dbUser.username,
@@ -188,8 +222,8 @@ async function runAdSync() {
       continue;
     }
 
-    // Departman değişikliği (directorate bazında karşılaştır)
-    if (adUser.directorate && dbUser.department !== adUser.department) {
+    // Departman değişikliği
+    if (adUser.department && dbUser.department !== adUser.department) {
       const log = await prisma.adChangeLog.create({
         data: {
           username:    dbUser.username,
@@ -227,7 +261,7 @@ async function runAdSync() {
     }
   }
 
-  // Yeni AD kullanıcılarını DB'ye upsert et (Personel sayfası için)
+  // Tüm AD kullanıcılarını upsert et
   let upserted = 0;
   for (const adUser of adUsers) {
     if (!adUser.username) continue;
@@ -235,27 +269,38 @@ async function runAdSync() {
       await prisma.user.upsert({
         where:  { username: adUser.username },
         update: {
-          displayName: adUser.displayName || adUser.username,
-          email:       adUser.email       || undefined,
-          directorate: adUser.directorate || undefined,
-          department:  adUser.department  || undefined,
-          title:       adUser.title       || undefined,
+          displayName:      adUser.displayName      || adUser.username,
+          email:            adUser.email            ?? undefined,
+          directorate:      adUser.directorate      ?? undefined,
+          department:       adUser.department       ?? undefined,
+          title:            adUser.title            ?? undefined,
+          phone:            adUser.phone            ?? undefined,
+          ipPhone:          adUser.ipPhone          ?? undefined,
+          employeeNumber:   adUser.employeeNumber   ?? undefined,
+          departmentNumber: adUser.departmentNumber ?? undefined,
+          office:           adUser.office           ?? undefined,
+          city:             adUser.city             ?? undefined,
         },
         create: {
-          username:    adUser.username,
-          displayName: adUser.displayName || adUser.username,
-          email:       adUser.email       || null,
-          directorate: adUser.directorate || null,
-          department:  adUser.department  || null,
-          title:       adUser.title       || null,
-          role:        'user',
+          username:         adUser.username,
+          displayName:      adUser.displayName      || adUser.username,
+          email:            adUser.email            || null,
+          directorate:      adUser.directorate      || null,
+          department:       adUser.department       || null,
+          title:            adUser.title            || null,
+          phone:            adUser.phone            || null,
+          ipPhone:          adUser.ipPhone          || null,
+          employeeNumber:   adUser.employeeNumber   || null,
+          departmentNumber: adUser.departmentNumber || null,
+          office:           adUser.office           || null,
+          city:             adUser.city             || null,
+          role:             'user',
         },
       });
       upserted++;
     } catch { /* tek kullanıcı hatası tüm sync'i durdurmasın */ }
   }
   console.log(`[AD Sync] ${upserted} kullanıcı upsert edildi`);
-
   console.log(`[AD Sync] ${changes.length} değişiklik tespit edildi`);
 
   if (changes.length > 0) {

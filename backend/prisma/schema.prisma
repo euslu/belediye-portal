@@ -57,9 +57,13 @@ model User {
   department  String?
   directorate String?
   title       String?
-  office      String?  // physicalDeliveryOfficeName (ofis/lokasyon)
-  city        String?  // l (ilçe)
-  role        String   @default("user") // "admin" | "manager" | "user"
+  office           String?  // physicalDeliveryOfficeName (ofis/lokasyon)
+  city             String?  // l (ilçe)
+  phone            String?  // extensionAttribute1 (GSM)
+  ipPhone          String?  // otherIpPhone (dahili)
+  employeeNumber   String?  // employeeNumber (sicil/çalışan no)
+  departmentNumber String?  // departmentNumber
+  role             String   @default("user") // "admin" | "manager" | "user"
   locationId  Int?
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])
   createdAt   DateTime @default(now())

@@ -71,7 +71,17 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
 
   for (const adPC of adComputers) {
     // Daire/şube eşleştirmesi
-    const { directorate, department } = resolveDirectorate(adPC.department);
+    // 1. AD department alanını dene
+    // 2. Null ise OU segmentlerini sağdan sola tara (en özgül → genel)
+    let resolveInput = adPC.department || null;
+    if (!resolveInput && adPC.ou) {
+      const ouSegments = adPC.ou.split(' > ').map(s => s.trim()).filter(Boolean).reverse();
+      for (const seg of ouSegments) {
+        const { directorate: d } = resolveDirectorate(seg);
+        if (d) { resolveInput = seg; break; }
+      }
+    }
+    const { directorate, department } = resolveDirectorate(resolveInput);
 
     // Bu AD bilgisayarının atandığı kullanıcıyı bul
     const assignedTo = await resolveAssignedTo(adPC.description, adPC.managedBy, adPC.managedByDN, prisma);
