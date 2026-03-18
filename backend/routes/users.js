@@ -1,6 +1,6 @@
 const express = require('express');
-const router = express.Router();
-const prisma = require('../lib/prisma');
+const router  = express.Router();
+const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 
 router.use(authMiddleware);
@@ -19,7 +19,52 @@ async function getMyDirectorate(username) {
   return me?.directorate || null;
 }
 
-// GET /api/users
+// ─── GET /api/users/me ────────────────────────────────────────────────────────
+// Giriş yapan kullanıcının tüm AD bilgilerini döndür
+router.get('/me', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where:  { username: req.user.username },
+      select: {
+        id: true, username: true, displayName: true, email: true,
+        title: true, department: true, directorate: true,
+        phone: true, ipPhone: true, employeeNumber: true,
+        departmentNumber: true, office: true, city: true, role: true,
+        groups: {
+          select: { role: true, group: { select: { id: true, name: true } } },
+        },
+        _count: { select: { tickets: true, assigned: true, devices: true } },
+      },
+    });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Kullanıcı bilgileri alınamadı' });
+  }
+});
+
+// ─── GET /api/users/stats ─────────────────────────────────────────────────────
+// Admin: personel istatistikleri
+router.get('/stats', async (req, res) => {
+  if (req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  try {
+    const [total, withDirectorate, withPhone, withEmployeeNumber] = await Promise.all([
+      prisma.user.count({ where: { AND: BASE_WHERE } }),
+      prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: { not: null } }] } }),
+      prisma.user.count({ where: { AND: [...BASE_WHERE, { phone: { not: null } }] } }),
+      prisma.user.count({ where: { AND: [...BASE_WHERE, { employeeNumber: { not: null } }] } }),
+    ]);
+    res.json({ total, withDirectorate, withPhone, withEmployeeNumber });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'İstatistikler alınamadı' });
+  }
+});
+
+// ─── GET /api/users ───────────────────────────────────────────────────────────
 // Admin → tüm personel | Diğerleri → sadece kendi dairesi
 router.get('/', async (req, res) => {
   const { search, department, directorate, page = '1', limit = '50' } = req.query;
@@ -27,29 +72,29 @@ router.get('/', async (req, res) => {
 
   const where = { AND: [...BASE_WHERE] };
 
-  // Yetki: admin değilse sadece kendi directorate'i görebilir
   const isAdmin = req.user.role === 'admin';
   if (!isAdmin) {
     const myDir = await getMyDirectorate(req.user.username);
     if (myDir) {
       where.AND.push({ directorate: myDir });
     } else {
-      // Directorate yoksa department bazında kısıtla
       if (req.user.department) where.AND.push({ department: req.user.department });
     }
   } else {
-    // Admin: query param filtreleri geçerli
-    // directorate veya department ile filtrele (COALESCE mantığı: birinde varsa göster)
     if (directorate) where.AND.push({ OR: [{ directorate }, { AND: [{ directorate: null }, { department: directorate }] }] });
     if (department)  where.AND.push({ department });
   }
 
   if (search) {
-    where.OR = [
-      { displayName: { contains: search, mode: 'insensitive' } },
-      { username:    { contains: search, mode: 'insensitive' } },
-      { email:       { contains: search, mode: 'insensitive' } },
-    ];
+    where.AND.push({
+      OR: [
+        { displayName:    { contains: search, mode: 'insensitive' } },
+        { username:       { contains: search, mode: 'insensitive' } },
+        { email:          { contains: search, mode: 'insensitive' } },
+        { employeeNumber: { contains: search, mode: 'insensitive' } },
+        { department:     { contains: search, mode: 'insensitive' } },
+      ],
+    });
   }
 
   try {
@@ -59,6 +104,7 @@ router.get('/', async (req, res) => {
         select: {
           id: true, username: true, displayName: true,
           email: true, department: true, directorate: true, title: true, role: true,
+          phone: true, ipPhone: true, employeeNumber: true, office: true,
         },
         orderBy: [{ directorate: 'asc' }, { department: 'asc' }, { displayName: 'asc' }],
         skip,
@@ -74,14 +120,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/users/directorates
-// Admin → tüm daireler | Diğerleri → sadece kendi dairesi
-// directorate boşsa department fallback olarak kullanılır
+// ─── GET /api/users/directorates ─────────────────────────────────────────────
 router.get('/directorates', async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
 
-    // Raw query: COALESCE(directorate, department) ile gruplama
     let rows;
     if (isAdmin) {
       rows = await prisma.$queryRaw`
@@ -115,36 +158,7 @@ router.get('/directorates', async (req, res) => {
   }
 });
 
-// PATCH /api/users/:id/location
-// Kullanıcıya lokasyon ata (admin/manager)
-router.patch('/:id/location', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
-    return res.status(403).json({ error: 'Yetkiniz yok' });
-
-  const id = parseInt(req.params.id);
-  const { locationId } = req.body; // null → lokasyon kaldır
-
-  try {
-    const user = await prisma.user.update({
-      where: { id },
-      data:  { locationId: locationId ?? null },
-      select: {
-        id: true, username: true, displayName: true,
-        locationId: true,
-        location: { select: { id: true, name: true, building: true } },
-      },
-    });
-    res.json(user);
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-    if (err.code === 'P2003') return res.status(404).json({ error: 'Lokasyon bulunamadı' });
-    console.error(err);
-    res.status(500).json({ error: 'Lokasyon atanamadı' });
-  }
-});
-
-// GET /api/users/departments
-// Seçili daire altındaki müdürlük listesi + çalışan sayısı
+// ─── GET /api/users/departments ──────────────────────────────────────────────
 router.get('/departments', async (req, res) => {
   const { directorate } = req.query;
   try {
@@ -165,6 +179,88 @@ router.get('/departments', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Departmanlar alınamadı' });
+  }
+});
+
+// ─── PATCH /api/users/:id/location ───────────────────────────────────────────
+router.patch('/:id/location', async (req, res) => {
+  if (!['admin', 'manager'].includes(req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  const { locationId } = req.body;
+
+  try {
+    const user = await prisma.user.update({
+      where: { id },
+      data:  { locationId: locationId ?? null },
+      select: {
+        id: true, username: true, displayName: true,
+        locationId: true,
+        location: { select: { id: true, name: true } },
+      },
+    });
+    res.json(user);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    if (err.code === 'P2003') return res.status(404).json({ error: 'Lokasyon bulunamadı' });
+    console.error(err);
+    res.status(500).json({ error: 'Lokasyon atanamadı' });
+  }
+});
+
+// ─── GET /api/users/:username ─────────────────────────────────────────────────
+// Yetki kuralları:
+//   admin   → herkesi tam görebilir
+//   manager → kendi dairesindeki herkesi tam; dışarısı → telefon/sicil gizli
+//   user    → kendi profilini tam; başkalarını → telefon/sicil gizli
+router.get('/:username', async (req, res) => {
+  const { username } = req.params;
+  const requester    = req.user;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where:  { username },
+      select: {
+        id: true, username: true, displayName: true, email: true,
+        title: true, department: true, directorate: true,
+        phone: true, ipPhone: true, employeeNumber: true,
+        office: true, city: true,
+        _count: { select: { devices: true, tickets: true } },
+      },
+    });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+    // Açık talep sayısı
+    const openTickets = await prisma.ticket.count({
+      where: {
+        createdById: user.id,
+        status: { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] },
+      },
+    });
+
+    // Tam görme yetkisi kontrol
+    const isSelf  = requester.username === username;
+    const isAdmin = requester.role === 'admin';
+    let canSeeFull = isSelf || isAdmin;
+
+    if (!canSeeFull && requester.role === 'manager') {
+      const me = await prisma.user.findUnique({
+        where:  { username: requester.username },
+        select: { directorate: true },
+      });
+      canSeeFull = !!(me?.directorate && me.directorate === user.directorate);
+    }
+
+    if (!canSeeFull) {
+      const { phone: _p, ipPhone: _ip, employeeNumber: _en, ...publicFields } = user;
+      return res.json({ ...publicFields, openTickets });
+    }
+
+    res.json({ ...user, openTickets });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Kullanıcı alınamadı' });
   }
 });
 

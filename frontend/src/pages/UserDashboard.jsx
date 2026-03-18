@@ -490,6 +490,93 @@ function OnayBekleyenlerCard({ delay = '' }) {
   );
 }
 
+// ─── HesabimCard ─────────────────────────────────────────────────────────────
+function HesabimCard({ delay = '' }) {
+  const { user: authUser } = useAuth();
+  const [adUser, setAdUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    authFetch('/api/users/me')
+      .then(setAdUser)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const u = adUser || authUser;
+  if (!u) return null;
+
+  function maskPhone(phone) {
+    if (!phone) return null;
+    const p = phone.replace(/\D/g, '');
+    if (p.length === 10) return `0${p.slice(0, 3)} XXX XX ${p.slice(-2)}`;
+    if (p.length === 11) return `${p.slice(0, 4)} XXX XX ${p.slice(-2)}`;
+    return phone;
+  }
+
+  const initials = u.displayName
+    ? u.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : (u.username?.[0] || '?').toUpperCase();
+
+  return (
+    <div className={`animate-fadeIn ${delay} bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden`}>
+      <div className="px-5 py-4 border-b border-gray-50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            {loading ? (
+              <>
+                <div className="h-3.5 bg-gray-100 rounded w-3/4 animate-pulse mb-1.5" />
+                <div className="h-3 bg-gray-100 rounded w-1/2 animate-pulse" />
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-gray-800 truncate">{u.displayName || u.username}</p>
+                <p className="text-xs text-indigo-600 truncate">{adUser?.directorate || u.directorate || u.department || '—'}</p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 py-3 space-y-2">
+        {loading ? (
+          [...Array(3)].map((_, i) => (
+            <div key={i} className="flex justify-between">
+              <div className="h-3 bg-gray-100 rounded w-1/3 animate-pulse" />
+              <div className="h-3 bg-gray-100 rounded w-2/5 animate-pulse" />
+            </div>
+          ))
+        ) : (
+          <>
+            <InfoLine icon="📧" label="E-posta" value={u.email || '—'} />
+            <InfoLine icon="📞" label="GSM"     value={maskPhone(adUser?.phone) || '—'} />
+            <InfoLine icon="🪪" label="Sicil"   value={adUser?.employeeNumber || '—'} />
+          </>
+        )}
+      </div>
+
+      <div className="px-5 py-3 border-t border-gray-50">
+        <a href="/profile" className="text-xs font-medium text-[#1e40af] hover:text-[#1d4ed8] transition-colors">
+          Profilimi Gör →
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function InfoLine({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-4 text-center shrink-0">{icon}</span>
+      <span className="text-gray-400 shrink-0">{label}</span>
+      <span className="text-gray-700 font-medium truncate flex-1 text-right">{value}</span>
+    </div>
+  );
+}
+
 // ─── HizliBasvuruCard ─────────────────────────────────────────────────────────
 function HizliBasvuruCard({ delay = '' }) {
   const navigate = useNavigate();
@@ -572,9 +659,10 @@ export default function UserDashboard() {
 
         {/* Sağ — sabit 288px */}
         <div className="w-72 shrink-0 space-y-4">
-          <EnvanterimCard delay="delay-100" />
-          {isMgr && <OnayBekleyenlerCard delay="delay-200" />}
-          <HizliBasvuruCard delay="delay-300" />
+          <HesabimCard delay="delay-100" />
+          <EnvanterimCard delay="delay-200" />
+          {isMgr && <OnayBekleyenlerCard delay="delay-300" />}
+          <HizliBasvuruCard delay="delay-400" />
         </div>
 
       </div>

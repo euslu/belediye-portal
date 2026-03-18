@@ -1,10 +1,153 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}` };
+}
+
+function maskPhone(phone) {
+  if (!phone) return null;
+  const p = phone.replace(/\D/g, '');
+  if (p.length === 10) return `0${p.slice(0, 3)} XXX XX ${p.slice(-2)}`;
+  if (p.length === 11) return `${p.slice(0, 4)} XXX XX ${p.slice(-2)}`;
+  return phone;
+}
+
+// ─── Kullanıcı Detay Drawer ───────────────────────────────────────────────────
+function UserDrawer({ username, onClose }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    setLoading(true); setErr(null); setUser(null);
+    fetch(`${API}/api/users/${encodeURIComponent(username)}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject('Kullanıcı bulunamadı'))
+      .then(setUser)
+      .catch(e => setErr(String(e)))
+      .finally(() => setLoading(false));
+  }, [username]);
+
+  const initials = user?.displayName
+    ? user.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : (username?.[0] || '?').toUpperCase();
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-800">Personel Detayı</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition text-gray-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-5 space-y-3">
+              <div className="flex gap-3 items-center">
+                <div className="w-12 h-12 bg-gray-100 rounded-xl animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-100 rounded w-3/4 animate-pulse" />
+                  <div className="h-3 bg-gray-100 rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-10 bg-gray-50 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : err ? (
+            <div className="p-8 text-center text-sm text-gray-400">{err}</div>
+          ) : user ? (
+            <div className="p-5 space-y-4">
+              {/* Avatar + isim */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-base shrink-0">
+                  {initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-800 text-sm truncate">{user.displayName}</p>
+                  {user.title && <p className="text-xs text-gray-400 truncate">{user.title}</p>}
+                </div>
+              </div>
+
+              {/* Birim bilgisi */}
+              {(user.directorate || user.department) && (
+                <div className="bg-indigo-50 rounded-xl px-4 py-3">
+                  {user.directorate && <p className="text-xs font-semibold text-indigo-700">{user.directorate}</p>}
+                  {user.department  && <p className="text-xs text-indigo-500 mt-0.5">{user.department}</p>}
+                </div>
+              )}
+
+              {/* İletişim */}
+              <div className="space-y-2">
+                <DrawerField icon="📧" label="E-posta"
+                  value={user.email ? (
+                    <a href={`mailto:${user.email}`} className="text-indigo-600 hover:underline text-xs">{user.email}</a>
+                  ) : '—'} />
+                <DrawerField icon="📞" label="GSM"     value={user.phone ? maskPhone(user.phone) : '—'} />
+                <DrawerField icon="☎️" label="Dahili"  value={user.ipPhone || '—'} />
+                <DrawerField icon="🏢" label="Ofis"    value={user.office || user.city || '—'} />
+                <DrawerField icon="🪪" label="Sicil"   value={user.employeeNumber || '—'} />
+                <DrawerField icon="👤" label="AD Hesabı" value={<span className="font-mono text-xs">{user.username}</span>} />
+              </div>
+
+              {/* Özet istatistikler */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-blue-50 rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-blue-700">{user._count?.devices ?? '—'}</p>
+                  <p className="text-[10px] text-blue-500 mt-0.5">Cihaz</p>
+                </div>
+                <div className="bg-purple-50 rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-purple-700">{user._count?.tickets ?? '—'}</p>
+                  <p className="text-[10px] text-purple-500 mt-0.5">Talep</p>
+                </div>
+                {user.openTickets !== undefined && (
+                  <div className="col-span-2 bg-amber-50 rounded-xl p-3 text-center">
+                    <p className="text-lg font-bold text-amber-700">{user.openTickets}</p>
+                    <p className="text-[10px] text-amber-500 mt-0.5">Açık Talep</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer */}
+        {user && (
+          <div className="px-5 py-4 border-t border-gray-100">
+            <Link
+              to={`/profile`}
+              onClick={onClose}
+              className="w-full block text-center text-xs font-semibold text-[#1e40af] hover:text-[#1d4ed8] transition-colors"
+            >
+              Tam Profili Gör →
+            </Link>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function DrawerField({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-2.5 py-1.5 border-b border-gray-50 last:border-0">
+      <span className="text-sm w-5 text-center shrink-0">{icon}</span>
+      <span className="text-xs text-gray-400 w-14 shrink-0">{label}</span>
+      <span className="text-xs font-medium text-gray-800 flex-1 min-w-0 truncate">{value}</span>
+    </div>
+  );
 }
 
 const USR_TYPE_COLORS = {
@@ -85,9 +228,12 @@ function DeviceModal({ user, onClose }) {
 }
 
 // ─── Personel satırı ────────────────────────────────────────────────────────
-function PersonelRow({ u, canViewDevices, onDeviceClick }) {
+function PersonelRow({ u, canViewDevices, onDeviceClick, onUserClick }) {
   return (
-    <div className="flex items-center gap-3 px-6 py-2 hover:bg-gray-50">
+    <div
+      className="flex items-center gap-3 px-6 py-2 hover:bg-gray-50 cursor-pointer"
+      onClick={() => onUserClick(u)}
+    >
       <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
         {u.displayName[0]}
       </div>
@@ -100,7 +246,7 @@ function PersonelRow({ u, canViewDevices, onDeviceClick }) {
       )}
       {canViewDevices && (
         <button
-          onClick={() => onDeviceClick(u)}
+          onClick={(e) => { e.stopPropagation(); onDeviceClick(u); }}
           className="ml-2 p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
           title="Cihazları görüntüle"
         >
@@ -114,7 +260,7 @@ function PersonelRow({ u, canViewDevices, onDeviceClick }) {
 }
 
 // ─── Şube Müdürlüğü accordion (Level 2) ────────────────────────────────────
-function SubeAccordion({ name, users, canViewDevices, onDeviceClick }) {
+function SubeAccordion({ name, users, canViewDevices, onDeviceClick, onUserClick }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -144,6 +290,7 @@ function SubeAccordion({ name, users, canViewDevices, onDeviceClick }) {
               u={u}
               canViewDevices={canViewDevices}
               onDeviceClick={onDeviceClick}
+              onUserClick={onUserClick}
             />
           ))}
         </div>
@@ -184,7 +331,10 @@ export default function Personel() {
   const [dirUsers, setDirUsers]         = useState({});
   const [loadingDir, setLoadingDir]     = useState(null);
   const [deviceModal, setDeviceModal]   = useState(null);
+  const [drawerUser, setDrawerUser]     = useState(null); // username string
+  const [stats, setStats]               = useState(null);
 
+  const isAdmin       = currentUser?.role === 'admin';
   const canViewDevices = ['admin', 'manager'].includes(currentUser?.role);
 
   useEffect(() => {
@@ -192,6 +342,14 @@ export default function Personel() {
       .then((d) => { setDirectorates(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch(`${API}/api/users/stats`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setStats(d))
+      .catch(() => {});
+  }, [isAdmin]);
 
   async function toggleDir(name) {
     if (openDir === name) { setOpenDir(null); return; }
@@ -229,6 +387,23 @@ export default function Personel() {
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
+
+      {/* Admin stats bar */}
+      {isAdmin && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: 'Toplam',   value: stats?.total,             color: 'bg-gray-50 text-gray-700'     },
+            { label: 'Daireli',  value: stats?.withDirectorate,   color: 'bg-indigo-50 text-indigo-700' },
+            { label: 'GSM\'li',  value: stats?.withPhone,         color: 'bg-green-50 text-green-700'   },
+            { label: 'Sicilli',  value: stats?.withEmployeeNumber, color: 'bg-amber-50 text-amber-700'  },
+          ].map(s => (
+            <div key={s.label} className={`rounded-xl p-4 ${s.color}`}>
+              <p className="text-2xl font-bold">{s.value ?? '…'}</p>
+              <p className="text-xs mt-0.5 opacity-70">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-20 text-sm text-gray-400">Yükleniyor...</div>
@@ -283,6 +458,7 @@ export default function Personel() {
                             u={u}
                             canViewDevices={canViewDevices}
                             onDeviceClick={setDeviceModal}
+                            onUserClick={(u) => setDrawerUser(u.username)}
                           />
                         ))}
                       </div>
@@ -295,6 +471,7 @@ export default function Personel() {
                           users={subeUsers}
                           canViewDevices={canViewDevices}
                           onDeviceClick={setDeviceModal}
+                          onUserClick={(u) => setDrawerUser(u.username)}
                         />
                       ))
                     )}
@@ -308,6 +485,10 @@ export default function Personel() {
 
       {deviceModal && (
         <DeviceModal user={deviceModal} onClose={() => setDeviceModal(null)} />
+      )}
+
+      {drawerUser && (
+        <UserDrawer username={drawerUser} onClose={() => setDrawerUser(null)} />
       )}
     </div>
   );
