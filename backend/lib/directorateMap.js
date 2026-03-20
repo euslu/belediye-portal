@@ -523,6 +523,36 @@ function parseDNForDirectorate(dn) {
   return { directorate: dirSlug ? OU_DB_MAP[dirSlug] : null };
 }
 
+// ── AD bilgisayar description slug → Daire adı ──────────────────────────────
+// AD'de bilgisayar OU'su düz "bilgisayar" — daire bilgisi description alanına yazılıyor.
+const DESCRIPTION_DIR_MAP = {
+  ulasim:                    'Ulaşım Dairesi Başkanlığı',
+  imar_sehircilik:           'İmar ve Şehircilik Dairesi Başkanlığı',
+  saglik_sosyal_hizmetler:   'Sağlık ve Sosyal Hizmetler Dairesi Başkanlığı',
+  fen_isleri:                'Fen İşleri Dairesi Başkanlığı',
+  mali_hizmetler:            'Mali Hizmetler Dairesi Başkanlığı',
+  insan_kaynaklari_egitim:   'İnsan Kaynakları ve Eğitim Dairesi Başkanlığı',
+  cevre_koruma_kontrol:      'Çevre Koruma ve Kontrol Dairesi Başkanlığı',
+  zabita:                    'Zabıta Dairesi Başkanlığı',
+  destek_hizmetleri:         'Destek Hizmetleri Dairesi Başkanlığı',
+  tarimsal_hizmetler:        'Tarımsal Hizmetler Dairesi Başkanlığı',
+  itfaiye:                   'İtfaiye Dairesi Başkanlığı',
+  kultur_turizm_spor:        'Kültür ve Sosyal İşler Dairesi Başkanlığı',
+  emlak_istimlak:            'Emlak ve İstimlak Dairesi Başkanlığı',
+  emak_istimlak:             'Emlak ve İstimlak Dairesi Başkanlığı', // typo variant
+  yazi_isleri_kararlar:      'Yazı İşleri ve Kararlar Dairesi Başkanlığı',
+  bilgi_islem:               'Bilgi İşlem Dairesi Başkanlığı',
+  hukuk_musavirligi:         'Hukuk Müşavirliği',
+  cagrimerkezi:              'Basın Yayın ve Halkla İlişkiler Dairesi Başkanlığı',
+  cagri_merkezi:             'Basın Yayın ve Halkla İlişkiler Dairesi Başkanlığı',
+  basin_yayin:               'Basın Yayın ve Halkla İlişkiler Dairesi Başkanlığı',
+  akom:                      'Afet İşleri ve Risk Yönetimi Dairesi Başkanlığı',
+  ozel_kalem:                'Özel Kalem Müdürlüğü',
+  teftis_kurulu:             'Rehberlik ve Teftiş Kurulu Başkanlığı',
+  muttas:                    'Muğla Su ve Kanalizasyon İdaresi (MUSKİ)',
+  bodrum_muttas:             'Muğla Su ve Kanalizasyon İdaresi (MUSKİ)',
+};
+
 module.exports = {
   DIRECTORATES,
   DIRECTORATE_NAMES,
@@ -530,6 +560,7 @@ module.exports = {
   DEPT_TO_DIRECTORATE,
   MAP,
   OU_DB_MAP,
+  DESCRIPTION_DIR_MAP,
   resolveDirectorate,
   parseDNForDirectorate,
 };

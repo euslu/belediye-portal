@@ -1,6 +1,6 @@
 // ─── AD Cihaz Senkronizasyonu ─────────────────────────────────────────────────
 const { fetchAdComputers, MOCK_COMPUTERS } = require('./adComputers');
-const { resolveDirectorate }               = require('./directorateMap');
+const { resolveDirectorate, OU_DB_MAP, DESCRIPTION_DIR_MAP } = require('./directorateMap');
 
 async function getAdComputers() {
   if (process.env.MOCK_AUTH === 'true') return MOCK_COMPUTERS;
@@ -74,17 +74,28 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
     // 1. AD department alanını dene
     // 2. Null ise OU segmentlerini sağdan sola tara (en özgül → genel)
     let resolveInput = adPC.department || null;
-    if (!resolveInput && adPC.ou) {
-      const ouSegments = adPC.ou.split(' > ').map(s => s.trim()).filter(Boolean).reverse();
-      for (const seg of ouSegments) {
-        const { directorate: d } = resolveDirectorate(seg);
-        if (d) { resolveInput = seg; break; }
+    let directorate  = resolveInput ? resolveDirectorate(resolveInput).directorate : null;
+    let department   = resolveInput ? resolveDirectorate(resolveInput).department  : null;
+
+    // Türkçe department metniyle eşleşme yoksa OU slug'larını OU_DB_MAP'te ara
+    if (!directorate && adPC.ou) {
+      const ouSlugs = adPC.ou.split(' > ').map(s => s.trim().toLowerCase()).filter(Boolean).reverse();
+      for (const slug of ouSlugs) {
+        if (OU_DB_MAP[slug]) { directorate = OU_DB_MAP[slug]; break; }
       }
     }
-    const { directorate, department } = resolveDirectorate(resolveInput);
+
+    // Hâlâ bulunamadıysa description alanını daire slug olarak dene
+    const descSlug = (adPC.description || '').trim().toLowerCase();
+    if (!directorate && descSlug && DESCRIPTION_DIR_MAP[descSlug]) {
+      directorate = DESCRIPTION_DIR_MAP[descSlug];
+    }
 
     // Bu AD bilgisayarının atandığı kullanıcıyı bul
-    const assignedTo = await resolveAssignedTo(adPC.description, adPC.managedBy, adPC.managedByDN, prisma);
+    // Not: description daire slug'ı ise kullanıcı araması atlanır
+    const assignedTo = DESCRIPTION_DIR_MAP[descSlug]
+      ? null
+      : await resolveAssignedTo(adPC.description, adPC.managedBy, adPC.managedByDN, prisma);
 
     // İsim veya seri numarasına göre DB'de eşleştir
     const dbDevice = dbDevices.find(
