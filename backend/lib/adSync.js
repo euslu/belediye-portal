@@ -37,6 +37,22 @@ function isActiveUser(uac) {
   return (parseInt(adVal(uac) || '0') & 2) === 0;
 }
 
+// personalTitle → normalleştirilmiş cinsiyet (Bay/Erkek → Erkek, Kadın/Bayan → Kadın)
+function normalizeGender(raw) {
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  if (s === 'erkek' || s === 'bay') return 'Erkek';
+  if (s === 'kadın' || s === 'bayan') return 'Kadın';
+  return null;
+}
+
+// AD genelleştirilmiş zaman "20151123143022.0Z" → JS Date (sadece tarih kısmı)
+function parseAdDateTime(raw) {
+  if (!raw) return null;
+  const m = String(raw).match(/^(\d{4})(\d{2})(\d{2})/);
+  return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00.000Z`) : null;
+}
+
 // ─── AD'den tüm kullanıcıları çek ─────────────────────────────────────────────
 async function fetchAdUsers() {
   const client = new Client({ url: AD_URL, strictDN: false });
@@ -65,6 +81,7 @@ async function fetchAdUsers() {
         'employeeType',               // kadro türü (Memur/İşçi/Sözleşmeli)
         'personalTitle',              // cinsiyet (Erkek/Kadın)
         'manager',                    // yönetici DN
+        'whenCreated',                // AD hesap oluşturma tarihi
       ],
       paged:     true,
       sizeLimit: 0,
@@ -110,8 +127,9 @@ async function fetchAdUsers() {
         tcno:             adVal(e.tcno),
         employeeId:       adVal(e.employeeID),
         employeeType:     adVal(e.employeeType),
-        gender:           adVal(e.personalTitle),
+        gender:           normalizeGender(adVal(e.personalTitle)),
         managerUsername,
+        adCreatedAt:      parseAdDateTime(adVal(e.whenCreated)),
       };
     }).filter((u) => u.username);
   } finally {
@@ -321,6 +339,7 @@ async function runAdSync() {
           employeeType:     adUser.employeeType     ?? undefined,
           gender:           adUser.gender           ?? undefined,
           managerUsername:  adUser.managerUsername  ?? undefined,
+          adCreatedAt:      adUser.adCreatedAt      ?? undefined,
         },
         create: {
           username:         adUser.username,
@@ -343,6 +362,7 @@ async function runAdSync() {
           employeeType:     adUser.employeeType     || null,
           gender:           adUser.gender           || null,
           managerUsername:  adUser.managerUsername  || null,
+          adCreatedAt:      adUser.adCreatedAt      || null,
           role:             'user',
         },
       });

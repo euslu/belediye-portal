@@ -66,12 +66,13 @@ model User {
   // ── Yeni AD alanları ──────────────────────────────────────────────────────
   firstName        String?  // givenName
   lastName         String?  // sn (surname)
-  birthday         String?  // birthday (DD.MM.YYYY)
-  tcno             String?  // TC kimlik numarası
-  employeeId       String?  // employeeID (iç sicil, employeeNumber'dan farklı)
-  employeeType     String?  // employeeType (Memur | İşçi | Sözleşmeli | ...)
-  gender           String?  // personalTitle (Erkek | Kadın)
-  managerUsername  String?  // manager DN'den çözümlenen yönetici sAMAccountName
+  birthday         String?   // birthday (DD.MM.YYYY)
+  tcno             String?   // TC kimlik numarası
+  employeeId       String?   // employeeID (iç sicil, employeeNumber'dan farklı)
+  employeeType     String?   // employeeType (Memur | İşçi | Hizmet Alımı | ...)
+  gender           String?   // personalTitle → normalleştirilmiş (Erkek | Kadın)
+  managerUsername  String?   // manager DN'den çözümlenen yönetici sAMAccountName
+  adCreatedAt      DateTime? // whenCreated — AD hesap oluşturma tarihi
   role             String   @default("user") // "admin" | "manager" | "user"
   locationId  Int?
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])
