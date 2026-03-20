@@ -142,7 +142,7 @@ router.get('/', async (req, res) => {
 
     let base = `
       FROM "Device" d
-      LEFT JOIN "User" u ON d."assignedTo" = u.username
+      LEFT JOIN "User" u ON LOWER(d."assignedTo") = LOWER(u.username)
       WHERE d.active = true
     `;
 
@@ -170,7 +170,7 @@ router.get('/', async (req, res) => {
     }
 
     if (assignedTo) {
-      base += ` AND d."assignedTo" = $${pi}`;
+      base += ` AND LOWER(d."assignedTo") = $${pi}`;
       params.push(assignedTo.toLowerCase().trim()); pi++;
     }
 
