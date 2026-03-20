@@ -4,6 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Sector,
 } from 'recharts';
+import { FileText, Clock, Wrench, CheckCircle, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -41,19 +42,17 @@ function SummaryCard({ label, value, sub, change, color, icon }) {
   const good = invertColors ? !isPositive : isPositive;
 
   return (
-    <div className={`bg-white border border-gray-100 rounded-2xl p-5 shadow-sm`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</p>
-          <p className={`text-3xl font-bold mt-1 ${color}`}>{value ?? '—'}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-        </div>
-        <span className="text-2xl">{icon}</span>
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide leading-tight">{label}</p>
+        <span className={`shrink-0 ${color}`}>{icon}</span>
       </div>
+      <p className={`text-2xl font-bold ${color}`}>{value ?? '—'}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
       {!isNeutral && (
-        <div className={`mt-3 flex items-center gap-1 text-xs font-medium ${good ? 'text-green-600' : 'text-red-500'}`}>
+        <div className={`mt-2 flex items-center gap-1 text-xs font-medium ${good ? 'text-green-600' : 'text-red-500'}`}>
           <span>{isPositive ? '↑' : '↓'}</span>
-          <span>{Math.abs(change)}% geçen döneme göre</span>
+          <span>{Math.abs(change)}%</span>
         </div>
       )}
     </div>
@@ -215,13 +214,13 @@ export default function ManagerDashboard() {
         <>
           {/* BÖLÜM 1 — Özet Kartlar */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-            <SummaryCard label="Toplam Başvuru"   value={data.summary.total}            icon="📋" color="text-indigo-600" change={data.summary.totalChange} />
-            <SummaryCard label="Çözülen"          value={data.summary.resolved}         icon="✅" color="text-green-600"  change={data.summary.resolvedChange}
+            <SummaryCard label="Toplam Başvuru"   value={data.summary.total}            icon={<FileText size={18}/>}       color="text-indigo-600" change={data.summary.totalChange} />
+            <SummaryCard label="Çözülen"          value={data.summary.resolved}         icon={<CheckCircle size={18}/>}    color="text-green-600"  change={data.summary.resolvedChange}
               sub={data.summary.total > 0 ? `%${data.summary.resolvedRate} oran` : null} />
-            <SummaryCard label="Ort. Çözüm Süresi" value={data.summary.avgResolutionHours !== null ? `${data.summary.avgResolutionHours}s` : '—'} icon="⏱️" color="text-purple-600" change={data.summary.avgResolutionChange} />
-            <SummaryCard label="SLA İhlali"       value={data.summary.slaBreaches}      icon="🚨" color="text-red-600"    change={data.summary.slaBreachesChange} />
-            <SummaryCard label="Bekleyen Onay"    value={data.summary.pendingApproval}  icon="⏳" color="text-amber-600" />
-            <SummaryCard label="Aktarılan"        value={data.summary.transferred}      icon="🔄" color="text-gray-600" />
+            <SummaryCard label="Ort. Çözüm Süresi" value={data.summary.avgResolutionHours !== null ? `${data.summary.avgResolutionHours}s` : '—'} icon={<Wrench size={18}/>}           color="text-orange-500" change={data.summary.avgResolutionChange} />
+            <SummaryCard label="SLA İhlali"       value={data.summary.slaBreaches}      icon={<AlertTriangle size={18}/>}  color="text-red-600"    change={data.summary.slaBreachesChange} />
+            <SummaryCard label="Bekleyen Onay"    value={data.summary.pendingApproval}  icon={<Clock size={18}/>}          color="text-amber-500" />
+            <SummaryCard label="Aktarılan"        value={data.summary.transferred}      icon={<ArrowLeftRight size={18}/>} color="text-gray-500" />
           </div>
 
           {/* BÖLÜM 2 — Grafikler */}

@@ -102,16 +102,14 @@ function buildGroups(role) {
 
 // ─── NavItem ─────────────────────────────────────────────────────────────────
 function NavItem({ item, approvalBadge = 0, adBadge = 0 }) {
-  const BASE = 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors w-full';
-  const ACTIVE = 'bg-indigo-50 text-indigo-700';
-  const IDLE   = 'text-gray-500 hover:bg-gray-50 hover:text-gray-800';
+  const BASE = 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full';
 
   if (item.disabled) {
     return (
-      <div className={`${BASE} ${IDLE} opacity-40 cursor-not-allowed`}>
+      <div className={`${BASE} opacity-40 cursor-not-allowed`} style={{ color: '#94a3b8' }}>
         <span className="shrink-0"><item.icon /></span>
         <span className="flex-1">{item.label}</span>
-        <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full">Yakında</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)', color: '#94a3b8' }}>Yakında</span>
       </div>
     );
   }
@@ -123,7 +121,13 @@ function NavItem({ item, approvalBadge = 0, adBadge = 0 }) {
     <NavLink
       to={item.to}
       end={item.exactEnd}
-      className={({ isActive }) => `${BASE} ${isActive ? ACTIVE : IDLE}`}
+      className={({ isActive }) =>
+        `${BASE} border-l-[3px] pl-[9px] ` +
+        (isActive
+          ? 'border-blue-500 text-blue-400'
+          : 'border-transparent text-slate-400 hover:text-slate-100')
+      }
+      style={({ isActive }) => isActive ? { background: 'rgba(59,130,246,0.15)' } : undefined}
     >
       <span className="shrink-0"><item.icon /></span>
       <span className="flex-1">{item.label}</span>
@@ -169,16 +173,19 @@ function UserDropdown({ user, logout, align = 'up' }) {
       {align === 'up' ? (
         <button
           onClick={() => setOpen(v => !v)}
-          className="flex items-center gap-3 w-full rounded-xl hover:bg-gray-50 px-2 py-2 transition"
+          className="flex items-center gap-3 w-full rounded-lg px-2 py-2 transition"
+          style={{ color: '#cbd5e1' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+          onMouseLeave={e => e.currentTarget.style.background = ''}
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
             {initial}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{user?.displayName || user?.username}</p>
-            <p className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">{roleLabel}</p>
+            <p className="text-xs font-semibold truncate leading-tight text-slate-200">{user?.displayName || user?.username}</p>
+            <p className="text-[11px] truncate leading-tight mt-0.5" style={{ color: '#64748b' }}>{roleLabel}</p>
           </div>
-          <svg className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: '#64748b' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -258,24 +265,24 @@ export default function Dashboard() {
     <div className="flex min-h-screen bg-gray-50">
 
       {/* ── Sol Sidebar ───────────────────────────────────────────────────── */}
-      <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shrink-0">
+      <aside className="w-60 flex flex-col shrink-0" style={{ backgroundColor: '#0f172a', color: '#cbd5e1' }}>
 
         {/* Logo */}
         <div
-          className="flex items-center gap-3 px-4 h-16 border-b border-gray-100 cursor-pointer shrink-0"
+          className="flex items-center gap-3 px-4 h-16 cursor-pointer shrink-0"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
           onClick={() => navigate('/')}
         >
           <img src="/mugla-logo.svg" alt="Muğla" className="w-10 h-10 object-contain shrink-0" />
           <div className="leading-tight min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">Muğla</p>
-            <p className="text-[11px] text-gray-500 truncate">Uygulama Portalı</p>
+            <p className="text-sm font-semibold truncate text-white">Muğla</p>
+            <p className="text-[11px] truncate" style={{ color: '#94a3b8' }}>Uygulama Portalı</p>
           </div>
         </div>
 
         {/* Navigasyon */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex-1 px-2 py-3 overflow-y-auto">
           {groups.map((group, idx) => {
-            // Roldeki kullanıcının görebileceği item'ları filtrele
             const visibleItems = group.items.filter(item =>
               !item.roles || item.roles.includes(user?.role)
             );
@@ -283,11 +290,10 @@ export default function Dashboard() {
 
             return (
               <div key={idx}>
-                {/* Ayraç + grup başlığı (ilk grup hariç) */}
                 {group.separator && (
-                  <div className={`${idx === 0 ? '' : 'mt-4 pt-3 border-t border-gray-100'}`}>
+                  <div className={idx === 0 ? '' : 'mt-4'}>
                     {group.label && (
-                      <p className="px-3 mb-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                      <p className="px-3 mb-1" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: '#475569', textTransform: 'uppercase' }}>
                         {group.label}
                       </p>
                     )}
@@ -295,7 +301,7 @@ export default function Dashboard() {
                 )}
                 {!group.separator && idx > 0 && <div className="mt-1" />}
 
-                <div className={`space-y-0.5 ${group.separator && group.label ? '' : idx === 0 ? '' : 'mt-1'}`}>
+                <div className="space-y-0.5">
                   {visibleItems.map(item => (
                     <NavItem
                       key={item.to}
@@ -311,7 +317,7 @@ export default function Dashboard() {
         </nav>
 
         {/* Alt kullanıcı */}
-        <div className="px-3 py-4 border-t border-gray-100 shrink-0">
+        <div className="px-2 py-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <UserDropdown user={user} logout={logout} align="up" />
         </div>
       </aside>
