@@ -1,6 +1,14 @@
 'use strict';
 /**
  * ManageEngine Endpoint Central (EPC) Entegrasyon Servisi
+ *
+ * Çalışan API endpoint'leri (v1.4):
+ *   GET /api/1.4/som/computers        → yönetilen bilgisayarlar (1689)
+ *   GET /api/1.4/inventory/hardware   → aggregate donanım listesi (tipler)
+ *   GET /api/1.4/patch/allsystems     → patch/güncelleme durumu
+ *
+ * Per-bilgisayar RAM/CPU: API desteklemiyor (lisans kısıtlaması)
+ * Mevcut alanlar: name, IP, MAC, OS, owner(AD user), branch, serviceTag, liveStatus
  * URL:  https://epc.mugla.bel.tr:8383
  * Auth: Authorization: <api_key>  (Bearer değil, direkt key)
  * API:  v1.4
@@ -126,6 +134,88 @@ async function getComputerDetail(resourceId) {
   return raw ? normalizeComputer(raw) : null;
 }
 
+// ─── EPC → Envanter Sync ──────────────────────────────────────────────────────
+/**
+ * EPC'deki bilgisayarları Prisma Device tablosuna senkronize eder.
+ * Eşleşme: önce MAC adresi, sonra bilgisayar adı.
+ * Sonuç: { created, updated, skipped, errors }
+ */
+async function syncToInventory() {
+  const prisma = require('../lib/prisma');
+
+  console.log('[EPC Sync] Başlıyor...');
+  const computers = await getAllComputers();
+  console.log(`[EPC Sync] ${computers.length} bilgisayar alındı`);
+
+  let created = 0, updated = 0, skipped = 0, errors = 0;
+  const log   = [];
+
+  for (const c of computers) {
+    if (!c.name || c.name === '--') { skipped++; continue; }
+
+    try {
+      // Mevcut cihazı bul (önce MAC, sonra isim)
+      let existing = null;
+      if (c.macAddress && c.macAddress !== '--') {
+        existing = await prisma.device.findFirst({ where: { macAddress: c.macAddress, active: true } });
+      }
+      if (!existing) {
+        existing = await prisma.device.findFirst({ where: { name: c.name, active: true } });
+      }
+
+      // Durum → DeviceStatus
+      const status = c.liveStatus === 1 ? 'ACTIVE' : 'PASSIVE';
+
+      // Seri no: URL decode ve VMware UUID'leri temizle
+      let serialNumber = c.serviceTag || null;
+      if (serialNumber && (serialNumber.includes('VMware') || serialNumber.length > 40)) {
+        serialNumber = null;
+      }
+
+      // Owner: "--" ise null
+      const assignedTo = (c.owner && c.owner !== '--') ? c.owner.toLowerCase() : null;
+
+      // Directorate: branch_office_name "Local Office" ise boş bırak
+      const directorate = (c.branchOffice && c.branchOffice !== '--' && c.branchOffice !== 'Local Office')
+        ? c.branchOffice : null;
+
+      // OS notu
+      const notes = [c.osName, c.servicepack].filter(v => v && v !== '--').join(' | ') || null;
+
+      const deviceData = {
+        name:         c.name,
+        type:         'BILGISAYAR',
+        ipAddress:    (c.ipAddress && c.ipAddress !== '--') ? c.ipAddress : null,
+        macAddress:   (c.macAddress && c.macAddress !== '--') ? c.macAddress : null,
+        serialNumber,
+        status,
+        assignedTo,
+        directorate,
+        notes,
+        lastSyncAt:   new Date(),
+        isShared:     false,
+      };
+
+      if (existing) {
+        await prisma.device.update({ where: { id: existing.id }, data: deviceData });
+        updated++;
+        log.push({ action: 'updated', name: c.name, ip: c.ipAddress });
+      } else {
+        await prisma.device.create({ data: { ...deviceData, active: true } });
+        created++;
+        log.push({ action: 'created', name: c.name, ip: c.ipAddress });
+      }
+    } catch(err) {
+      errors++;
+      console.error(`[EPC Sync] ${c.name} hatası:`, err.message);
+    }
+  }
+
+  const result = { created, updated, skipped, errors, total: computers.length };
+  console.log(`[EPC Sync] Tamamlandı:`, result);
+  return result;
+}
+
 module.exports = {
   testConnection,
   getComputers,
@@ -133,4 +223,5 @@ module.exports = {
   getPatchSummary,
   getComputerDetail,
   normalizeComputer,
+  syncToInventory,
 };

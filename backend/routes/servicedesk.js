@@ -77,6 +77,18 @@ router.get('/patch-summary', adminOrManager, async (req, res) => {
   }
 });
 
+// ─── POST /api/servicedesk/sync ──────────────────────────────────────────────
+// EPC bilgisayarlarını Device tablosuna senkronize et
+router.post('/sync', adminOnly, async (req, res) => {
+  try {
+    const result = await epc.syncToInventory();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[EPC] sync hatası:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── GET /api/servicedesk/status ─────────────────────────────────────────────
 router.get('/status', adminOrManager, async (req, res) => {
   const configured = !!(process.env.SDP_URL && process.env.SDP_API_KEY);
