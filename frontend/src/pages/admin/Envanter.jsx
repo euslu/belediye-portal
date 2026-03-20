@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import UserDrawer from '../../components/UserDrawer';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -915,6 +917,7 @@ function StatsPanel() {
 
 function DevicesTab({ user }) {
   const isAdmin = user?.role === 'admin' || (user?.groups || []).includes('int_bislem');
+  const location = useLocation();
 
   const [directorates, setDirs]   = useState([]);
   const [selectedDir, setSelectedDir] = useState('');
@@ -922,6 +925,7 @@ function DevicesTab({ user }) {
   const [total, setTotal]         = useState(0);
   const [loading, setLoading]     = useState(false);
   const [detail, setDetail]       = useState(null);
+  const [drawerUser, setDrawerUser] = useState(null);
 
   const [search, setSearch]           = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -929,6 +933,13 @@ function DevicesTab({ user }) {
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage]               = useState(1);
   const LIMIT = 50;
+
+  // URL'den assignedTo parametresini oku
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const at = sp.get('assignedTo');
+    if (at) { setSearch(at); setSearchQuery(at); }
+  }, [location.search]);
 
   // Daire listesini çek
   useEffect(() => {
@@ -946,14 +957,15 @@ function DevicesTab({ user }) {
       .catch(() => {});
   }, [isAdmin, user?.directorate]);
 
-  // Daire seçili olunca veri çek
+  // Veri çek — directorate VEYA searchQuery olunca
   useEffect(() => {
-    if (!selectedDir) { setDevices([]); setTotal(0); return; }
+    if (!selectedDir && !searchQuery) { setDevices([]); setTotal(0); return; }
 
     let cancelled = false;
     setLoading(true);
 
-    const params = new URLSearchParams({ directorate: selectedDir, page: String(page), limit: String(LIMIT) });
+    const params = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
+    if (selectedDir)  params.set('directorate', selectedDir);
     if (searchQuery)  params.set('search', searchQuery);
     if (filterType)   params.set('type', filterType);
     if (filterStatus) params.set('status', filterStatus);
@@ -1009,15 +1021,15 @@ function DevicesTab({ user }) {
           </button>
         </form>
 
-        {selectedDir && <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{total} cihaz</span>}
+        {(selectedDir || searchQuery) && <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{total} cihaz</span>}
       </div>
 
       {/* İçerik */}
-      {!selectedDir ? (
+      {!selectedDir && !searchQuery ? (
         <div className="py-24 flex flex-col items-center gap-3 text-center">
           <span className="text-5xl">🏢</span>
           <p className="text-base font-medium text-gray-500">Listelemek için daire başkanlığı seçin</p>
-          <p className="text-sm text-gray-400">Soldaki açılır menüden bir daire başkanlığı seçerek cihazları listeleyin</p>
+          <p className="text-sm text-gray-400">Soldaki açılır menüden bir daire başkanlığı seçin veya arama yapın</p>
         </div>
       ) : loading ? (
         <div className="py-16 text-center text-sm text-gray-400">Yükleniyor...</div>
@@ -1048,9 +1060,14 @@ function DevicesTab({ user }) {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-gray-600 text-xs">
-                    {d.userName
-                      ? <span>{d.userName}<span className="text-gray-400 ml-1">({d.assignedTo})</span></span>
-                      : d.assignedTo || <span className="text-gray-300">—</span>}
+                    {d.assignedTo ? (
+                      <button
+                        onClick={() => setDrawerUser(d.assignedTo)}
+                        className="text-left hover:text-indigo-700 hover:underline"
+                      >
+                        {d.userName || d.assignedTo}
+                      </button>
+                    ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[140px] truncate" title={d.userDepartment || d.department}>{d.userDepartment || d.department || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 text-xs font-mono">{d.ipAddress || '—'}</td>
@@ -1092,6 +1109,7 @@ function DevicesTab({ user }) {
       )}
 
       {detail && <DeviceDetailModal device={detail} onClose={() => setDetail(null)} />}
+      {drawerUser && <UserDrawer username={drawerUser} onClose={() => setDrawerUser(null)} />}
     </div>
   );
 }

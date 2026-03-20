@@ -129,7 +129,7 @@ router.get('/directorates', async (req, res) => {
 // ─── GET /api/inventory ───────────────────────────────────────────────────────
 // Raw SQL — Prisma ORM'nin LEFT JOIN + OR kısıtlamasını aşmak için
 router.get('/', async (req, res) => {
-  const { directorate, type, status, search, page = '1', limit = '50' } = req.query;
+  const { directorate, type, status, search, assignedTo, page = '1', limit = '50' } = req.query;
 
   const userGroups = req.user.groups || [];
   const isAdmin    = req.user.role === 'admin' || userGroups.includes('int_bislem');
@@ -167,6 +167,11 @@ router.get('/', async (req, res) => {
       const like = `%${search}%`;
       base += ` AND (d.name ILIKE $${pi} OR d."assignedTo" ILIKE $${pi} OR d."ipAddress" ILIKE $${pi} OR d."serialNumber" ILIKE $${pi} OR u."displayName" ILIKE $${pi})`;
       params.push(like); pi++;
+    }
+
+    if (assignedTo) {
+      base += ` AND d."assignedTo" = $${pi}`;
+      params.push(assignedTo.toLowerCase().trim()); pi++;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
