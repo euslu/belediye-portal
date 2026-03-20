@@ -873,8 +873,8 @@ function StatsPanel() {
   useEffect(() => {
     fetch(`${API}/api/inventory/stats`, { headers: authHeaders() })
       .then(r => r.json())
-      .then(setStats)
-      .catch(() => {});
+      .then(data => setStats(data.error ? { total: 0, totalByType: {}, addedToday: 0 } : data))
+      .catch(() => setStats({ total: 0, totalByType: {}, addedToday: 0 }));
   }, []);
 
   if (!stats) {
