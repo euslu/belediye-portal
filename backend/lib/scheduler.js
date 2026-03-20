@@ -23,5 +23,18 @@ cron.schedule('*/5 * * * *', async () => {
   }
 }, { timezone: 'Europe/Istanbul' });
 
+// Her gece 02:00'de EPC senkronizasyonu
+cron.schedule('0 2 * * *', async () => {
+  console.log('[Scheduler] EPC senkronizasyonu başlatılıyor...');
+  try {
+    const { syncToInventory } = require('../services/servicedesk');
+    const result = await syncToInventory();
+    console.log(`[Scheduler] EPC senkronizasyonu tamamlandı — ${result.created} eklendi, ${result.updated} güncellendi`);
+  } catch (err) {
+    console.error('[Scheduler] EPC senkronizasyonu başarısız:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
 console.log('[Scheduler] AD sync zamanlandı: her gün 08:00 ve 20:00 (Istanbul)');
+console.log('[Scheduler] EPC sync zamanlandı: her gece 02:00 (Istanbul)');
 console.log('[Scheduler] E-posta tarama zamanlandı: her 5 dakika');

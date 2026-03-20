@@ -95,12 +95,16 @@ function ManageEngineTab() {
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [showKey, setShowKey]   = useState(false);
+  const [syncing, setSyncing]   = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    fetch(`${API}/api/servicedesk/settings`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API}/api/servicedesk/status`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(d => setCfg({ url: d.url || 'https://epc.mugla.bel.tr:8383', apiKey: d.apiKey || '', enabled: d.enabled || false }))
+      .then(d => {
+        if (d.url) setCfg(p => ({ ...p, url: d.url }));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -131,20 +135,35 @@ function ManageEngineTab() {
     setTesting(false);
   };
 
+  const sync = async () => {
+    setSyncing(true); setSyncResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/servicedesk/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSyncResult(await r.json());
+    } catch (e) { setSyncResult({ success: false, error: e.message }); }
+    setSyncing(false);
+  };
+
   if (loading) return <div className="text-sm text-gray-400 p-2">Yükleniyor…</div>;
 
   return (
     <div className="max-w-lg">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">🛠️</span>
-        <h3 className="text-base font-semibold text-gray-800">ManageEngine ServiceDesk Plus</h3>
+        <span className="text-xl">🖥️</span>
+        <h3 className="text-base font-semibold text-gray-800">ManageEngine Endpoint Central</h3>
       </div>
-      <p className="text-sm text-gray-500 mb-5">SDP v3 API entegrasyonu — asset ve talep senkronizasyonu.</p>
+      <p className="text-sm text-gray-500 mb-5">
+        EPC API v1.4 entegrasyonu — 1689 yönetilen bilgisayar, cihaz envanter senkronizasyonu.
+      </p>
 
       <Field label="Aktif">
-        <Toggle label="SDP entegrasyonu aktif" value={cfg.enabled} onChange={v => setCfg(p => ({ ...p, enabled: v }))} />
+        <Toggle label="EPC entegrasyonu aktif" value={cfg.enabled} onChange={v => setCfg(p => ({ ...p, enabled: v }))} />
       </Field>
-      <Field label="SDP URL">
+      <Field label="Sunucu URL">
         <Input value={cfg.url} onChange={v => setCfg(p => ({ ...p, url: v }))} placeholder="https://epc.mugla.bel.tr:8383" />
       </Field>
       <Field label="API Key">
@@ -153,20 +172,25 @@ function ManageEngineTab() {
             type={showKey ? 'text' : 'password'}
             value={cfg.apiKey}
             onChange={e => setCfg(p => ({ ...p, apiKey: e.target.value }))}
-            placeholder="••••••••••••••••"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="••••••••-••••-••••-••••-••••••••••••"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
           />
           <button type="button" onClick={() => setShowKey(v => !v)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
             {showKey ? '🙈' : '👁'}
           </button>
         </div>
+        <p className="text-xs text-gray-400 mt-1">EPC Admin panelinden alınır. Bearer prefix olmadan gönderilir.</p>
       </Field>
 
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-wrap items-center gap-2 pt-2">
         <button onClick={test} disabled={testing}
           className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60">
-          {testing ? 'Test ediliyor…' : '🔌 Bağlantıyı Test Et'}
+          {testing ? '⟳ Test ediliyor…' : '🔌 Bağlantıyı Test Et'}
+        </button>
+        <button onClick={sync} disabled={syncing}
+          className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-60">
+          {syncing ? '⟳ Senkronize ediliyor…' : '🔄 Şimdi Senkronize Et'}
         </button>
         <button onClick={save} disabled={saving}
           className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
@@ -183,9 +207,22 @@ function ManageEngineTab() {
         </div>
       )}
 
-      <p className="text-xs text-gray-400 mt-4">
-        Authorization header'a API key direkt gönderilir (Bearer prefix olmadan).
-      </p>
+      {syncResult && (
+        <div className={`mt-3 p-3 rounded-lg text-sm ${syncResult.success ? 'bg-violet-50 border border-violet-200' : 'bg-red-50 border border-red-200'}`}>
+          {syncResult.success ? (
+            <p className="text-violet-800 font-medium">
+              🔄 Sync tamamlandı — {syncResult.created} eklendi, {syncResult.updated} güncellendi, {syncResult.errors} hata
+            </p>
+          ) : (
+            <p className="text-red-700">❌ {syncResult.error || syncResult.message}</p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-5 p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-500 space-y-1">
+        <p>📡 Otomatik sync: <strong>Her gece 02:00</strong> (Türkiye saati)</p>
+        <p>🖥️ Çalışan endpoint'ler: <code className="bg-white px-1 rounded">/api/1.4/som/computers</code>, <code className="bg-white px-1 rounded">/api/1.4/patch/allsystems</code></p>
+      </div>
     </div>
   );
 }

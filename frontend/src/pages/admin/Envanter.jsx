@@ -1056,9 +1056,15 @@ function DevicesTab({ user }) {
                   <td className="px-3 py-2.5 text-gray-500 text-xs font-mono">{d.ipAddress || '—'}</td>
                   <td className="px-3 py-2.5 text-gray-500 text-xs max-w-[150px] truncate" title={d.model}>{d.model || '—'}</td>
                   <td className="px-3 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[d.status] || ''}`}>
-                      {STATUS_LABELS[d.status] || d.status}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[d.status] || ''}`}>
+                        {STATUS_LABELS[d.status] || d.status}
+                      </span>
+                      {d.epcStatus === 'online'  && <span title="EPC: Çevrimiçi"    className="text-xs">🟢</span>}
+                      {d.epcStatus === 'passive' && <span title="EPC: Pasif (1-7g)"  className="text-xs">🟡</span>}
+                      {d.epcStatus === 'offline' && <span title="EPC: Çevrimdışı (7g+)" className="text-xs">🔴</span>}
+                      {d.epcStatus === 'unknown' && <span title="EPC: Bilinmiyor"   className="text-xs">⚫</span>}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5">
                     <button onClick={() => setDetail(d)}
@@ -1280,6 +1286,40 @@ function ChangeLogsTab() {
   );
 }
 
+// ─── EPC Sync Sonuç Modal ─────────────────────────────────────────────────────
+function EpcSyncResultModal({ result, onClose }) {
+  if (!result) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+          <span className="text-2xl">🔧</span>
+          <h2 className="text-lg font-semibold text-gray-800">EPC Senkronizasyonu Tamamlandı</h2>
+        </div>
+        <div className="px-6 py-4 grid grid-cols-2 gap-3">
+          {[
+            { label: 'Toplam EPC',    value: result.total,   color: 'text-gray-700' },
+            { label: 'Güncellenen',   value: result.updated, color: 'text-amber-600' },
+            { label: 'Yeni Eklenen',  value: result.created, color: 'text-green-600' },
+            { label: 'Hata',          value: result.errors,  color: 'text-red-500' },
+          ].map(s => (
+            <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center">
+              <p className={`text-2xl font-bold ${s.color}`}>{s.value ?? 0}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onClick={onClose}
+            className="px-5 py-2 text-sm font-medium bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition">
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Ana Sayfa ────────────────────────────────────────────────────────────────
 export default function Envanter() {
   const { user } = useAuth();
@@ -1287,6 +1327,9 @@ export default function Envanter() {
   const [syncing, setSyncing]     = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState('');
+  const [epcSyncing, setEpcSyncing]       = useState(false);
+  const [epcSyncResult, setEpcSyncResult] = useState(null);
+  const [epcSyncError, setEpcSyncError]   = useState('');
 
   async function handleSync() {
     setSyncing(true); setSyncError('');
@@ -1305,6 +1348,23 @@ export default function Envanter() {
     }
   }
 
+  async function handleEpcSync() {
+    setEpcSyncing(true); setEpcSyncError('');
+    try {
+      const r = await fetch(`${API}/api/servicedesk/sync`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error(data.error || 'EPC senkronizasyonu başarısız');
+      setEpcSyncResult(data);
+    } catch (err) {
+      setEpcSyncError(err.message);
+    } finally {
+      setEpcSyncing(false);
+    }
+  }
+
   return (
     <div className="p-8">
       <div className="flex items-start justify-between mb-6">
@@ -1312,21 +1372,38 @@ export default function Envanter() {
           <h1 className="text-xl font-bold text-gray-800">Envanter</h1>
           <p className="text-sm text-gray-400 mt-1">Lokasyonlar ve cihaz yönetimi</p>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition disabled:opacity-60"
-        >
-          <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {syncing ? 'Senkronize ediliyor...' : 'AD\'den Senkronize Et'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleEpcSync}
+            disabled={epcSyncing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition disabled:opacity-60"
+          >
+            <svg className={`w-4 h-4 ${epcSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+            </svg>
+            {epcSyncing ? 'EPC Senkronize...' : 'EPC\'den Senkronize Et'}
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition disabled:opacity-60"
+          >
+            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? 'Senkronize ediliyor...' : 'AD\'den Senkronize Et'}
+          </button>
+        </div>
       </div>
 
       {syncError && (
         <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
           {syncError}
+        </div>
+      )}
+      {epcSyncError && (
+        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+          EPC: {epcSyncError}
         </div>
       )}
 
@@ -1353,6 +1430,7 @@ export default function Envanter() {
       {tab === 'locations' && <LocationsTab userRole={user?.role} />}
 
       <SyncResultModal result={syncResult} onClose={() => setSyncResult(null)} />
+      <EpcSyncResultModal result={epcSyncResult} onClose={() => setEpcSyncResult(null)} />
     </div>
   );
 }

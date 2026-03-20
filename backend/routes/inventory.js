@@ -185,7 +185,13 @@ router.get('/', async (req, res) => {
       ),
     ]);
 
-    res.json({ devices, total: countRows[0]?.count ?? 0, page: parseInt(page), limit: parseInt(limit) });
+    const now = Date.now();
+    const devicesWithEpc = devices.map(d => {
+      const diff = d.lastSyncAt ? (now - new Date(d.lastSyncAt).getTime()) / 86400000 : null;
+      const epcStatus = diff === null ? 'unknown' : diff < 1 ? 'online' : diff < 7 ? 'passive' : 'offline';
+      return { ...d, epcStatus };
+    });
+    res.json({ devices: devicesWithEpc, total: countRows[0]?.count ?? 0, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
     console.error('Inventory GET error:', err);
     res.status(500).json({ error: err.message });
