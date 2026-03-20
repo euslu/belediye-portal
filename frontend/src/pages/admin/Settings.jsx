@@ -339,22 +339,37 @@ function UlakbellTab() {
 
 // ─── Tab listesi ─────────────────────────────────────────────────────────────
 
-const TABS = [
-  { key: 'GENERAL',    label: 'Genel',               icon: '⚙️' },
-  { key: 'AD',         label: 'Aktif Dizin',         icon: '🔗' },
-  { key: 'SMTP',       label: 'E-Posta',             icon: '📧' },
-  { key: 'PDKS',       label: 'PDKS',                icon: '🕐' },
-  { key: 'FLEXCITY',   label: 'FlexCity',            icon: '🏛️' },
-  { key: 'DASHBOARD',  label: 'Dashboard',           icon: '📊' },
-  // ── ITSM grubu ──────────────────────────
-  { key: 'ITSM',       label: 'ITSM / SLA',         icon: '🎫', separator: true },
-  { key: 'SUBJECTS',   label: 'Başvuru Konuları',    icon: '📋' },
-  // ── AD Değişiklikleri ────────────────────
-  { key: 'AD_CHANGES', label: 'AD Değişiklikleri',  icon: '🔄', separator: true },
-  // ── Entegrasyonlar ───────────────────────
-  { key: 'ULAKBELL',      label: 'ulakBELL',        icon: '🔔', separator: true },
-  { key: 'MANAGEENGINE', label: 'ManageEngine SDP', icon: '🛠️' },
+const TAB_GROUPS = [
+  {
+    title: 'SİSTEM',
+    tabs: [
+      { key: 'GENERAL', label: 'Genel' },
+      { key: 'AD',      label: 'Aktif Dizin' },
+    ],
+  },
+  {
+    title: 'ENTEGRASYONLAR',
+    tabs: [
+      { key: 'SMTP',        label: 'E-Posta' },
+      { key: 'PDKS',        label: 'PDKS' },
+      { key: 'FLEXCITY',    label: 'FlexCity' },
+      { key: 'ULAKBELL',    label: 'ulakBELL' },
+      { key: 'MANAGEENGINE', label: 'ManageEngine EPC' },
+    ],
+  },
+  {
+    title: 'PORTAL',
+    tabs: [
+      { key: 'DASHBOARD',  label: 'Dashboard' },
+      { key: 'ITSM',       label: 'ITSM / SLA' },
+      { key: 'SUBJECTS',   label: 'Başvuru Konuları' },
+      { key: 'AD_CHANGES', label: 'AD Değişiklikleri' },
+    ],
+  },
 ];
+
+// Flat list for compatibility
+const TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 
@@ -813,22 +828,31 @@ export default function Settings() {
   return (
     <div className="flex h-full min-h-screen bg-gray-50">
       {/* Sol dikey sekmeler */}
-      <aside className="w-52 shrink-0 bg-white border-r border-gray-200 pt-6">
-        <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Ayarlar</p>
-        <nav className="px-2">
-          {TABS.map((t, i) => (
-            <div key={t.key}>
-              {t.separator && (
-                <div className="mx-1 my-2 border-t border-gray-100" />
-              )}
-              <button
-                onClick={() => setActiveTab(t.key)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left
-                  ${activeTab === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <span>{t.icon}</span>
-                <span>{t.label}</span>
-              </button>
+      <aside className="w-52 shrink-0 bg-white border-r border-gray-200 pt-4 pb-6">
+        <nav>
+          {TAB_GROUPS.map(group => (
+            <div key={group.title} className="mt-4">
+              <p className="px-4 mb-1" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase' }}>
+                {group.title}
+              </p>
+              {group.tabs.map(t => {
+                const active = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`w-full text-left px-4 py-2 text-sm font-medium transition-colors relative
+                      ${active
+                        ? 'text-blue-700 bg-blue-50'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-600 rounded-r" />
+                    )}
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </nav>
