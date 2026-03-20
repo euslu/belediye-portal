@@ -56,15 +56,40 @@ async function fetchAdUsers() {
         'departmentNumber',           // departman no
         'physicalDeliveryOfficeName', // ofis / lokasyon
         'l',                          // şehir / ilçe
+        // ── Yeni alanlar ──────────────────────────────────────────────────
+        'givenName',                  // ad
+        'sn',                         // soyad
+        'birthday',                   // doğum tarihi (DD.MM.YYYY)
+        'tcno',                       // TC kimlik numarası
+        'employeeID',                 // iç sicil no
+        'employeeType',               // kadro türü (Memur/İşçi/Sözleşmeli)
+        'personalTitle',              // cinsiyet (Erkek/Kadın)
+        'manager',                    // yönetici DN
       ],
       paged:     true,
       sizeLimit: 0,
+    });
+
+    // manager DN'den sAMAccountName çıkar: "CN=Ad Soyad,OU=..." → "ad.soyad" lookup için CN
+    const managerCNMap = {};
+    searchEntries.forEach((e) => {
+      const cn  = adVal(e.displayName);
+      const sam = adVal(e.sAMAccountName);
+      if (cn && sam) managerCNMap[cn.toLowerCase()] = sam.toLowerCase();
     });
 
     return searchEntries.map((e) => {
       const dn = adVal(e.distinguishedName);
       const { directorate } = parseDNForDirectorate(dn);
       const department = cleanDept(adVal(e.department));
+
+      // Manager DN'den CN'i al → displayName ile eşleştir → sAMAccountName
+      let managerUsername = null;
+      const managerDN = adVal(e.manager);
+      if (managerDN) {
+        const cnMatch = managerDN.match(/^CN=([^,]+)/i);
+        if (cnMatch) managerUsername = managerCNMap[cnMatch[1].trim().toLowerCase()] || null;
+      }
 
       return {
         username:         (adVal(e.sAMAccountName) || '').toLowerCase(),
@@ -79,6 +104,14 @@ async function fetchAdUsers() {
         departmentNumber: adVal(e.departmentNumber),
         office:           adVal(e.physicalDeliveryOfficeName),
         city:             adVal(e.l),
+        firstName:        adVal(e.givenName),
+        lastName:         adVal(e.sn),
+        birthday:         adVal(e.birthday),
+        tcno:             adVal(e.tcno),
+        employeeId:       adVal(e.employeeID),
+        employeeType:     adVal(e.employeeType),
+        gender:           adVal(e.personalTitle),
+        managerUsername,
       };
     }).filter((u) => u.username);
   } finally {
@@ -280,6 +313,14 @@ async function runAdSync() {
           departmentNumber: adUser.departmentNumber ?? undefined,
           office:           adUser.office           ?? undefined,
           city:             adUser.city             ?? undefined,
+          firstName:        adUser.firstName        ?? undefined,
+          lastName:         adUser.lastName         ?? undefined,
+          birthday:         adUser.birthday         ?? undefined,
+          tcno:             adUser.tcno             ?? undefined,
+          employeeId:       adUser.employeeId       ?? undefined,
+          employeeType:     adUser.employeeType     ?? undefined,
+          gender:           adUser.gender           ?? undefined,
+          managerUsername:  adUser.managerUsername  ?? undefined,
         },
         create: {
           username:         adUser.username,
@@ -294,6 +335,14 @@ async function runAdSync() {
           departmentNumber: adUser.departmentNumber || null,
           office:           adUser.office           || null,
           city:             adUser.city             || null,
+          firstName:        adUser.firstName        || null,
+          lastName:         adUser.lastName         || null,
+          birthday:         adUser.birthday         || null,
+          tcno:             adUser.tcno             || null,
+          employeeId:       adUser.employeeId       || null,
+          employeeType:     adUser.employeeType     || null,
+          gender:           adUser.gender           || null,
+          managerUsername:  adUser.managerUsername  || null,
           role:             'user',
         },
       });
