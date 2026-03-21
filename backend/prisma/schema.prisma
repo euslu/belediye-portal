@@ -73,6 +73,7 @@ model User {
   gender           String?   // personalTitle → normalleştirilmiş (Erkek | Kadın)
   managerUsername  String?   // manager DN'den çözümlenen yönetici sAMAccountName
   adCreatedAt      DateTime? // whenCreated — AD hesap oluşturma tarihi
+  welcomeMailSent  Boolean   @default(false) // hoş geldiniz maili gönderildi mi
   role             String   @default("user") // "admin" | "manager" | "user"
   locationId  Int?
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])

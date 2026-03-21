@@ -339,6 +339,104 @@ function UlakbellTab() {
 
 // ─── Tab listesi ─────────────────────────────────────────────────────────────
 
+// ─── Servis Durumları Tabı ────────────────────────────────────────────────────
+
+const SERVICE_LABELS = {
+  SERVICE_STATUS_AD_SYNC:       { label: 'AD Senkronizasyonu',    icon: '🔄', runKey: 'ad-sync' },
+  SERVICE_STATUS_BIRTHDAY_MAIL: { label: 'Doğum Günü Maili',      icon: '🎂', runKey: 'birthday-mail' },
+  SERVICE_STATUS_WELCOME_MAIL:  { label: 'Hoş Geldiniz Maili',    icon: '📨', runKey: 'welcome-mail' },
+  SERVICE_STATUS_EPC_SYNC:      { label: 'ManageEngine EPC Sync', icon: '🏗️', runKey: 'epc-sync' },
+  SERVICE_STATUS_EMAIL_POLL:    { label: 'E-Posta Tarama',        icon: '📬', runKey: null },
+};
+
+function ServicesTab() {
+  const [statuses, setStatuses] = useState({});
+  const [loading, setLoading]   = useState(true);
+  const [running, setRunning]   = useState({});
+
+  const load = () => {
+    const token = localStorage.getItem('token');
+    setLoading(true);
+    fetch(`${API}/api/services/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(setStatuses)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  const run = async (runKey) => {
+    if (!runKey) return;
+    setRunning(r => ({ ...r, [runKey]: true }));
+    const token = localStorage.getItem('token');
+    try {
+      await fetch(`${API}/api/services/run/${runKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      load();
+    } catch { /* ignore */ }
+    setRunning(r => ({ ...r, [runKey]: false }));
+  };
+
+  const statusColor = (s) => {
+    if (!s || s === 'never') return 'bg-gray-100 text-gray-500';
+    if (s === 'ok') return 'bg-green-100 text-green-700';
+    if (s === 'warning') return 'bg-amber-100 text-amber-700';
+    return 'bg-red-100 text-red-700';
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-base font-semibold text-gray-800">Servis Durumları</h3>
+        <button onClick={load} className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition">
+          🔃 Yenile
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="py-16 text-center text-sm text-gray-400">Yükleniyor…</div>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(SERVICE_LABELS).map(([key, meta]) => {
+            const s = statuses[key] || {};
+            return (
+              <div key={key} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-4">
+                <span className="text-2xl">{meta.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-800">{meta.label}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColor(s.status)}`}>
+                      {s.status === 'ok' ? 'Başarılı' : s.status === 'warning' ? 'Uyarı' : s.status === 'never' ? 'Hiç çalışmadı' : s.status || '—'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">{s.message || '—'}</p>
+                  {s.lastRun && (
+                    <p className="text-xs text-gray-300 mt-0.5">
+                      Son çalışma: {new Date(s.lastRun).toLocaleString('tr-TR')}
+                    </p>
+                  )}
+                </div>
+                {meta.runKey && (
+                  <button
+                    onClick={() => run(meta.runKey)}
+                    disabled={!!running[meta.runKey]}
+                    className="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {running[meta.runKey] ? 'Çalışıyor…' : '▶ Çalıştır'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TAB_GROUPS = [
   {
     title: 'SİSTEM',
@@ -364,6 +462,12 @@ const TAB_GROUPS = [
       { key: 'ITSM',       label: 'ITSM / SLA' },
       { key: 'SUBJECTS',   label: 'Başvuru Konuları' },
       { key: 'AD_CHANGES', label: 'AD Değişiklikleri' },
+    ],
+  },
+  {
+    title: 'İZLEME',
+    tabs: [
+      { key: 'SERVICES', label: 'Servis Durumları' },
     ],
   },
 ];
@@ -819,8 +923,9 @@ export default function Settings() {
   const renderUlakbell = () => <UlakbellTab />;
 
   const renderManageengine = () => <ManageEngineTab />;
+  const renderServices     = () => <ServicesTab />;
 
-  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell, MANAGEENGINE: renderManageengine };
+  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell, MANAGEENGINE: renderManageengine, SERVICES: renderServices };
 
   // Bazı sekmeler kendi padding'ini yönetir
   const FULL_PAGE_TABS = ['SUBJECTS', 'AD_CHANGES'];

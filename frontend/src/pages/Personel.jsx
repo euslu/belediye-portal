@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import UserDrawer from '../components/UserDrawer';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, LabelList,
+} from 'recharts';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -181,6 +185,60 @@ function groupByDept(users) {
   return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, 'tr'));
 }
 
+// Daire adını kısalt: "X Dairesi Başkanlığı" → "X DB"
+function shortenDir(name = '') {
+  return name
+    .replace(' Dairesi Başkanlığı', ' DB')
+    .replace(' Müdürlüğü', ' Müd.')
+    .replace('Hizmetleri', 'Hiz.');
+}
+
+// Kart bileşeni
+function Card({ title, children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-2xl p-5 border border-slate-100 ${className}`}
+      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)' }}>
+      {title && (
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+          {title}
+        </p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// Donut pie orta toplam
+function DonutCenter({ cx, cy, total }) {
+  return (
+    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle">
+      <tspan x={cx} dy="-6" fontSize="22" fontWeight="700" fill="#1e293b">{total?.toLocaleString('tr-TR')}</tspan>
+      <tspan x={cx} dy="18" fontSize="11" fill="#94a3b8">kişi</tspan>
+    </text>
+  );
+}
+
+// Custom tooltip
+function ChartTip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-100 rounded-lg px-3 py-2 text-xs shadow-lg">
+      <span className="font-semibold text-slate-700">{payload[0].name}</span>
+      <span className="ml-2 text-slate-500">{Number(payload[0].value).toLocaleString('tr-TR')}</span>
+    </div>
+  );
+}
+
+// Avatar initials
+function Avatar({ name, size = 32, bg = '#1e40af' }) {
+  const initials = name?.split(' ').slice(0, 2).map(w => w[0]).join('') || '?';
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: size * 0.35, fontWeight: 700, flexShrink: 0 }}>
+      {initials}
+    </div>
+  );
+}
+
 export default function Personel() {
   const { user: currentUser } = useAuth();
   const [directorates, setDirectorates] = useState([]);
@@ -190,8 +248,8 @@ export default function Personel() {
   const [dirUsers, setDirUsers]         = useState({});
   const [loadingDir, setLoadingDir]     = useState(null);
   const [deviceModal, setDeviceModal]   = useState(null);
-  const [drawerUser, setDrawerUser]     = useState(null); // username string
-  const [stats, setStats]               = useState(null);
+  const [drawerUser, setDrawerUser]     = useState(null);
+  const [demo, setDemo]                 = useState(null);
 
   const isAdmin       = currentUser?.role === 'admin';
   const canViewDevices = ['admin', 'manager'].includes(currentUser?.role);
@@ -204,9 +262,9 @@ export default function Personel() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    fetch(`${API}/api/users/stats`, { headers: authHeaders() })
+    fetch(`${API}/api/users/demographics`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => d && setStats(d))
+      .then(d => d && setDemo(d))
       .catch(() => {});
   }, [isAdmin]);
 
@@ -247,20 +305,179 @@ export default function Personel() {
         />
       </div>
 
-      {/* Admin stats bar */}
-      {isAdmin && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: 'Toplam',   value: stats?.total,             color: 'bg-gray-50 text-gray-700'     },
-            { label: 'Daireli',  value: stats?.withDirectorate,   color: 'bg-indigo-50 text-indigo-700' },
-            { label: 'GSM\'li',  value: stats?.withPhone,         color: 'bg-green-50 text-green-700'   },
-            { label: 'Sicilli',  value: stats?.withEmployeeNumber, color: 'bg-amber-50 text-amber-700'  },
-          ].map(s => (
-            <div key={s.label} className={`rounded-xl p-4 ${s.color}`}>
-              <p className="text-2xl font-bold">{s.value ?? '…'}</p>
-              <p className="text-xs mt-0.5 opacity-70">{s.label}</p>
-            </div>
-          ))}
+      {/* Demografik dashboard (admin only) */}
+      {isAdmin && demo && (
+        <div className="mb-8">
+          {/* Satır 1: Cinsiyet + Kadro + Daire (row-span-2) */}
+          <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '1fr 1fr 2fr', gridTemplateRows: 'auto auto' }}>
+
+            {/* Cinsiyet Dağılımı */}
+            <Card title="Cinsiyet Dağılımı">
+              {(() => {
+                const gTotal = demo.gender.reduce((s, r) => s + r.value, 0);
+                const colors = { Erkek: '#1e40af', Kadın: '#ec4899', Belirtilmemiş: '#cbd5e1' };
+                return (
+                  <>
+                    <div className="relative">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <PieChart>
+                          <Pie data={demo.gender} dataKey="value" nameKey="name"
+                            cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={2}>
+                            {demo.gender.map((r) => <Cell key={r.name} fill={colors[r.name] || '#94a3b8'} />)}
+                          </Pie>
+                          <Tooltip content={<ChartTip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center">
+                          <p className="text-xl font-bold text-slate-800">{gTotal.toLocaleString('tr-TR')}</p>
+                          <p style={{ fontSize: 10, color: '#94a3b8' }}>kişi</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      {demo.gender.map(r => (
+                        <div key={r.name} className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colors[r.name] || '#94a3b8' }} />
+                          <span className="text-xs text-slate-600 flex-1">{r.name}</span>
+                          <span className="text-xs font-semibold text-slate-800">{r.value.toLocaleString('tr-TR')}</span>
+                          <span className="text-xs text-slate-400">%{((r.value / gTotal) * 100).toFixed(0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </Card>
+
+            {/* Kadro Türü */}
+            <Card title="Kadro Türü">
+              {(() => {
+                const kadroColors = { Memur: '#0ea5e9', 'Hizmet Alımı': '#f59e0b', İşçi: '#10b981' };
+                // Sadece ana 3 + Diğer olarak grupla
+                const main = demo.employeeType.filter(r => ['Memur','Hizmet Alımı','İşçi'].includes(r.name));
+                const otherVal = demo.employeeType.filter(r => !['Memur','Hizmet Alımı','İşçi'].includes(r.name)).reduce((s, r) => s + r.value, 0);
+                const data = otherVal > 0 ? [...main, { name: 'Diğer', value: otherVal }] : main;
+                const eTotal = data.reduce((s, r) => s + r.value, 0);
+                return (
+                  <>
+                    <div className="relative">
+                      <ResponsiveContainer width="100%" height={160}>
+                        <PieChart>
+                          <Pie data={data} dataKey="value" nameKey="name"
+                            cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={2}>
+                            {data.map((r) => <Cell key={r.name} fill={kadroColors[r.name] || '#94a3b8'} />)}
+                          </Pie>
+                          <Tooltip content={<ChartTip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-center">
+                          <p className="text-xl font-bold text-slate-800">{eTotal.toLocaleString('tr-TR')}</p>
+                          <p style={{ fontSize: 10, color: '#94a3b8' }}>kişi</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      {data.map(r => (
+                        <div key={r.name} className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: kadroColors[r.name] || '#94a3b8' }} />
+                          <span className="text-xs text-slate-600 flex-1">{r.name}</span>
+                          <span className="text-xs font-semibold text-slate-800">{r.value.toLocaleString('tr-TR')}</span>
+                          <span className="text-xs text-slate-400">%{((r.value / eTotal) * 100).toFixed(0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </Card>
+
+            {/* Daire Dağılımı — row-span-2 */}
+            <Card title="Daire Dağılımı — İlk 10" className="row-span-2">
+              <ResponsiveContainer width="100%" height={340}>
+                <BarChart
+                  data={demo.byDirectorate.map(r => ({ ...r, short: shortenDir(r.name) }))}
+                  layout="vertical"
+                  margin={{ top: 2, right: 48, left: 4, bottom: 2 }}
+                >
+                  <XAxis type="number" tick={false} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="short" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ChartTip />} />
+                  <Bar dataKey="value" fill="#1e40af" radius={[0, 4, 4, 0]} barSize={18}>
+                    <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: '#1e40af', fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {/* Yaş Dağılımı */}
+            <Card title="Yaş Dağılımı" className="col-span-2">
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={demo.ageGroups} margin={{ top: 16, right: 8, left: -16, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip content={<ChartTip />} />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={42}>
+                    {demo.ageGroups.map((_, i) => (
+                      <Cell key={i} fill={`hsl(${215 + i * 8}, ${75 - i * 5}%, ${35 + i * 5}%)`} />
+                    ))}
+                    <LabelList dataKey="value" position="top" style={{ fontSize: 11, fill: '#475569', fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+
+          {/* Satır 2: Bugün Doğum Günü + Yeni Katılanlar */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Bugün Doğum Günü */}
+            <Card title={`🎂 Bugün Doğum Günü (${demo.birthdayToday?.length || 0})`}>
+              {!demo.birthdayToday?.length ? (
+                <p className="text-sm text-slate-400 py-4 text-center">Bugün doğum günü olan personel yok</p>
+              ) : (
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {demo.birthdayToday.map(u => (
+                    <div key={u.username} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition">
+                      <Avatar name={u.displayName} bg="#1e40af" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{u.displayName}</p>
+                        <p className="text-xs text-slate-400 truncate">{u.directorate || u.department || '—'}</p>
+                      </div>
+                      <button
+                        onClick={() => fetch(`${API}/api/users/send-birthday-mail/${u.username}`, { method: 'POST', headers: authHeaders() })}
+                        title="Tebrik maili gönder"
+                        className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition text-xs"
+                      >📧</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Bu Hafta Yeni Katılanlar */}
+            <Card title={`👋 Bu Hafta Yeni Katılanlar (${demo.newThisWeek?.length || 0})`}>
+              {!demo.newThisWeek?.length ? (
+                <p className="text-sm text-slate-400 py-4 text-center">Bu hafta yeni personel eklenmedi</p>
+              ) : (
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {demo.newThisWeek.map(u => {
+                    const daysAgo = Math.floor((Date.now() - new Date(u.adCreatedAt)) / 86400000);
+                    return (
+                      <div key={u.username} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition">
+                        <Avatar name={u.displayName} bg="#0f766e" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{u.displayName}</p>
+                          <p className="text-xs text-slate-400 truncate">{u.directorate || u.department || '—'}</p>
+                        </div>
+                        <span className="text-xs text-slate-400 shrink-0">{daysAgo === 0 ? 'bugün' : `${daysAgo}g önce`}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
       )}
 

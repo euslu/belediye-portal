@@ -182,6 +182,139 @@ router.get('/departments', async (req, res) => {
   }
 });
 
+// ─── GET /api/users/demographics ─────────────────────────────────────────────
+// Admin: personel demografik istatistikleri (cinsiyet, çalışan tipi, daire dağılımı, ay bazlı giriş)
+router.get('/demographics', async (req, res) => {
+  if (req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  try {
+    const today = new Date();
+    const todayMD = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}`;
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [genderRows, employeeTypeRows, directorateRows, ageRows, birthdayRows, newWeekRows, totals] = await Promise.all([
+      // Cinsiyet dağılımı
+      prisma.$queryRaw`
+        SELECT COALESCE(gender, 'Belirtilmemiş') AS name, COUNT(*)::int AS value
+        FROM "User"
+        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
+        GROUP BY COALESCE(gender, 'Belirtilmemiş')
+        ORDER BY value DESC
+      `,
+      // Çalışan tipi dağılımı
+      prisma.$queryRaw`
+        SELECT COALESCE("employeeType", 'Belirtilmemiş') AS name, COUNT(*)::int AS value
+        FROM "User"
+        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
+        GROUP BY COALESCE("employeeType", 'Belirtilmemiş')
+        ORDER BY value DESC
+      `,
+      // Daire bazlı personel sayısı (top 10)
+      prisma.$queryRaw`
+        SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS value
+        FROM "User"
+        WHERE (directorate IS NOT NULL OR department IS NOT NULL)
+          AND department != 'Dış Kullanıcı'
+        GROUP BY COALESCE(directorate, department)
+        ORDER BY value DESC
+        LIMIT 10
+      `,
+      // Yaş grupları (birthday DD.MM.YYYY formatında)
+      prisma.$queryRaw`
+        SELECT name, value FROM (
+          SELECT
+            CASE
+              WHEN age_years < 25 THEN '<25'
+              WHEN age_years BETWEEN 25 AND 34 THEN '25-34'
+              WHEN age_years BETWEEN 35 AND 44 THEN '35-44'
+              WHEN age_years BETWEEN 45 AND 54 THEN '45-54'
+              WHEN age_years BETWEEN 55 AND 64 THEN '55-64'
+              ELSE '65+'
+            END AS name,
+            COUNT(*)::int AS value,
+            MIN(age_years) AS sort_key
+          FROM (
+            SELECT EXTRACT(YEAR FROM AGE(NOW(), TO_DATE(birthday, 'DD.MM.YYYY')))::int AS age_years
+            FROM "User"
+            WHERE birthday IS NOT NULL AND LENGTH(birthday) = 10
+              AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+          ) sub
+          GROUP BY 1
+        ) grouped
+        ORDER BY sort_key
+      `,
+      // Bugün doğum günü olanlar
+      prisma.$queryRaw`
+        SELECT username, "displayName", department, directorate
+        FROM "User"
+        WHERE birthday IS NOT NULL
+          AND SUBSTRING(birthday, 1, 5) = ${todayMD}
+          AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+        ORDER BY "displayName"
+      `,
+      // Bu hafta AD'ye eklenenler
+      prisma.$queryRaw`
+        SELECT username, "displayName", department, directorate, "adCreatedAt"
+        FROM "User"
+        WHERE "adCreatedAt" >= ${weekAgo}
+          AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+        ORDER BY "adCreatedAt" DESC
+        LIMIT 20
+      `,
+      // Özet sayaçlar
+      Promise.all([
+        prisma.user.count({ where: { AND: BASE_WHERE } }),
+        prisma.user.count({ where: { AND: BASE_WHERE, birthday: { not: null } } }),
+        prisma.user.count({ where: { AND: BASE_WHERE, welcomeMailSent: true } }),
+        prisma.user.count({
+          where: {
+            AND: BASE_WHERE,
+            adCreatedAt: { gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()) },
+          },
+        }),
+      ]),
+    ]);
+
+    const [total, withBirthday, welcomeMailsSent, newLastYear] = totals;
+
+    res.json({
+      totals: { total, withBirthday, welcomeMailsSent, newLastYear },
+      gender:        genderRows.map(r => ({ name: r.name, value: Number(r.value) })),
+      employeeType:  employeeTypeRows.map(r => ({ name: r.name, value: Number(r.value) })),
+      byDirectorate: directorateRows.map(r => ({ name: r.name, value: Number(r.value) })),
+      ageGroups:     ageRows.map(r => ({ name: r.name, value: Number(r.value) })),
+      birthdayToday: birthdayRows.map(r => ({
+        username: r.username, displayName: r.displayName,
+        department: r.department, directorate: r.directorate,
+      })),
+      newThisWeek:   newWeekRows.map(r => ({
+        username: r.username, displayName: r.displayName,
+        department: r.department, directorate: r.directorate,
+        adCreatedAt: r.adCreatedAt,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Demografik veriler alınamadı' });
+  }
+});
+
+// ─── POST /api/users/send-birthday-mail/:username ────────────────────────────
+router.post('/send-birthday-mail/:username', async (req, res) => {
+  if (req.user.role !== 'admin')
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  try {
+    const { sendBirthdayMails } = require('../lib/birthdayMailer');
+    const result = await sendBirthdayMails(req.params.username);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Mail gönderilemedi' });
+  }
+});
+
 // ─── PATCH /api/users/:id/location ───────────────────────────────────────────
 router.patch('/:id/location', async (req, res) => {
   if (!['admin', 'manager'].includes(req.user.role))

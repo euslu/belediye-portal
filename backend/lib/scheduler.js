@@ -1,6 +1,8 @@
 const cron = require('node-cron');
-const { runAdSync }  = require('./adSync');
-const { pollEmails } = require('./emailPoller');
+const { runAdSync }        = require('./adSync');
+const { pollEmails }       = require('./emailPoller');
+const { sendBirthdayMails } = require('./birthdayMailer');
+const { sendWelcomeMails }  = require('./welcomeMailer');
 
 // Her gün sabah 08:00'de AD senkronizasyonu yap
 cron.schedule('0 8,20 * * *', async () => {
@@ -35,6 +37,30 @@ cron.schedule('0 2 * * *', async () => {
   }
 }, { timezone: 'Europe/Istanbul' });
 
+// Her gün 09:00'da doğum günü maili gönder
+cron.schedule('0 9 * * *', async () => {
+  console.log('[Scheduler] Doğum günü mailleri gönderiliyor...');
+  try {
+    const result = await sendBirthdayMails();
+    console.log(`[Scheduler] Doğum günü maili — ${result.sent} gönderildi, ${result.failed} hata`);
+  } catch (err) {
+    console.error('[Scheduler] Doğum günü maili başarısız:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
+// Her gün 09:05'de hoş geldiniz maili gönder
+cron.schedule('5 9 * * *', async () => {
+  console.log('[Scheduler] Hoş geldiniz mailleri gönderiliyor...');
+  try {
+    const result = await sendWelcomeMails();
+    console.log(`[Scheduler] Hoş geldiniz maili — ${result.sent} gönderildi, ${result.failed} hata`);
+  } catch (err) {
+    console.error('[Scheduler] Hoş geldiniz maili başarısız:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
 console.log('[Scheduler] AD sync zamanlandı: her gün 08:00 ve 20:00 (Istanbul)');
 console.log('[Scheduler] EPC sync zamanlandı: her gece 02:00 (Istanbul)');
 console.log('[Scheduler] E-posta tarama zamanlandı: her 5 dakika');
+console.log('[Scheduler] Doğum günü maili zamanlandı: her gün 09:00 (Istanbul)');
+console.log('[Scheduler] Hoş geldiniz maili zamanlandı: her gün 09:05 (Istanbul)');
