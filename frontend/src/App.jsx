@@ -72,7 +72,6 @@ export default function App() {
             <Route path="itsm/:id"        element={<TicketDetail />} />
             <Route path="personel"         element={<Personel />} />
             <Route path="gruplar"          element={<Gruplar />} />
-            <Route path="admin/users"      element={<Personel />} />
             <Route path="admin/groups"     element={<AdminGroups />} />
             <Route path="profile"          element={<Profile />} />
             <Route path="my-tasks"         element={<MyTasks />} />

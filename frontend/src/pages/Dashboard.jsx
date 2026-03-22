@@ -73,7 +73,7 @@ function buildGroups(role) {
       label: 'ARAÇLAR',
       separator: true,
       items: [
-        { label: 'Personel',     icon: PersonIcon,  to: '/admin/users'    },
+        { label: 'Personel',     icon: PersonIcon,  to: '/personel'    },
         { label: 'Envanter',          icon: ServerIcon,  to: '/admin/envanter'      },
         { label: 'ulakBELL Talepleri', icon: BellIcon,    to: '/ulakbell-incidents'  },
         { label: 'PDKS',              icon: ClockIcon,   to: '/pdks'                },
