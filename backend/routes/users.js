@@ -228,7 +228,7 @@ router.get('/demographics', async (req, res) => {
     const todayMD = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}`;
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [genderRows, employeeTypeRows, directorateRows, ageRows, birthdayRows, newWeekRows, totals] = await Promise.all([
+    const [genderRows, employeeTypeRows, directorateRows, ageRows, birthdayRows, newWeekRows, totals, kadroRows] = await Promise.all([
       // Cinsiyet dağılımı
       prisma.$queryRaw`
         SELECT COALESCE(gender, 'Belirtilmemiş') AS name, COUNT(*)::int AS value
@@ -299,6 +299,16 @@ router.get('/demographics', async (req, res) => {
         ORDER BY "adCreatedAt" DESC
         LIMIT 20
       `,
+      // Kadro (FlexCity'den) dağılımı
+      prisma.$queryRaw`
+        SELECT COALESCE(kadro, 'Belirtilmemiş') AS name, COUNT(*)::int AS value
+        FROM "User"
+        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
+          AND kadro IS NOT NULL
+        GROUP BY COALESCE(kadro, 'Belirtilmemiş')
+        ORDER BY value DESC
+        LIMIT 15
+      `,
       // Özet sayaçlar
       Promise.all([
         prisma.user.count({ where: { AND: BASE_WHERE } }),
@@ -340,6 +350,7 @@ router.get('/demographics', async (req, res) => {
         department: r.department, directorate: r.directorate,
         adCreatedAt: r.adCreatedAt,
       })),
+      byKadro: kadroRows.map(r => ({ name: r.name, value: Number(r.value) })),
     });
   } catch (err) {
     console.error(err);

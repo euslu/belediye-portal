@@ -24,6 +24,7 @@ const ulakbellRoutes        = require('./routes/ulakbell');
 const pdksRoutes            = require('./routes/pdks');
 const servicedeskRoutes     = require('./routes/servicedesk');
 const servicesRoutes        = require('./routes/services');
+const flexcityRoutes        = require('./routes/flexcity');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
@@ -66,6 +67,7 @@ app.use('/api/ulakbell',        ulakbellRoutes);
 app.use('/api/pdks',            pdksRoutes);
 app.use('/api/servicedesk',     servicedeskRoutes);
 app.use('/api/services',        servicesRoutes);
+app.use('/api/flexcity',        flexcityRoutes);
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 

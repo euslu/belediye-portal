@@ -74,6 +74,12 @@ model User {
   managerUsername  String?   // manager DN'den çözümlenen yönetici sAMAccountName
   adCreatedAt      DateTime? // whenCreated — AD hesap oluşturma tarihi
   welcomeMailSent  Boolean   @default(false) // hoş geldiniz maili gönderildi mi
+  // ── FlexCity alanları ─────────────────────────────────────────────────────
+  flexcityOrgutId  Int?      // ORGUT_ID (KBS örgüt referansı)
+  pdksNo           String?   // PDKS_NO
+  kadro            String?   // KADRO unvanı (FlexCity'den)
+  gorev            String?   // GOREV (FlexCity'den)
+  flexSyncedAt     DateTime? // Son FlexCity sync tarihi
   role             String   @default("user") // "admin" | "manager" | "user"
   locationId  Int?
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])
@@ -400,6 +406,18 @@ model AdChangeLog {
   newValue    String?
   detectedAt  DateTime @default(now())
   notified    Boolean  @default(false)
+}
+
+// ─── FlexCity KBS Örgüt Ağacı ────────────────────────────────────────────────
+model FlexcityOrgut {
+  id         Int      @id
+  adi        String
+  sabitAdi   String?
+  kod        String?
+  durum      String?
+  ustId      Int?
+  servisTuru String?
+  syncedAt   DateTime @default(now())
 }
 
 // ─── Kullanıcı Cihazları (eski, geriye dönük uyumluluk) ───────────────────────

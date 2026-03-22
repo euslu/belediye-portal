@@ -97,28 +97,83 @@ function DeviceModal({ user, onClose }) {
 function BirthdayCardPreview({ user }) {
   const birthYear = user.birthday?.split('.')?.[2];
   const age = birthYear ? new Date().getFullYear() - parseInt(birthYear) : null;
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+
   return (
-    <div style={{ maxWidth: '500px', margin: '0 auto', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', fontFamily: 'Inter, Arial, sans-serif' }}>
-      <div style={{ background: 'linear-gradient(135deg, #1e40af, #3b82f6)', padding: '32px 24px', textAlign: 'center' }}>
-        <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎂</div>
-        <h2 style={{ color: 'white', margin: 0, fontSize: '22px', fontWeight: 700 }}>Doğum Günün Kutlu Olsun!</h2>
-      </div>
-      <div style={{ padding: '24px' }}>
-        <p style={{ fontSize: '16px', color: '#0f172a', margin: '0 0 12px' }}>
-          Sayın <strong>{user.displayName}</strong>,
-        </p>
-        <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: '0 0 20px' }}>
-          {age ? <><strong>{age}. yaşını</strong> kutlarken, </> : ''}
-          Muğla Büyükşehir Belediyesi ailesi olarak bu mutlu günde sağlık, mutluluk ve başarı dolu bir yıl dileriz.
-        </p>
-        <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '16px 0' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', background: '#1e40af', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '14px', flexShrink: 0 }}>AA</div>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>Ahmet ARAS</p>
-            <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '12px' }}>Muğla Büyükşehir Belediye Başkanı</p>
+    <div style={{ maxWidth: '480px', margin: '0 auto', background: 'white', border: '1px solid #e2e8f0', position: 'relative', fontFamily: 'Inter, Arial, sans-serif' }}>
+      {/* Köşe süslemeleri */}
+      <div style={{ position: 'absolute', top: 12, left: 12, width: 24, height: 24, borderTop: '2px solid #991b1b', borderLeft: '2px solid #991b1b' }} />
+      <div style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, borderTop: '2px solid #991b1b', borderRight: '2px solid #991b1b' }} />
+      <div style={{ position: 'absolute', bottom: 12, left: 12, width: 24, height: 24, borderBottom: '2px solid #991b1b', borderLeft: '2px solid #991b1b' }} />
+      <div style={{ position: 'absolute', bottom: 12, right: 12, width: 24, height: 24, borderBottom: '2px solid #991b1b', borderRight: '2px solid #991b1b' }} />
+
+      <div style={{ padding: '48px 56px' }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <img src="https://www.mugla.bel.tr/mbb/tema/mbb/img/mbblogo.svg" alt="MBB"
+            style={{ height: '56px', marginBottom: '10px' }}
+            onError={e => e.target.style.display = 'none'} />
+          <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.15em', color: '#1e40af', textTransform: 'uppercase' }}>
+            MUĞLA BÜYÜKŞEHİR BELEDİYESİ
           </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>T.C. Muğla</div>
         </div>
+
+        {/* Kırmızı ayraç */}
+        <div style={{ width: 40, height: 2, background: '#991b1b', margin: '0 auto 28px' }} />
+
+        {/* Pasta */}
+        <div style={{ textAlign: 'center', fontSize: '40px', marginBottom: '14px' }}>🎂</div>
+
+        {/* Başlık */}
+        <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0f172a', fontFamily: 'Georgia, serif' }}>
+            Doğum Günü Tebrik Mektubu
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#991b1b', fontStyle: 'italic' }}>Nice Mutlu Senelere</p>
+        </div>
+
+        <div style={{ width: 30, height: 1, background: '#e2e8f0', margin: '18px auto' }} />
+
+        {/* İsim */}
+        <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase' }}>SAYIN</div>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', fontFamily: 'Georgia, serif', letterSpacing: '0.05em' }}>
+            {user.displayName}
+          </div>
+          {age && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{age}. Yaş</div>}
+        </div>
+
+        {/* Metin */}
+        <div style={{ fontSize: '13px', color: '#475569', lineHeight: 1.8, textAlign: 'center', marginBottom: '18px' }}>
+          <p style={{ margin: '0 0 10px' }}>
+            Doğum gününüzü en içten dileklerimizle kutlar, sağlık, huzur ve başarı dolu nice yıllar dileriz.
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong style={{ color: '#1e40af' }}>Muğla Büyükşehir Belediyesi</strong> ailesinin değerli bir üyesi
+            olarak gösterdiğiniz özveri ve katkılarınız için teşekkür eder, birlikte geçireceğimiz daha
+            nice güzel yıllara sabırsızlıkla bakıyoruz.
+          </p>
+        </div>
+
+        {/* Alıntı */}
+        <div style={{ background: '#fef2f2', borderLeft: '3px solid #991b1b', borderRadius: '0 4px 4px 0', padding: '14px 18px', margin: '20px 0', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: '#7f1d1d', fontStyle: 'italic', lineHeight: 1.8 }}>
+            "Hayatınızın her yeni yılı,<br/>umutlarınızın gerçekleştiği,<br/>sevdiklerinizle mutlu olduğunuz<br/>güzel günlerle dolsun."
+          </p>
+        </div>
+
+        {/* İmza */}
+        <div style={{ marginTop: '28px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', fontFamily: 'Georgia, serif' }}>Ahmet ARAS</div>
+          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Belediye Başkanı</div>
+        </div>
+
+        {/* Tarih */}
+        <div style={{ textAlign: 'right', marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>{dateStr}</div>
+
+
       </div>
     </div>
   );

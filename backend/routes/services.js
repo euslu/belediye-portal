@@ -18,6 +18,7 @@ router.get('/status', async (req, res) => {
     'SERVICE_STATUS_WELCOME_MAIL',
     'SERVICE_STATUS_EPC_SYNC',
     'SERVICE_STATUS_EMAIL_POLL',
+    'SERVICE_STATUS_FLEXCITY',
   ];
 
   try {
@@ -109,6 +110,11 @@ router.post('/run/:service', async (req, res) => {
       case 'epc-sync': {
         const { syncToInventory } = require('../services/servicedesk');
         result = await syncToInventory();
+        break;
+      }
+      case 'flexcity-sync': {
+        const { syncAll } = require('../lib/flexcitySync');
+        result = await syncAll();
         break;
       }
       default:

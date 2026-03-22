@@ -48,6 +48,18 @@ cron.schedule('0 9 * * *', async () => {
   }
 }, { timezone: 'Europe/Istanbul' });
 
+// Her gece 03:00'de FlexCity sync
+cron.schedule('0 3 * * *', async () => {
+  console.log('[Scheduler] FlexCity sync başlıyor...');
+  try {
+    const { syncAll } = require('./flexcitySync');
+    const result = await syncAll();
+    console.log(`[Scheduler] FlexCity sync tamamlandı — ${result.personelResult.updated} personel, ${result.orgResult.synced} örgüt`);
+  } catch (err) {
+    console.error('[Scheduler] FlexCity sync başarısız:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
 // Her gün 09:05'de hoş geldiniz maili gönder
 cron.schedule('5 9 * * *', async () => {
   console.log('[Scheduler] Hoş geldiniz mailleri gönderiliyor...');
@@ -64,3 +76,4 @@ console.log('[Scheduler] EPC sync zamanlandı: her gece 02:00 (Istanbul)');
 console.log('[Scheduler] E-posta tarama zamanlandı: her 5 dakika');
 console.log('[Scheduler] Doğum günü maili zamanlandı: her gün 09:00 (Istanbul)');
 console.log('[Scheduler] Hoş geldiniz maili zamanlandı: her gün 09:05 (Istanbul)');
+console.log('[Scheduler] FlexCity sync zamanlandı: her gece 03:00 (Istanbul)');
