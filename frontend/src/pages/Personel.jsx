@@ -93,6 +93,37 @@ function DeviceModal({ user, onClose }) {
 
 
 
+// ─── Doğum günü tebrik kartı önizleme ───────────────────────────────────────
+function BirthdayCardPreview({ user }) {
+  const birthYear = user.birthday?.split('.')?.[2];
+  const age = birthYear ? new Date().getFullYear() - parseInt(birthYear) : null;
+  return (
+    <div style={{ maxWidth: '500px', margin: '0 auto', background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', fontFamily: 'Inter, Arial, sans-serif' }}>
+      <div style={{ background: 'linear-gradient(135deg, #1e40af, #3b82f6)', padding: '32px 24px', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎂</div>
+        <h2 style={{ color: 'white', margin: 0, fontSize: '22px', fontWeight: 700 }}>Doğum Günün Kutlu Olsun!</h2>
+      </div>
+      <div style={{ padding: '24px' }}>
+        <p style={{ fontSize: '16px', color: '#0f172a', margin: '0 0 12px' }}>
+          Sayın <strong>{user.displayName}</strong>,
+        </p>
+        <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: '0 0 20px' }}>
+          {age ? <><strong>{age}. yaşını</strong> kutlarken, </> : ''}
+          Muğla Büyükşehir Belediyesi ailesi olarak bu mutlu günde sağlık, mutluluk ve başarı dolu bir yıl dileriz.
+        </p>
+        <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '16px 0' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', background: '#1e40af', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '14px', flexShrink: 0 }}>AA</div>
+          <div>
+            <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>Ahmet ARAS</p>
+            <p style={{ margin: '2px 0 0', color: '#64748b', fontSize: '12px' }}>Muğla Büyükşehir Belediye Başkanı</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Kart bileşeni
 function Card({ title, children, className = '' }) {
   return (
@@ -144,6 +175,7 @@ export default function Personel() {
   const [deviceModal, setDeviceModal] = useState(null);
   const [drawerUser, setDrawerUser]   = useState(null);
   const [demo, setDemo]               = useState(null);
+  const [previewUser, setPreviewUser] = useState(null);
 
   const isAdmin = currentUser?.role === 'admin';
 
@@ -248,31 +280,36 @@ export default function Personel() {
             {/* Daire Dağılımı */}
             <Card title="Daire Dağılımı" className="row-span-2">
               {(() => {
-                const maxCount = Math.max(...demo.byDirectorate.map(d => d.count));
+                const maxTotal = Math.max(...demo.byDirectorate.map(d => d.total));
                 return (
-                  <div style={{ overflowY: 'auto', maxHeight: '480px', paddingRight: '4px' }}>
-                    {demo.byDirectorate.map(dir => (
-                      <div key={dir.name} style={{ marginBottom: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                          <span title={dir.fullName} style={{ fontSize: '12px', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
-                            {dir.name}
-                          </span>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e40af', flexShrink: 0 }}>
-                            {dir.count}
-                          </span>
-                        </div>
-                        <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '5px', overflow: 'hidden' }}>
-                          <div style={{
-                            width: `${(dir.count / maxCount) * 100}%`,
-                            height: '100%',
-                            background: dir.count >= 200 ? '#1e40af' : dir.count >= 100 ? '#3b82f6' : '#93c5fd',
-                            borderRadius: '4px',
-                            transition: 'width 0.6s ease',
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div style={{ overflowY: 'auto', maxHeight: '480px', paddingRight: '4px' }}>
+                      {demo.byDirectorate.map(dir => {
+                        const erkekPct = (dir.erkek / maxTotal) * 100;
+                        const kadinPct = (dir.kadin / maxTotal) * 100;
+                        return (
+                          <div key={dir.name} style={{ marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                              <span title={dir.fullName} style={{ fontSize: '12px', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
+                                {dir.name}
+                              </span>
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e40af', flexShrink: 0 }}>
+                                {dir.total}
+                              </span>
+                            </div>
+                            <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '6px', overflow: 'hidden', display: 'flex' }}>
+                              <div style={{ width: `${erkekPct}%`, height: '100%', background: '#1e40af', transition: 'width 0.6s ease' }} />
+                              <div style={{ width: `${kadinPct}%`, height: '100%', background: '#a855f7', transition: 'width 0.6s ease' }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
+                      <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#1e40af', borderRadius: 2, marginRight: 4 }} />Erkek</span>
+                      <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#a855f7', borderRadius: 2, marginRight: 4 }} />Kadın</span>
+                    </div>
+                  </>
                 );
               })()}
             </Card>
@@ -311,8 +348,8 @@ export default function Personel() {
                         <p className="text-xs text-slate-400 truncate">{u.directorate || u.department || '—'}</p>
                       </div>
                       <button
-                        onClick={() => fetch(`${API}/api/users/send-birthday-mail/${u.username}`, { method: 'POST', headers: authHeaders() })}
-                        title="Tebrik maili gönder"
+                        onClick={() => setPreviewUser(u)}
+                        title="Tebrik kartını önizle ve gönder"
                         className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition text-xs"
                       >📧</button>
                     </div>
@@ -349,6 +386,38 @@ export default function Personel() {
 
       {deviceModal && (
         <DeviceModal user={deviceModal} onClose={() => setDeviceModal(null)} />
+      )}
+
+      {previewUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Tebrik Kartı Önizleme</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>{previewUser.displayName} · {previewUser.email || previewUser.username}</p>
+              </div>
+              <button onClick={() => setPreviewUser(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: '#64748b', padding: '4px' }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+              <BirthdayCardPreview user={previewUser} />
+            </div>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setPreviewUser(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '13px' }}>
+                İptal
+              </button>
+              <button
+                onClick={async () => {
+                  await fetch(`${API}/api/users/send-birthday-mail/${previewUser.username}`, { method: 'POST', headers: authHeaders() });
+                  setPreviewUser(null);
+                  alert(`✅ ${previewUser.displayName}'e tebrik maili gönderildi!`);
+                }}
+                style={{ padding: '8px 16px', borderRadius: '8px', background: '#1e40af', color: 'white', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}
+              >
+                📧 Gönder
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {drawerUser && (

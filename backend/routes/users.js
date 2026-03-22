@@ -245,13 +245,18 @@ router.get('/demographics', async (req, res) => {
         GROUP BY COALESCE("employeeType", 'Belirtilmemiş')
         ORDER BY value DESC
       `,
-      // Daire bazlı personel sayısı (sadece resmi daireler)
-      prisma.user.groupBy({
-        by: ['directorate'],
-        where: { directorate: { in: OFFICIAL_DIRECTORATES } },
-        _count: true,
-        orderBy: { _count: { directorate: 'desc' } },
-      }),
+      // Daire bazlı personel sayısı — erkek/kadın breakdown
+      prisma.$queryRaw`
+        SELECT
+          directorate,
+          COUNT(*)::int AS total,
+          COUNT(CASE WHEN gender = 'Erkek' THEN 1 END)::int AS erkek,
+          COUNT(CASE WHEN gender = 'Kadın' THEN 1 END)::int AS kadin
+        FROM "User"
+        WHERE directorate = ANY(${OFFICIAL_DIRECTORATES})
+        GROUP BY directorate
+        ORDER BY total DESC
+      `,
       // Yaş grupları (birthday DD.MM.YYYY formatında)
       prisma.$queryRaw`
         SELECT name, value FROM (
@@ -315,13 +320,15 @@ router.get('/demographics', async (req, res) => {
       gender:        genderRows.map(r => ({ name: r.name, value: Number(r.value) })),
       employeeType:  employeeTypeRows.map(r => ({ name: r.name, value: Number(r.value) })),
       byDirectorate: directorateRows.map(d => ({
-        name: (d.directorate || '')
+        name: String(d.directorate)
           .replace(' Dairesi Başkanlığı', ' DB')
           .replace(' Şube Müdürlüğü', ' ŞM')
           .replace('Müdürlüğü', 'Md.')
           .replace('Başkanlığı', 'Bşk.'),
         fullName: d.directorate,
-        count: d._count.directorate,
+        total: Number(d.total),
+        erkek: Number(d.erkek),
+        kadin: Number(d.kadin),
       })),
       ageGroups:     ageRows.map(r => ({ name: r.name, value: Number(r.value) })),
       birthdayToday: birthdayRows.map(r => ({
