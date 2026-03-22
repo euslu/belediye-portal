@@ -210,7 +210,7 @@ router.get('/demographics', async (req, res) => {
         GROUP BY COALESCE("employeeType", 'Belirtilmemiş')
         ORDER BY value DESC
       `,
-      // Daire bazlı personel sayısı (top 10)
+      // Daire bazlı personel sayısı (tüm daireler)
       prisma.$queryRaw`
         SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS value
         FROM "User"
@@ -218,7 +218,6 @@ router.get('/demographics', async (req, res) => {
           AND department != 'Dış Kullanıcı'
         GROUP BY COALESCE(directorate, department)
         ORDER BY value DESC
-        LIMIT 10
       `,
       // Yaş grupları (birthday DD.MM.YYYY formatında)
       prisma.$queryRaw`

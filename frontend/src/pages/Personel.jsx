@@ -393,22 +393,29 @@ export default function Personel() {
               })()}
             </Card>
 
-            {/* Daire Dağılımı — row-span-2 */}
-            <Card title="Daire Dağılımı — İlk 10" className="row-span-2">
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart
-                  data={demo.byDirectorate.map(r => ({ ...r, short: shortenDir(r.name) }))}
-                  layout="vertical"
-                  margin={{ top: 2, right: 48, left: 4, bottom: 2 }}
-                >
-                  <XAxis type="number" tick={false} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="short" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<ChartTip />} />
-                  <Bar dataKey="value" fill="#1e40af" radius={[0, 4, 4, 0]} barSize={18}>
-                    <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: '#1e40af', fontWeight: 600 }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Daire Dağılımı — tüm daireler */}
+            <Card title="Daire Dağılımı" className="row-span-2">
+              <div style={{ overflowY: 'auto', maxHeight: 420 }}>
+                <ResponsiveContainer width="100%" height={demo.byDirectorate.length * 40}>
+                  <BarChart
+                    data={demo.byDirectorate.map(r => ({
+                      ...r,
+                      short: r.name
+                        .replace(' Dairesi Başkanlığı', '')
+                        .replace(' Şube Müdürlüğü', '')
+                        .replace(' Daire Başkanlığı', ''),
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 2, right: 48, left: 4, bottom: 2 }}
+                  >
+                    <XAxis type="number" tick={false} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="short" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Bar dataKey="value" fill="#1e40af" radius={[0, 4, 4, 0]} barSize={18}>
+                      <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: '#1e40af', fontWeight: 600 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </Card>
 
             {/* Yaş Dağılımı */}
@@ -481,7 +488,8 @@ export default function Personel() {
         </div>
       )}
 
-      {loading ? (
+      {/* TODO: FlexCity entegrasyonu ile yeniden yapılacak */}
+      {false && (loading ? (
         <div className="text-center py-20 text-sm text-gray-400">Yükleniyor...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-sm text-gray-400">Sonuç bulunamadı</div>
@@ -557,7 +565,7 @@ export default function Personel() {
             );
           })}
         </div>
-      )}
+      ))}
 
       {deviceModal && (
         <DeviceModal user={deviceModal} onClose={() => setDeviceModal(null)} />
