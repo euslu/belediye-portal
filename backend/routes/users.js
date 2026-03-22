@@ -182,6 +182,41 @@ router.get('/departments', async (req, res) => {
   }
 });
 
+const OFFICIAL_DIRECTORATES = [
+  'Afet İşleri ve Risk Yönetimi Dairesi Başkanlığı',
+  'Akıllı Şehir ve Kent Bilgi Sistemleri Dairesi Başkanlığı',
+  'Basın Yayın ve Halkla İlişkiler Dairesi Başkanlığı',
+  'Bilgi İşlem Dairesi Başkanlığı',
+  'Çevre Koruma ve Kontrol Dairesi Başkanlığı',
+  'Destek Hizmetleri Dairesi Başkanlığı',
+  'Dış İlişkiler Dairesi Başkanlığı',
+  'Emlak ve İstimlak Dairesi Başkanlığı',
+  'Etüt ve Projeler Dairesi Başkanlığı',
+  'Fen İşleri Dairesi Başkanlığı',
+  'Gençlik ve Spor Hizmetleri Dairesi Başkanlığı',
+  'İklim Değişikliği ve Sıfır Atık Dairesi Başkanlığı',
+  'İlçe Hizmetleri 1. Bölge Dairesi Başkanlığı',
+  'İlçe Hizmetleri 2. Bölge Dairesi Başkanlığı',
+  'İlçe Hizmetleri 3. Bölge Dairesi Başkanlığı',
+  'İlçe Hizmetleri 4. Bölge Dairesi Başkanlığı',
+  'İmar ve Şehircilik Dairesi Başkanlığı',
+  'İnsan Kaynakları ve Eğitim Dairesi Başkanlığı',
+  'İtfaiye Dairesi Başkanlığı',
+  'Kadın ve Aile Hizmetleri Dairesi Başkanlığı',
+  'Kent Tarihi, Tanıtım ve Turizm Dairesi Başkanlığı',
+  'Kültür, Sanat ve Sosyal İşler Dairesi Başkanlığı',
+  'Mali Hizmetler Dairesi Başkanlığı',
+  'Muhtarlık İşleri Dairesi Başkanlığı',
+  'Sağlık ve Sosyal Hizmetler Dairesi Başkanlığı',
+  'Tarımsal Hizmetler Dairesi Başkanlığı',
+  'Ulaşım Dairesi Başkanlığı',
+  'Yazı İşleri ve Kararlar Dairesi Başkanlığı',
+  'Zabıta Dairesi Başkanlığı',
+  'Özel Kalem Müdürlüğü',
+  '1. Hukuk Müşavirliği',
+  'Rehberlik ve Teftiş Kurulu Başkanlığı',
+];
+
 // ─── GET /api/users/demographics ─────────────────────────────────────────────
 // Admin: personel demografik istatistikleri (cinsiyet, çalışan tipi, daire dağılımı, ay bazlı giriş)
 router.get('/demographics', async (req, res) => {
@@ -210,15 +245,13 @@ router.get('/demographics', async (req, res) => {
         GROUP BY COALESCE("employeeType", 'Belirtilmemiş')
         ORDER BY value DESC
       `,
-      // Daire bazlı personel sayısı (tüm daireler)
-      prisma.$queryRaw`
-        SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS value
-        FROM "User"
-        WHERE (directorate IS NOT NULL OR department IS NOT NULL)
-          AND department != 'Dış Kullanıcı'
-        GROUP BY COALESCE(directorate, department)
-        ORDER BY value DESC
-      `,
+      // Daire bazlı personel sayısı (sadece resmi daireler)
+      prisma.user.groupBy({
+        by: ['directorate'],
+        where: { directorate: { in: OFFICIAL_DIRECTORATES } },
+        _count: true,
+        orderBy: { _count: { directorate: 'desc' } },
+      }),
       // Yaş grupları (birthday DD.MM.YYYY formatında)
       prisma.$queryRaw`
         SELECT name, value FROM (
@@ -281,7 +314,15 @@ router.get('/demographics', async (req, res) => {
       totals: { total, withBirthday, welcomeMailsSent, newLastYear },
       gender:        genderRows.map(r => ({ name: r.name, value: Number(r.value) })),
       employeeType:  employeeTypeRows.map(r => ({ name: r.name, value: Number(r.value) })),
-      byDirectorate: directorateRows.map(r => ({ name: r.name, value: Number(r.value) })),
+      byDirectorate: directorateRows.map(d => ({
+        name: (d.directorate || '')
+          .replace(' Dairesi Başkanlığı', ' DB')
+          .replace(' Şube Müdürlüğü', ' ŞM')
+          .replace('Müdürlüğü', 'Md.')
+          .replace('Başkanlığı', 'Bşk.'),
+        fullName: d.directorate,
+        count: d._count.directorate,
+      })),
       ageGroups:     ageRows.map(r => ({ name: r.name, value: Number(r.value) })),
       birthdayToday: birthdayRows.map(r => ({
         username: r.username, displayName: r.displayName,

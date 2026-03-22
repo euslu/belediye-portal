@@ -393,29 +393,36 @@ export default function Personel() {
               })()}
             </Card>
 
-            {/* Daire Dağılımı — tüm daireler */}
+            {/* Daire Dağılımı */}
             <Card title="Daire Dağılımı" className="row-span-2">
-              <div style={{ overflowY: 'auto', maxHeight: 420 }}>
-                <ResponsiveContainer width="100%" height={demo.byDirectorate.length * 40}>
-                  <BarChart
-                    data={demo.byDirectorate.map(r => ({
-                      ...r,
-                      short: r.name
-                        .replace(' Dairesi Başkanlığı', '')
-                        .replace(' Şube Müdürlüğü', '')
-                        .replace(' Daire Başkanlığı', ''),
-                    }))}
-                    layout="vertical"
-                    margin={{ top: 2, right: 48, left: 4, bottom: 2 }}
-                  >
-                    <XAxis type="number" tick={false} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="short" width={140} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                    <Bar dataKey="value" fill="#1e40af" radius={[0, 4, 4, 0]} barSize={18}>
-                      <LabelList dataKey="value" position="right" style={{ fontSize: 11, fill: '#1e40af', fontWeight: 600 }} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {(() => {
+                const maxCount = Math.max(...demo.byDirectorate.map(d => d.count));
+                return (
+                  <div style={{ overflowY: 'auto', maxHeight: '480px', paddingRight: '4px' }}>
+                    {demo.byDirectorate.map(dir => (
+                      <div key={dir.name} style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                          <span title={dir.fullName} style={{ fontSize: '12px', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
+                            {dir.name}
+                          </span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1e40af', flexShrink: 0 }}>
+                            {dir.count}
+                          </span>
+                        </div>
+                        <div style={{ background: '#f1f5f9', borderRadius: '4px', height: '5px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${(dir.count / maxCount) * 100}%`,
+                            height: '100%',
+                            background: dir.count >= 200 ? '#1e40af' : dir.count >= 100 ? '#3b82f6' : '#93c5fd',
+                            borderRadius: '4px',
+                            transition: 'width 0.6s ease',
+                          }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </Card>
 
             {/* Yaş Dağılımı */}
