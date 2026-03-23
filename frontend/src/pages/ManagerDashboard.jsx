@@ -12,14 +12,14 @@ const H = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 // ─── Renk paleti ─────────────────────────────────────────────────────────────
 const C = {
-  blue:   '#1e40af',
-  green:  '#059669',
-  amber:  '#d97706',
-  red:    '#dc2626',
-  purple: '#7c3aed',
-  slate:  '#475569',
-  bg:     '#f0f4f8',
-  text:   '#1e293b',
+  blue:   '#3ab0ff',
+  green:  '#26af68',
+  amber:  '#FFA500',
+  red:    '#f82649',
+  purple: '#7B2FBE',
+  slate:  '#888888',
+  bg:     '#f4f5fb',
+  text:   '#374557',
 };
 
 const STATUS_META = {
@@ -66,29 +66,38 @@ function StatCard({ label, value, icon, borderColor, change, pulse, suffix = '' 
   const trendGood  = invertGood ? isNeg : isUp;
 
   return (
-    <div
-      className="relative bg-white rounded-2xl p-5 flex flex-col gap-3 overflow-hidden"
-      style={{ borderLeft: `4px solid ${borderColor}`, boxShadow: '0 1px 8px rgba(0,0,0,0.07)' }}
-    >
+    <div style={{
+      background: 'white', borderRadius: 12, padding: 24,
+      boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      borderTop: `4px solid ${borderColor}`,
+      position: 'relative', overflow: 'hidden',
+    }}>
       {pulse && (value > 0) && (
-        <span className="absolute top-3 right-3 flex h-3 w-3">
+        <span style={{ position: 'absolute', top: 12, right: 12 }} className="flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: C.red }} />
           <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: C.red }} />
         </span>
       )}
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.slate }}>{label}</p>
-        <span className="text-xl leading-none">{icon}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+            {value ?? '—'}{suffix && <span style={{ fontSize: 16, fontWeight: 600, color: C.slate, marginLeft: 4 }}>{suffix}</span>}
+          </div>
+          <div style={{ fontSize: 13, color: C.slate }}>{label}</div>
+          {hasTrend && (
+            <div style={{ fontSize: 11, marginTop: 4, color: trendGood ? C.green : C.red, fontWeight: 500 }}>
+              {isUp ? '↑' : '↓'} {Math.abs(change)}% geçen dönem
+            </div>
+          )}
+        </div>
+        <div style={{
+          width: 50, height: 50, background: borderColor + '20',
+          borderRadius: 10, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: borderColor, fontSize: 22,
+        }}>
+          {icon}
+        </div>
       </div>
-      <p className="text-4xl font-extrabold leading-none" style={{ color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-        {value ?? '—'}<span className="text-lg font-semibold ml-1" style={{ color: C.slate }}>{suffix}</span>
-      </p>
-      {hasTrend && (
-        <p className="text-xs font-medium" style={{ color: trendGood ? C.green : C.red }}>
-          {isUp ? '↑' : '↓'} {Math.abs(change)}% geçen döneme göre
-        </p>
-      )}
-      {!hasTrend && <p className="text-xs" style={{ color: C.slate }}>Bu dönem</p>}
     </div>
   );
 }
@@ -323,7 +332,7 @@ export default function ManagerDashboard() {
     : [];
 
   return (
-    <div className="min-h-full p-6 space-y-5" style={{ background: C.bg, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div className="min-h-full p-6 space-y-5" style={{ background: 'var(--bg)' }}>
 
       {/* ── Başlık ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
@@ -347,13 +356,40 @@ export default function ManagerDashboard() {
       ) : !data ? null : (
         <>
           {/* ── Özet Kartlar ───────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-            <StatCard label="Toplam Başvuru"    value={s.total}          icon="📋" borderColor={C.blue}   change={s.totalChange} />
-            <StatCard label="Bekleyen Onay"     value={s.pendingApproval} icon="⏳" borderColor={C.amber}  />
-            <StatCard label="İşlemdeki"         value={s.inProgress}     icon="🔧" borderColor="#f97316" />
-            <StatCard label="Bugün Çözülen"     value={s.resolvedToday}  icon="✅" borderColor={C.green}  change={s.resolvedChange} />
-            <StatCard label="SLA İhlali"        value={s.slaBreaches}    icon="🚨" borderColor={C.red}    change={s.slaBreachesChange} pulse />
-            <StatCard label="Aktarılan"         value={s.transferred}    icon="🔄" borderColor={C.slate}  />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '24px' }}>
+            {[
+              { label: 'Toplam Başvuru', value: s.total           ?? 0, color: C.purple, icon: '📄' },
+              { label: 'Bekleyen Onay',  value: s.pendingApproval ?? 0, color: C.amber,  icon: '⏳', pulse: true },
+              { label: 'İşlemdeki',      value: s.inProgress      ?? 0, color: C.blue,   icon: '🔄' },
+              { label: 'Bugün Çözülen',  value: s.resolvedToday   ?? 0, color: C.green,  icon: '✅' },
+              { label: 'SLA İhlali',     value: s.slaBreaches     ?? 0, color: C.red,    icon: '⚠️' },
+              { label: 'Aktarılan',      value: s.transferred     ?? 0, color: C.slate,  icon: '↗️' },
+            ].map((card, i) => (
+              <div key={i} style={{
+                background: 'white', borderRadius: 12, padding: '20px 24px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+                borderTop: `4px solid ${card.color}`,
+                position: 'relative',
+              }}>
+                {card.pulse && (card.value > 0) && (
+                  <span style={{ position: 'absolute', top: 12, right: 12 }} className="flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: C.amber }} />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: C.amber }} />
+                  </span>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: 32, fontWeight: 700, color: C.text, marginBottom: 4 }}>{card.value}</div>
+                    <div style={{ fontSize: 13, color: C.slate }}>{card.label}</div>
+                  </div>
+                  <div style={{
+                    width: 46, height: 46, background: card.color + '20',
+                    borderRadius: 10, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 20,
+                  }}>{card.icon}</div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* ── Orta bölüm ─────────────────────────────────────────────────── */}

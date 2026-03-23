@@ -1,11 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+:root {
+  --primary: #26af68;
+  --primary-dark: #1d8a52;
+  --secondary: #7B2FBE;
+  --accent: #3ab0ff;
+  --warning: #FFA500;
+  --danger: #f82649;
+  --bg: #f4f5fb;
+  --surface: #ffffff;
+  --text: #374557;
+  --text-muted: #888888;
+  --border: #e6e6e6;
+  --sidebar-w: 260px;
+  --header-h: 60px;
+  --radius: 12px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.06);
+}
+
 * {
   font-family: 'Inter', sans-serif !important;
 }
+
 body {
-  background-color: #f8fafc !important;
+  background-color: var(--bg) !important;
+  color: var(--text);
 }
 
 @keyframes fadeInUp {
@@ -20,3 +40,4 @@ body {
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
 .delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }

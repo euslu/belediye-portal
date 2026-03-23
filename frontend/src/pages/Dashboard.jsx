@@ -102,14 +102,15 @@ function buildGroups(role) {
 
 // ─── NavItem ─────────────────────────────────────────────────────────────────
 function NavItem({ item, approvalBadge = 0, adBadge = 0 }) {
-  const BASE = 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full';
+  const BASE = 'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-all w-full cursor-pointer';
 
   if (item.disabled) {
     return (
-      <div className={`${BASE} opacity-40 cursor-not-allowed`} style={{ color: '#94a3b8' }}>
+      <div className={`${BASE} opacity-40 cursor-not-allowed`}
+        style={{ padding: '10px 20px', color: '#bbb' }}>
         <span className="shrink-0"><item.icon /></span>
         <span className="flex-1">{item.label}</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)', color: '#94a3b8' }}>Yakında</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#f0f0f0', color: '#bbb' }}>Yakında</span>
       </div>
     );
   }
@@ -122,26 +123,40 @@ function NavItem({ item, approvalBadge = 0, adBadge = 0 }) {
       to={item.to}
       end={item.exactEnd}
       className={({ isActive }) =>
-        `${BASE} border-l-[3px] pl-[9px] ` +
-        (isActive
-          ? 'border-blue-500 text-blue-400'
-          : 'border-transparent text-slate-400 hover:text-slate-100')
+        `${BASE} ` + (isActive ? 'font-semibold' : '')
       }
-      style={({ isActive }) => isActive ? { background: 'rgba(59,130,246,0.15)' } : undefined}
+      style={({ isActive }) => ({
+        padding: '10px 20px',
+        color: isActive ? '#26af68' : '#888',
+        background: isActive ? '#f0faf5' : 'transparent',
+        margin: '1px 0',
+      })}
+      onMouseEnter={e => {
+        if (!e.currentTarget.dataset.active) {
+          e.currentTarget.style.background = '#f0faf5';
+          e.currentTarget.style.color = '#26af68';
+        }
+      }}
+      onMouseLeave={e => {
+        if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#888';
+        }
+      }}
     >
       <span className="shrink-0"><item.icon /></span>
       <span className="flex-1">{item.label}</span>
 
       {showApproval && (
         <span className="relative flex items-center justify-center w-5 h-5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
-          <span className="relative inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#f82649' }} />
+          <span className="relative inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[10px] font-bold" style={{ background: '#f82649' }}>
             {approvalBadge > 9 ? '9+' : approvalBadge}
           </span>
         </span>
       )}
       {showAd && (
-        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-white text-[10px] font-bold" style={{ background: '#f82649' }}>
           {adBadge > 99 ? '99+' : adBadge}
         </span>
       )}
@@ -164,7 +179,9 @@ function UserDropdown({ user, logout, align = 'up' }) {
   }, []);
 
   const go = (path) => { setOpen(false); navigate(path); };
-  const initial = (user?.displayName || user?.username || '?')[0].toUpperCase();
+  const initials = user?.displayName
+    ? user.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : (user?.username?.[0] || '?').toUpperCase();
   const dropdownPos = align === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 right-0';
   const roleLabel = user?.role === 'admin' ? 'Yönetici' : user?.role === 'manager' ? 'Müdür' : 'Kullanıcı';
 
@@ -174,28 +191,33 @@ function UserDropdown({ user, logout, align = 'up' }) {
         <button
           onClick={() => setOpen(v => !v)}
           className="flex items-center gap-3 w-full rounded-lg px-2 py-2 transition"
-          style={{ color: '#cbd5e1' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+          style={{ color: '#374557' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#f4f5fb'}
           onMouseLeave={e => e.currentTarget.style.background = ''}
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            {initial}
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+            style={{ background: '#26af68' }}>
+            {initials}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <p className="text-xs font-semibold truncate leading-tight text-slate-200">{user?.displayName || user?.username}</p>
-            <p className="text-[11px] truncate leading-tight mt-0.5" style={{ color: '#64748b' }}>{roleLabel}</p>
+            <p className="text-sm font-semibold truncate leading-tight" style={{ color: '#374557' }}>{user?.displayName || user?.username}</p>
+            <p className="text-[11px] truncate leading-tight mt-0.5" style={{ color: '#888' }}>{roleLabel}</p>
           </div>
-          <svg className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: '#64748b' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: '#888' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
       ) : (
         <button
           onClick={() => setOpen(v => !v)}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 transition px-2 py-1.5 rounded-xl hover:bg-indigo-50"
+          className="flex items-center gap-2 text-sm transition px-2 py-1.5 rounded-xl"
+          style={{ color: '#374557' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#f0faf5'}
+          onMouseLeave={e => e.currentTarget.style.background = ''}
         >
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
-            {initial}
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+            style={{ background: '#26af68' }}>
+            {initials}
           </div>
           <span className="font-medium">{user?.displayName?.split(' ')[0] || user?.username}</span>
           <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -205,15 +227,22 @@ function UserDropdown({ user, logout, align = 'up' }) {
       )}
 
       {open && (
-        <div className={`absolute ${dropdownPos} w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 py-1.5 overflow-hidden`}>
+        <div className={`absolute ${dropdownPos} w-48 bg-white rounded-xl shadow-xl z-50 py-1.5 overflow-hidden`}
+          style={{ border: '1px solid #e6e6e6' }}>
           <button onClick={() => go('/profile')}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition">
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition"
+            style={{ color: '#374557' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = '#26af68'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#374557'; }}>
             <ProfileIcon /> Hesabım
           </button>
-          <div className="my-1 border-t border-gray-100" />
+          <div className="my-1" style={{ borderTop: '1px solid #f0f0f0' }} />
           <button
             onClick={() => { setOpen(false); logout(); navigate('/login', { replace: true }); }}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition">
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition"
+            style={{ color: '#f82649' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fff0f3'}
+            onMouseLeave={e => e.currentTarget.style.background = ''}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
@@ -262,26 +291,35 @@ export default function Dashboard() {
   const groups = buildGroups(user?.role || 'user');
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
 
       {/* ── Sol Sidebar ───────────────────────────────────────────────────── */}
-      <aside className="w-60 flex flex-col shrink-0" style={{ backgroundColor: '#0f172a', color: '#cbd5e1' }}>
+      <aside className="flex flex-col shrink-0" style={{
+        width: 'var(--sidebar-w)',
+        background: 'white',
+        borderRight: '1px solid #e6e6e6',
+        boxShadow: '2px 0 8px rgba(0,0,0,0.04)',
+      }}>
 
         {/* Logo */}
         <div
-          className="flex items-center gap-3 px-4 h-16 cursor-pointer shrink-0"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+          className="flex items-center gap-3 cursor-pointer shrink-0"
+          style={{ padding: '20px', borderBottom: '1px solid #f0f0f0' }}
           onClick={() => navigate('/')}
         >
-          <img src="/mugla-logo.svg" alt="Muğla" className="w-10 h-10 object-contain shrink-0" />
+          <div style={{
+            width: 40, height: 40, background: '#26af68', borderRadius: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'white', fontWeight: 700, fontSize: 18, shrink: 0,
+          }}>M</div>
           <div className="leading-tight min-w-0">
-            <p className="text-sm font-semibold truncate text-white">Muğla</p>
-            <p className="text-[11px] truncate" style={{ color: '#94a3b8' }}>Uygulama Portalı</p>
+            <p className="text-sm font-bold truncate" style={{ color: '#374557' }}>Muğla BB</p>
+            <p className="text-[11px] truncate" style={{ color: '#888' }}>Uygulama Portalı</p>
           </div>
         </div>
 
         {/* Navigasyon */}
-        <nav className="flex-1 px-2 py-3 overflow-y-auto">
+        <nav className="flex-1 py-3 overflow-y-auto">
           {groups.map((group, idx) => {
             const visibleItems = group.items.filter(item =>
               !item.roles || item.roles.includes(user?.role)
@@ -291,9 +329,12 @@ export default function Dashboard() {
             return (
               <div key={idx}>
                 {group.separator && (
-                  <div className={idx === 0 ? '' : 'mt-4'}>
+                  <div className={idx === 0 ? '' : 'mt-3'}>
                     {group.label && (
-                      <p className="px-3 mb-1" style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: '#475569', textTransform: 'uppercase' }}>
+                      <p style={{
+                        fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+                        color: '#bbb', padding: '16px 20px 4px', textTransform: 'uppercase',
+                      }}>
                         {group.label}
                       </p>
                     )}
@@ -301,7 +342,7 @@ export default function Dashboard() {
                 )}
                 {!group.separator && idx > 0 && <div className="mt-1" />}
 
-                <div className="space-y-0.5">
+                <div>
                   {visibleItems.map(item => (
                     <NavItem
                       key={item.to}
@@ -317,7 +358,7 @@ export default function Dashboard() {
         </nav>
 
         {/* Alt kullanıcı */}
-        <div className="px-2 py-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="px-3 py-3 shrink-0" style={{ borderTop: '1px solid #f0f0f0' }}>
           <UserDropdown user={user} logout={logout} align="up" />
         </div>
       </aside>
@@ -326,9 +367,15 @@ export default function Dashboard() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Üst bar */}
-        <header className="bg-white border-b border-gray-100 px-6 h-16 flex items-center justify-between shrink-0">
-          <div className="relative w-72">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+        <header className="shrink-0 flex items-center justify-between" style={{
+          background: 'white',
+          height: 'var(--header-h)',
+          borderBottom: '1px solid #e6e6e6',
+          padding: '0 24px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        }}>
+          <div className="relative" style={{ width: 280 }}>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#aaa' }}>
               <SearchIcon />
             </span>
             <input
@@ -336,18 +383,29 @@ export default function Dashboard() {
               placeholder="Ara..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-100 rounded-xl
-                focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300
-                placeholder-gray-400 transition"
+              style={{
+                width: '100%', height: 38,
+                paddingLeft: 36, paddingRight: 16,
+                background: '#f4f5fb', border: 'none',
+                borderRadius: 30, fontSize: 14,
+                outline: 'none', color: '#374557',
+                boxSizing: 'border-box',
+              }}
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <button className="relative w-9 h-9 flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition">
+          <div className="flex items-center gap-3">
+            <button className="relative flex items-center justify-center rounded-full transition"
+              style={{ width: 36, height: 36, color: '#888', background: 'transparent' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = '#26af68'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#888'; }}>
               <BellIcon />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+              {approvalBadge > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 text-[9px] font-bold text-white rounded-full flex items-center justify-center"
+                  style={{ background: '#26af68' }}>{approvalBadge > 9 ? '9+' : approvalBadge}</span>
+              )}
             </button>
-            <div className="w-px h-6 bg-gray-100 mx-1" />
+            <div style={{ width: 1, height: 24, background: '#e6e6e6' }} />
             <UserDropdown user={user} logout={logout} align="down" />
           </div>
         </header>

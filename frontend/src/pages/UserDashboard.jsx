@@ -70,23 +70,23 @@ function WelcomeBanner({ user }) {
   const roleLabel = user.role === 'admin' ? 'Yönetici' : user.role === 'manager' ? 'Birim Yöneticisi' : 'Kullanıcı';
 
   return (
-    <div className="animate-fadeIn relative overflow-hidden rounded-2xl px-8 py-6 shadow-md shadow-blue-900/15"
-      style={{ background: 'linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%)' }}>
-      <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full bg-white/5" />
-      <div className="absolute top-4 right-28 w-24 h-24 rounded-full bg-white/5" />
+    <div className="animate-fadeIn relative overflow-hidden rounded-2xl px-8 py-6"
+      style={{ background: 'linear-gradient(135deg, #26af68 0%, #1d8a52 60%, #16754a 100%)', boxShadow: '0 4px 24px rgba(38,175,104,0.25)' }}>
+      <div className="absolute -top-8 -right-8 w-48 h-48 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
+      <div className="absolute top-4 right-28 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
       <div className="relative flex items-center justify-between">
         <div>
-          <p className="text-blue-200 text-sm font-medium mb-1">{greeting} 👋</p>
+          <p className="text-sm font-medium mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>{greeting} 👋</p>
           <h1 className="text-2xl font-bold text-white">{user.displayName || user.username}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-2.5">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-white/15 text-blue-100 font-medium">{roleLabel}</span>
-            {user.directorate && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-blue-200">{user.directorate}</span>}
-            {user.department  && <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-blue-200">{user.department}</span>}
+            <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>{roleLabel}</span>
+            {user.directorate && <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)' }}>{user.directorate}</span>}
+            {user.department  && <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)' }}>{user.department}</span>}
           </div>
         </div>
         <div className="text-right hidden sm:block">
-          <p className="text-4xl font-bold text-white/90 tabular-nums">{timeStr}</p>
-          <p className="text-blue-200 text-xs mt-1.5 capitalize">{dateStr}</p>
+          <p className="text-4xl font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.9)' }}>{timeStr}</p>
+          <p className="text-xs mt-1.5 capitalize" style={{ color: 'rgba(255,255,255,0.65)' }}>{dateStr}</p>
         </div>
       </div>
     </div>
@@ -94,19 +94,30 @@ function WelcomeBanner({ user }) {
 }
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, valueColor = 'text-gray-800', sub, delay = '', loading }) {
+function StatCard({ label, value, icon, borderColor = '#26af68', iconBg, sub, delay = '', loading }) {
+  const bg = iconBg || borderColor;
   return (
-    <div className={`animate-fadeIn ${delay} bg-white rounded-2xl p-5 shadow-sm border border-gray-100`}>
-      <div className="flex items-start justify-between">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-        <span className="text-xl leading-none">{icon}</span>
+    <div className={`animate-fadeIn ${delay}`} style={{
+      background: 'white', borderRadius: 12,
+      padding: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      borderTop: `4px solid ${borderColor}`,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          {loading ? (
+            <div style={{ height: 36, width: 64, background: '#f0f0f0', borderRadius: 8 }} />
+          ) : (
+            <div style={{ fontSize: 32, fontWeight: 700, color: '#374557', marginBottom: 4 }}>{value ?? '—'}</div>
+          )}
+          <div style={{ fontSize: 13, color: '#888' }}>{label}</div>
+          {sub && <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{sub}</div>}
+        </div>
+        <div style={{
+          width: 50, height: 50, background: bg + '20',
+          borderRadius: 10, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: bg, fontSize: 22,
+        }}>{icon}</div>
       </div>
-      {loading ? (
-        <div className="mt-3 h-9 w-16 bg-gray-100 rounded-lg animate-pulse" />
-      ) : (
-        <p className={`mt-2 text-3xl font-bold tabular-nums ${valueColor}`}>{value ?? '—'}</p>
-      )}
-      {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
     </div>
   );
 }
@@ -161,7 +172,7 @@ function SonBasvurularCard({ delay = '' }) {
               <span className="text-xs text-gray-300 font-mono w-8 shrink-0">#{t.id}</span>
               <Link
                 to={`/itsm/${t.id}`}
-                className="flex-1 text-sm text-gray-800 group-hover:text-[#1e40af] font-medium truncate transition-colors"
+                className="flex-1 text-sm text-gray-800 group-hover:text-[#26af68] font-medium truncate transition-colors"
               >
                 {t.title}
               </Link>
@@ -174,7 +185,7 @@ function SonBasvurularCard({ delay = '' }) {
       </div>
 
       <div className="px-5 py-3 border-t border-gray-50">
-        <Link to="/my-tickets" className="text-xs font-medium text-[#1e40af] hover:text-[#1d4ed8] transition-colors">
+        <Link to="/my-tickets" className="text-xs font-medium text-[#26af68] hover:text-[#1d8a52] transition-colors">
           Tüm Başvurularım →
         </Link>
       </div>
@@ -270,7 +281,7 @@ function AktifGorevlerCard({ delay = '' }) {
                     <div key={t.id} className={`px-5 py-2.5 flex items-center gap-3 ${bg} hover:bg-gray-50/70 transition-colors group`}>
                       <span className="text-xs text-gray-300 font-mono w-8 shrink-0">#{t.id}</span>
                       <Link to={`/itsm/${t.id}`}
-                        className="flex-1 text-sm text-gray-800 group-hover:text-[#1e40af] font-medium truncate transition-colors">
+                        className="flex-1 text-sm text-gray-800 group-hover:text-[#26af68] font-medium truncate transition-colors">
                         {t.title}
                       </Link>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${PRIORITY_COLORS[t.priority] || 'bg-gray-100 text-gray-500'}`}>
@@ -288,7 +299,7 @@ function AktifGorevlerCard({ delay = '' }) {
       </div>
 
       <div className="px-5 py-3 border-t border-gray-50">
-        <Link to="/my-tasks" className="text-xs font-medium text-[#1e40af] hover:text-[#1d4ed8] transition-colors">
+        <Link to="/my-tasks" className="text-xs font-medium text-[#26af68] hover:text-[#1d8a52] transition-colors">
           Tüm Görevlerim →
         </Link>
       </div>
@@ -456,7 +467,7 @@ function OnayBekleyenlerCard({ delay = '' }) {
         </div>
 
         <div className="px-5 py-3 border-t border-gray-50">
-          <Link to="/pending-approvals" className="text-xs font-medium text-[#1e40af] hover:text-[#1d4ed8] transition-colors">
+          <Link to="/pending-approvals" className="text-xs font-medium text-[#26af68] hover:text-[#1d8a52] transition-colors">
             Tümünü Gör →
           </Link>
         </div>
@@ -522,7 +533,7 @@ function HesabimCard({ delay = '' }) {
     <div className={`animate-fadeIn ${delay} bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden`}>
       <div className="px-5 py-4 border-b border-gray-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#26af68] flex items-center justify-center text-white text-sm font-bold shrink-0">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
@@ -534,7 +545,7 @@ function HesabimCard({ delay = '' }) {
             ) : (
               <>
                 <p className="text-sm font-semibold text-gray-800 truncate">{u.displayName || u.username}</p>
-                <p className="text-xs text-indigo-600 truncate">{adUser?.directorate || u.directorate || u.department || '—'}</p>
+                <p className="text-xs text-[#26af68] truncate">{adUser?.directorate || u.directorate || u.department || '—'}</p>
               </>
             )}
           </div>
@@ -559,7 +570,7 @@ function HesabimCard({ delay = '' }) {
       </div>
 
       <div className="px-5 py-3 border-t border-gray-50">
-        <a href="/profile" className="text-xs font-medium text-[#1e40af] hover:text-[#1d4ed8] transition-colors">
+        <a href="/profile" className="text-xs font-medium text-[#26af68] hover:text-[#1d8a52] transition-colors">
           Profilimi Gör →
         </a>
       </div>
@@ -595,14 +606,14 @@ function HizliBasvuruCard({ delay = '' }) {
           <button
             key={item.label}
             onClick={() => navigate('/itsm/new')}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all group text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100 hover:border-green-200 hover:bg-green-50/50 transition-all group text-left"
           >
             <span className="text-xl">{item.icon}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800 group-hover:text-[#1e40af] transition-colors">{item.label}</p>
+              <p className="text-sm font-semibold text-gray-800 group-hover:text-[#26af68] transition-colors">{item.label}</p>
               <p className="text-xs text-gray-400">{item.desc}</p>
             </div>
-            <svg className="w-4 h-4 text-gray-300 group-hover:text-[#1e40af] transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-300 group-hover:text-[#26af68] transition-colors shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -627,21 +638,21 @@ export default function UserDashboard() {
   const isMgr = ['admin', 'manager'].includes(user.role);
 
   return (
-    <div className="p-6 space-y-5" style={{ background: '#f0f4f8', minHeight: '100%' }}>
+    <div className="p-6 space-y-5" style={{ background: 'var(--bg)', minHeight: '100%' }}>
 
       {/* ── 1. Banner ───────────────────────────────────── */}
       <WelcomeBanner user={user} />
 
       {/* ── 2. Stat Kartları ────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Açık Taleplerim"  value={stats?.openTickets}      icon="📂" loading={!stats} />
-        <StatCard label="Bu Ay Çözülen"    value={stats?.resolvedThisMonth} icon="✅" valueColor="text-green-700" loading={!stats} delay="delay-100" />
-        <StatCard label="Görevlerim"       value={stats?.myTasks}          icon="📌" valueColor="text-indigo-700" loading={!stats} delay="delay-200" />
+        <StatCard label="Açık Taleplerim"  value={stats?.openTickets}      icon="📂" borderColor="#7B2FBE" loading={!stats} />
+        <StatCard label="Bu Ay Çözülen"    value={stats?.resolvedThisMonth} icon="✅" borderColor="#26af68" loading={!stats} delay="delay-100" />
+        <StatCard label="Görevlerim"       value={stats?.myTasks}          icon="📌" borderColor="#3ab0ff" loading={!stats} delay="delay-200" />
         <StatCard
           label="SLA Riski"
           value={stats?.slaRisk ?? '—'}
           icon="⏱️"
-          valueColor={stats?.slaRisk > 0 ? 'text-red-700' : 'text-gray-700'}
+          borderColor={stats?.slaRisk > 0 ? '#f82649' : '#888'}
           sub={stats?.slaRisk > 0 ? '2 saatten az süresi var' : undefined}
           loading={!stats}
           delay="delay-300"
