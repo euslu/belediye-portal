@@ -1,171 +1,66 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
-// ─── SVG ikonlar ─────────────────────────────────────────────────────────────
-function HomeIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9.75L12 3l9 6.75V21a.75.75 0 01-.75.75H15v-6h-6v6H3.75A.75.75 0 013 21V9.75z" /></svg>; }
-function TicketIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>; }
-function TaskIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>; }
-function PersonIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
-function ProfileIcon()   { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>; }
-function TagIcon()       { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>; }
-function SettingsIcon()  { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>; }
-function SyncIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>; }
-function ServerIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>; }
-function ClipboardIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>; }
-function SearchIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>; }
-function ChartIcon()     { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>; }
-function NewTicketIcon() { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>; }
-function ListIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6m-6 4h4" /></svg>; }
-function BellIcon()      { return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>; }
-function ClockIcon()     { return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" /></svg>; }
-function BuildingIcon()  { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>; }
-function WrenchIcon()    { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>; }
-function BookIcon()      { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>; }
-function GroupIcon()     { return <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm5-4v2m8-2v2M3 11h18" /></svg>; }
-
 // ─── Menü Yapısı ──────────────────────────────────────────────────────────────
-// Her grup:  { label?, separator?, items[], roles? }
-// Her item:  { label, icon, to, roles?, adminOnly?, badge?, approvalBadge?, disabled? }
-
 function buildGroups(role) {
-  const isAdmin   = role === 'admin';
-  const isMgr     = ['admin', 'manager'].includes(role);
+  const isAdmin = role === 'admin';
+  const isMgr   = ['admin', 'manager'].includes(role);
   const homeRoute = isMgr ? '/' : '/home';
 
   return [
-    // ── Anasayfa ──────────────────────────────────────────
     {
       items: [
-        { label: 'Anasayfa', icon: HomeIcon, to: homeRoute, exactEnd: true },
+        { label: 'Anasayfa', icon: 'bi-house-door', to: homeRoute, exactEnd: true },
       ],
     },
-
-    // ── TALEPLERİM ────────────────────────────────────────
     {
       label: 'TALEPLERİM',
-      separator: true,
       items: [
-        { label: 'Talep / Arıza Bildir', icon: NewTicketIcon, to: '/itsm/new'           },
-        { label: 'Tüm Başvurularım',     icon: ListIcon,      to: '/my-tickets'          },
-        { label: 'Tüm Talepler',         icon: TicketIcon,    to: '/itsm',
+        { label: 'Talep / Arıza Bildir', icon: 'bi-plus-circle',      to: '/itsm/new'          },
+        { label: 'Tüm Başvurularım',     icon: 'bi-list-ul',          to: '/my-tickets'         },
+        { label: 'Tüm Talepler',         icon: 'bi-ticket-detailed',  to: '/itsm',
           roles: ['admin', 'manager'] },
-        { label: 'Onay Bekleyenler',     icon: ClipboardIcon, to: '/pending-approvals',
+        { label: 'Onay Bekleyenler',     icon: 'bi-clipboard-check',  to: '/pending-approvals',
           roles: ['admin', 'manager'], approvalBadge: true },
       ],
     },
-
-    // ── GÖREVLERİM (sadece admin/manager) ─────────────────
     ...(isMgr ? [{
       label: 'GÖREVLERİM',
-      separator: true,
       items: [
-        { label: 'Aktif Görevlerim', icon: TaskIcon,  to: '/my-tasks'         },
-        { label: 'Birim Raporu',     icon: ChartIcon, to: '/manager-dashboard' },
+        { label: 'Aktif Görevlerim', icon: 'bi-check2-square', to: '/my-tasks'          },
+        { label: 'Birim Raporu',     icon: 'bi-bar-chart-line', to: '/manager-dashboard' },
       ],
     }] : []),
-
-    // ── ARAÇLAR (sadece admin/manager) ────────────────────
     ...(isMgr ? [{
       label: 'ARAÇLAR',
-      separator: true,
       items: [
-        { label: 'Personel',     icon: PersonIcon,  to: '/personel'    },
-        { label: 'Envanter',          icon: ServerIcon,  to: '/admin/envanter'      },
-        { label: 'ulakBELL Talepleri', icon: BellIcon,    to: '/ulakbell-incidents'  },
-        { label: 'PDKS',              icon: ClockIcon,   to: '/pdks'                },
-        { label: 'Bilgi Tabanı',      icon: BookIcon,    to: '/kb', disabled: true  },
+        { label: 'Personel',            icon: 'bi-people',          to: '/personel'           },
+        { label: 'Envanter',            icon: 'bi-server',          to: '/admin/envanter'     },
+        { label: 'ulakBELL Talepleri',  icon: 'bi-bell',            to: '/ulakbell-incidents' },
+        { label: 'PDKS',                icon: 'bi-clock',           to: '/pdks'               },
+        { label: 'Bilgi Tabanı',        icon: 'bi-book',            to: '/kb', disabled: true },
       ],
     }] : []),
-
-    // ── SİSTEM (sadece admin) ─────────────────────────────
     ...(isAdmin ? [{
       label: 'SİSTEM',
-      separator: true,
       items: [
-        { label: 'Ayarlar', icon: SettingsIcon, to: '/admin/settings' },
+        { label: 'Ayarlar', icon: 'bi-gear', to: '/admin/settings' },
       ],
     }] : []),
-
-    // ── Profilim ──────────────────────────────────────────
     {
-      separator: true,
       items: [
-        { label: 'Profilim', icon: ProfileIcon, to: '/profile' },
+        { label: 'Profilim', icon: 'bi-person-circle', to: '/profile' },
       ],
     },
   ];
 }
 
-// ─── NavItem ─────────────────────────────────────────────────────────────────
-function NavItem({ item, approvalBadge = 0, adBadge = 0 }) {
-  const BASE = 'flex items-center gap-2.5 rounded-lg text-sm font-medium transition-all w-full cursor-pointer';
-
-  if (item.disabled) {
-    return (
-      <div className={`${BASE} opacity-40 cursor-not-allowed`}
-        style={{ padding: '10px 20px', color: '#bbb' }}>
-        <span className="shrink-0"><item.icon /></span>
-        <span className="flex-1">{item.label}</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: '#f0f0f0', color: '#bbb' }}>Yakında</span>
-      </div>
-    );
-  }
-
-  const showApproval = item.approvalBadge && approvalBadge > 0;
-  const showAd       = item.adBadge       && adBadge       > 0;
-
-  return (
-    <NavLink
-      to={item.to}
-      end={item.exactEnd}
-      className={({ isActive }) =>
-        `${BASE} ` + (isActive ? 'font-semibold' : '')
-      }
-      style={({ isActive }) => ({
-        padding: '10px 20px',
-        color: isActive ? '#26af68' : '#888',
-        background: isActive ? '#f0faf5' : 'transparent',
-        margin: '1px 0',
-      })}
-      onMouseEnter={e => {
-        if (!e.currentTarget.dataset.active) {
-          e.currentTarget.style.background = '#f0faf5';
-          e.currentTarget.style.color = '#26af68';
-        }
-      }}
-      onMouseLeave={e => {
-        if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-          e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = '#888';
-        }
-      }}
-    >
-      <span className="shrink-0"><item.icon /></span>
-      <span className="flex-1">{item.label}</span>
-
-      {showApproval && (
-        <span className="relative flex items-center justify-center w-5 h-5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#f82649' }} />
-          <span className="relative inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[10px] font-bold" style={{ background: '#f82649' }}>
-            {approvalBadge > 9 ? '9+' : approvalBadge}
-          </span>
-        </span>
-      )}
-      {showAd && (
-        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-white text-[10px] font-bold" style={{ background: '#f82649' }}>
-          {adBadge > 99 ? '99+' : adBadge}
-        </span>
-      )}
-    </NavLink>
-  );
-}
-
-// ─── UserDropdown ─────────────────────────────────────────────────────────────
-function UserDropdown({ user, logout, align = 'up' }) {
+// ─── UserDropdown (header) ───────────────────────────────────────────────────
+function UserDropdown({ user, logout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -178,75 +73,56 @@ function UserDropdown({ user, logout, align = 'up' }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const go = (path) => { setOpen(false); navigate(path); };
   const initials = user?.displayName
     ? user.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : (user?.username?.[0] || '?').toUpperCase();
-  const dropdownPos = align === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 right-0';
   const roleLabel = user?.role === 'admin' ? 'Yönetici' : user?.role === 'manager' ? 'Müdür' : 'Kullanıcı';
 
   return (
-    <div ref={ref} className="relative">
-      {align === 'up' ? (
-        <button
-          onClick={() => setOpen(v => !v)}
-          className="flex items-center gap-3 w-full rounded-lg px-2 py-2 transition"
-          style={{ color: '#374557' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#f4f5fb'}
-          onMouseLeave={e => e.currentTarget.style.background = ''}
-        >
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-            style={{ background: '#26af68' }}>
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1 text-left">
-            <p className="text-sm font-semibold truncate leading-tight" style={{ color: '#374557' }}>{user?.displayName || user?.username}</p>
-            <p className="text-[11px] truncate leading-tight mt-0.5" style={{ color: '#888' }}>{roleLabel}</p>
-          </div>
-          <svg className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: '#888' }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      ) : (
-        <button
-          onClick={() => setOpen(v => !v)}
-          className="flex items-center gap-2 text-sm transition px-2 py-1.5 rounded-xl"
-          style={{ color: '#374557' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#f0faf5'}
-          onMouseLeave={e => e.currentTarget.style.background = ''}
-        >
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-            style={{ background: '#26af68' }}>
-            {initials}
-          </div>
-          <span className="font-medium">{user?.displayName?.split(' ')[0] || user?.username}</span>
-          <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      )}
+    <div ref={ref} className="nav-item dropdown header-profile" style={{ position: 'relative', listStyle: 'none' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="nav-link i-false c-pointer"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer' }}
+      >
+        <div style={{
+          width: 34, height: 34, borderRadius: '50%', background: 'var(--primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0,
+        }}>
+          {initials}
+        </div>
+        <div className="header-info" style={{ textAlign: 'left' }}>
+          <span style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374557', lineHeight: 1.2 }}>
+            {user?.displayName?.split(' ')[0] || user?.username}
+          </span>
+          <small style={{ color: '#888', fontSize: 11 }}>{roleLabel}</small>
+        </div>
+      </button>
 
       {open && (
-        <div className={`absolute ${dropdownPos} w-48 bg-white rounded-xl shadow-xl z-50 py-1.5 overflow-hidden`}
-          style={{ border: '1px solid #e6e6e6' }}>
-          <button onClick={() => go('/profile')}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition"
-            style={{ color: '#374557' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = '#26af68'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#374557'; }}>
-            <ProfileIcon /> Hesabım
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', marginTop: 8,
+          background: '#fff', border: '1px solid #e6e6e6', borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)', zIndex: 9999, minWidth: 180,
+          padding: '6px 0', overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => { setOpen(false); navigate('/profile'); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#374557' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = 'var(--primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#374557'; }}
+          >
+            <i className="bi bi-person" style={{ fontSize: 15 }} /> Hesabım
           </button>
-          <div className="my-1" style={{ borderTop: '1px solid #f0f0f0' }} />
+          <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
           <button
             onClick={() => { setOpen(false); logout(); navigate('/login', { replace: true }); }}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition"
-            style={{ color: '#f82649' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#f82649' }}
             onMouseEnter={e => e.currentTarget.style.background = '#fff0f3'}
-            onMouseLeave={e => e.currentTarget.style.background = ''}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Çıkış Yap
+            onMouseLeave={e => e.currentTarget.style.background = ''}
+          >
+            <i className="bi bi-box-arrow-right" style={{ fontSize: 15 }} /> Çıkış Yap
           </button>
         </div>
       )}
@@ -258,11 +134,16 @@ function UserDropdown({ user, logout, align = 'up' }) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [search, setSearch]               = useState('');
+  const [sideMenu, setSideMenu]   = useState(false);
+  const [mounted, setMounted]     = useState(false);
+  const [search, setSearch]       = useState('');
   const [adBadge, setAdBadge]             = useState(0);
   const [approvalBadge, setApprovalBadge] = useState(0);
 
-  // AD değişiklik badge'i (admin için)
+  // Fade in after mount
+  useEffect(() => { setMounted(true); }, []);
+
+  // AD değişiklik badge'i (admin)
   useEffect(() => {
     if (user?.role !== 'admin') return;
     const load = () =>
@@ -291,130 +172,213 @@ export default function Dashboard() {
   const groups = buildGroups(user?.role || 'user');
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
+    <div id="main-wrapper" className={[mounted ? 'show' : '', sideMenu ? 'menu-toggle' : ''].join(' ').trim()}>
 
-      {/* ── Sol Sidebar ───────────────────────────────────────────────────── */}
-      <aside className="flex flex-col shrink-0" style={{
-        width: 'var(--sidebar-w)',
-        background: 'white',
-        borderRight: '1px solid #e6e6e6',
-        boxShadow: '2px 0 8px rgba(0,0,0,0.04)',
-      }}>
-
-        {/* Logo */}
-        <div
-          className="flex items-center gap-3 cursor-pointer shrink-0"
-          style={{ padding: '20px', borderBottom: '1px solid #f0f0f0' }}
+      {/* ── nav-header (Logo) ─────────────────────────────────────── */}
+      <div className="nav-header">
+        <span
+          className="brand-logo"
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}
           onClick={() => navigate('/')}
         >
+          {/* Logo icon */}
           <div style={{
-            width: 40, height: 40, background: '#26af68', borderRadius: 10,
+            width: 42, height: 42, background: 'rgba(255,255,255,0.2)', borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontWeight: 700, fontSize: 18, shrink: 0,
-          }}>M</div>
-          <div className="leading-tight min-w-0">
-            <p className="text-sm font-bold truncate" style={{ color: '#374557' }}>Muğla BB</p>
-            <p className="text-[11px] truncate" style={{ color: '#888' }}>Uygulama Portalı</p>
+            color: '#fff', fontWeight: 800, fontSize: 20, flexShrink: 0,
+          }}>
+            M
+          </div>
+          <div className="brand-title" style={{ lineHeight: 1.2 }}>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Muğla BB</div>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11 }}>Uygulama Portalı</div>
+          </div>
+        </span>
+
+        <div
+          className="nav-control"
+          onClick={() => setSideMenu(v => !v)}
+        >
+          <div className={`hamburger ${sideMenu ? 'is-active' : ''}`}>
+            <span className="line" />
+            <span className="line" />
+            <span className="line" />
           </div>
         </div>
+      </div>
 
-        {/* Navigasyon */}
-        <nav className="flex-1 py-3 overflow-y-auto">
-          {groups.map((group, idx) => {
-            const visibleItems = group.items.filter(item =>
-              !item.roles || item.roles.includes(user?.role)
-            );
-            if (visibleItems.length === 0) return null;
+      {/* ── header (Top bar) ──────────────────────────────────────── */}
+      <div className="header">
+        <div className="header-content">
+          <nav className="navbar navbar-expand">
+            <div className="collapse navbar-collapse justify-content-between">
 
-            return (
-              <div key={idx}>
-                {group.separator && (
-                  <div className={idx === 0 ? '' : 'mt-3'}>
-                    {group.label && (
-                      <p style={{
-                        fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                        color: '#bbb', padding: '16px 20px 4px', textTransform: 'uppercase',
-                      }}>
-                        {group.label}
-                      </p>
-                    )}
+              {/* Sol: Arama */}
+              <div className="header-left">
+                <div className="input-group search-area d-lg-inline-flex">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ara..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    style={{ borderRadius: '30px 0 0 30px', background: '#f4f5fb', border: '1px solid #e6e6e6' }}
+                  />
+                  <div className="input-group-append">
+                    <button className="input-group-text" style={{ borderRadius: '0 30px 30px 0', background: '#f4f5fb', border: '1px solid #e6e6e6', borderLeft: 'none', color: '#aaa' }}>
+                      <i className="bi bi-search" />
+                    </button>
                   </div>
-                )}
-                {!group.separator && idx > 0 && <div className="mt-1" />}
+                </div>
+              </div>
 
-                <div>
+              {/* Sağ: Bildirimler + Kullanıcı */}
+              <ul className="navbar-nav header-right main-notification">
+                {/* Bell badge */}
+                <li className="nav-item" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <button
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      width: 38, height: 38, borderRadius: '50%', color: '#888',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = 'var(--primary)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#888'; }}
+                  >
+                    <i className="bi bi-bell" style={{ fontSize: 18 }} />
+                    {approvalBadge > 0 && (
+                      <span style={{
+                        position: 'absolute', top: 4, right: 4,
+                        width: 16, height: 16, background: 'var(--primary)',
+                        borderRadius: '50%', color: '#fff', fontSize: 9,
+                        fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {approvalBadge > 9 ? '9+' : approvalBadge}
+                      </span>
+                    )}
+                  </button>
+                </li>
+
+                <li style={{ width: 1, height: 24, background: '#e6e6e6', margin: '0 4px', alignSelf: 'center' }} />
+
+                {/* User dropdown */}
+                <UserDropdown user={user} logout={logout} />
+              </ul>
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      {/* ── deznav (Sidebar) ──────────────────────────────────────── */}
+      <div className="deznav">
+        <div className="deznav-scroll" style={{ overflowY: 'auto', height: '100%' }}>
+          <ul className="metismenu" id="menu">
+            {(() => {
+              let firstLabel = true;
+              return groups.map((group, gIdx) => {
+              const visibleItems = group.items.filter(item =>
+                !item.roles || item.roles.includes(user?.role)
+              );
+              if (visibleItems.length === 0) return null;
+
+              const isFirstLabel = group.label && firstLabel;
+              if (group.label) firstLabel = false;
+
+              return (
+                <span key={gIdx}>
+                  {group.label && (
+                    <li className={`nav-label${isFirstLabel ? ' first' : ''}`}>{group.label}</li>
+                  )}
                   {visibleItems.map(item => (
-                    <NavItem
+                    <SidebarItem
                       key={item.to}
                       item={item}
                       approvalBadge={approvalBadge}
                       adBadge={adBadge}
                     />
                   ))}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
+                </span>
+              );
+            });
+            })()}
+          </ul>
 
-        {/* Alt kullanıcı */}
-        <div className="px-3 py-3 shrink-0" style={{ borderTop: '1px solid #f0f0f0' }}>
-          <UserDropdown user={user} logout={logout} align="up" />
+          {/* Alt bilgi */}
+          <div className="copyright" style={{ padding: '16px 20px', fontSize: 11, color: '#bbb', marginTop: 8 }}>
+            <p style={{ margin: 0 }}>© {new Date().getFullYear()} Muğla Büyükşehir Belediyesi</p>
+          </div>
         </div>
-      </aside>
-
-      {/* ── Ana içerik ────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
-
-        {/* Üst bar */}
-        <header className="shrink-0 flex items-center justify-between" style={{
-          background: 'white',
-          height: 'var(--header-h)',
-          borderBottom: '1px solid #e6e6e6',
-          padding: '0 24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        }}>
-          <div className="relative" style={{ width: 280 }}>
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#aaa' }}>
-              <SearchIcon />
-            </span>
-            <input
-              type="text"
-              placeholder="Ara..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                width: '100%', height: 38,
-                paddingLeft: 36, paddingRight: 16,
-                background: '#f4f5fb', border: 'none',
-                borderRadius: 30, fontSize: 14,
-                outline: 'none', color: '#374557',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button className="relative flex items-center justify-center rounded-full transition"
-              style={{ width: 36, height: 36, color: '#888', background: 'transparent' }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = '#26af68'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#888'; }}>
-              <BellIcon />
-              {approvalBadge > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-4 h-4 text-[9px] font-bold text-white rounded-full flex items-center justify-center"
-                  style={{ background: '#26af68' }}>{approvalBadge > 9 ? '9+' : approvalBadge}</span>
-              )}
-            </button>
-            <div style={{ width: 1, height: 24, background: '#e6e6e6' }} />
-            <UserDropdown user={user} logout={logout} align="down" />
-          </div>
-        </header>
-
-        {/* Sayfa içeriği */}
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
       </div>
+
+      {/* ── content-body ──────────────────────────────────────────── */}
+      <div className="content-body">
+        <div className="container-fluid" style={{ padding: 0 }}>
+          <Outlet />
+        </div>
+      </div>
+
     </div>
+  );
+}
+
+// ─── SidebarItem ─────────────────────────────────────────────────────────────
+function SidebarItem({ item, approvalBadge, adBadge }) {
+  const resolved = useResolvedPath(item.to);
+  const match    = useMatch({ path: resolved.pathname, end: item.exactEnd ?? false });
+  const isActive = !!match;
+
+  if (item.disabled) {
+    return (
+      <li>
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
+          color: '#ccc', cursor: 'not-allowed', fontSize: 14,
+        }}>
+          <i className={`bi ${item.icon}`} style={{ fontSize: 16, width: 20, textAlign: 'center' }} />
+          <span className="nav-text">{item.label}</span>
+          <span style={{
+            marginLeft: 'auto', fontSize: 10, background: '#f0f0f0',
+            color: '#bbb', padding: '2px 6px', borderRadius: 10,
+          }}>Yakında</span>
+        </span>
+      </li>
+    );
+  }
+
+  const showApproval = item.approvalBadge && approvalBadge > 0;
+  const showAd       = item.adBadge       && adBadge       > 0;
+
+  return (
+    <li className={isActive ? 'mm-active' : ''}>
+      <NavLink
+        to={item.to}
+        end={item.exactEnd}
+        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+      >
+        <i className={`bi ${item.icon}`} style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }} />
+        <span className="nav-text">{item.label}</span>
+
+        {showApproval && (
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{
+              width: 20, height: 20, background: '#f82649',
+              borderRadius: '50%', color: '#fff', fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {approvalBadge > 9 ? '9+' : approvalBadge}
+            </span>
+          </span>
+        )}
+        {showAd && (
+          <span style={{
+            marginLeft: 'auto', minWidth: 20, height: 20, background: '#f82649',
+            borderRadius: 10, color: '#fff', fontSize: 10, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+          }}>
+            {adBadge > 99 ? '99+' : adBadge}
+          </span>
+        )}
+      </NavLink>
+    </li>
   );
 }

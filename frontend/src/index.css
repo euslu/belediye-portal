@@ -1,24 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* ── Marka renkleri (Fasto primary override) ─────────────────────── */
 :root {
-  --primary: #26af68;
-  --primary-dark: #1d8a52;
-  --secondary: #7B2FBE;
-  --accent: #3ab0ff;
-  --warning: #FFA500;
-  --danger: #f82649;
-  --bg: #f4f5fb;
-  --surface: #ffffff;
-  --text: #374557;
-  --text-muted: #888888;
-  --border: #e6e6e6;
-  --sidebar-w: 260px;
-  --header-h: 60px;
-  --radius: 12px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.06);
+  --primary:        #26af68;
+  --primary-rgb:    38, 175, 104;
+  --primary-dark:   #1d8a52;
+  --secondary:      #7B2FBE;
+  --accent:         #3ab0ff;
+  --warning:        #FFA500;
+  --danger:         #f82649;
+  --bg:             #f4f5fb;
+  --surface:        #ffffff;
+  --text:           #374557;
+  --text-muted:     #888888;
+  --border:         #e6e6e6;
+  --sidebar-w:      260px;
+  --header-h:       60px;
+  --radius:         12px;
+  --shadow:         0 4px 24px rgba(0,0,0,0.06);
 }
 
+/* Force Inter font */
 * {
   font-family: 'Inter', sans-serif !important;
 }
@@ -28,6 +30,65 @@ body {
   color: var(--text);
 }
 
+/* ── Fasto primary color override ───────────────────────────────── */
+/* Fasto CSS sets primary via [data-primary="color_1"] – override here */
+[data-primary="color_1"] {
+  --primary: #26af68 !important;
+}
+
+/* nav header background = primary color */
+.nav-header,
+[data-nav-headerbg="color_1"] .nav-header {
+  background: var(--primary) !important;
+}
+
+/* sidebar bg = white for our design */
+[data-sibebarbg="color_1"] .deznav,
+.deznav {
+  background: #fff !important;
+  border-right: 1px solid var(--border);
+}
+
+/* sidebar text + icons color */
+[data-sibebarbg="color_1"] .deznav .metismenu > li > a {
+  color: var(--text-muted) !important;
+}
+
+/* active/hover sidebar item */
+[data-sibebarbg="color_1"] .deznav .metismenu > li:hover > a,
+[data-sibebarbg="color_1"] .deznav .metismenu > li.mm-active > a,
+.deznav .metismenu > li:hover > a,
+.deznav .metismenu > li.mm-active > a {
+  background: rgba(38,175,104,0.08) !important;
+  color: var(--primary) !important;
+}
+
+/* Override Fasto's default green (#43DC80) with our brand green */
+.bg-primary, .btn-primary, .badge.bg-primary { background-color: var(--primary) !important; }
+.text-primary { color: var(--primary) !important; }
+
+/* nav-label (section header in sidebar) */
+.deznav .metismenu .nav-label {
+  color: #bbb !important;
+  font-size: 11px !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  font-weight: 600 !important;
+}
+
+/* header background = white */
+[data-headerbg="color_1"] .header {
+  background: #fff !important;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* content-body bg */
+.content-body {
+  background: var(--bg) !important;
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
