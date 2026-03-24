@@ -99,23 +99,24 @@ function StatCard({ label, value, icon, borderColor = '#26af68', iconBg, sub, de
   return (
     <div className={`animate-fadeIn ${delay}`} style={{
       background: 'white', borderRadius: 12,
-      padding: 24, boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      padding: '28px 24px',
+      border: '1px solid #EEEEEE',
       borderTop: `4px solid ${borderColor}`,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
+          <div style={{ fontSize: 13, color: '#7e7e7e', marginBottom: 10 }}>{label}</div>
           {loading ? (
-            <div style={{ height: 36, width: 64, background: '#f0f0f0', borderRadius: 8 }} />
+            <div style={{ height: 44, width: 72, background: '#f0f0f0', borderRadius: 8 }} />
           ) : (
-            <div style={{ fontSize: 32, fontWeight: 700, color: '#374557', marginBottom: 4 }}>{value ?? '—'}</div>
+            <div style={{ fontSize: 42, fontWeight: 800, color: '#212529', lineHeight: 1.1 }}>{value ?? '—'}</div>
           )}
-          <div style={{ fontSize: 13, color: '#888' }}>{label}</div>
-          {sub && <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>{sub}</div>}
+          {sub && <div style={{ fontSize: 12, color: '#aaa', marginTop: 6 }}>{sub}</div>}
         </div>
         <div style={{
-          width: 50, height: 50, background: bg + '20',
-          borderRadius: 10, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: bg, fontSize: 22,
+          width: 64, height: 64, background: bg + '20',
+          borderRadius: 12, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: bg, fontSize: 28, flexShrink: 0,
         }}>{icon}</div>
       </div>
     </div>

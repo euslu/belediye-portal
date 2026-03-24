@@ -12,14 +12,14 @@ const H = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 // ─── Renk paleti ─────────────────────────────────────────────────────────────
 const C = {
-  blue:   '#3ab0ff',
+  blue:   '#43DC80',
   green:  '#26af68',
   amber:  '#FFA500',
   red:    '#f82649',
   purple: '#7B2FBE',
-  slate:  '#888888',
-  bg:     '#f4f5fb',
-  text:   '#374557',
+  slate:  '#7e7e7e',
+  bg:     '#f9f9f9',
+  text:   '#212529',
 };
 
 const STATUS_META = {
@@ -67,33 +67,31 @@ function StatCard({ label, value, icon, borderColor, change, pulse, suffix = '' 
 
   return (
     <div style={{
-      background: 'white', borderRadius: 12, padding: 24,
-      boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      background: 'white', borderRadius: 12,
+      padding: '28px 24px',
+      border: '1px solid #EEEEEE',
       borderTop: `4px solid ${borderColor}`,
       position: 'relative', overflow: 'hidden',
     }}>
       {pulse && (value > 0) && (
-        <span style={{ position: 'absolute', top: 12, right: 12 }} className="flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: C.red }} />
-          <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: C.red }} />
-        </span>
+        <span style={{ position: 'absolute', top: 10, right: 10, width: 10, height: 10, borderRadius: '50%', background: C.red, display: 'inline-block' }} />
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: C.text, marginBottom: 4 }}>
-            {value ?? '—'}{suffix && <span style={{ fontSize: 16, fontWeight: 600, color: C.slate, marginLeft: 4 }}>{suffix}</span>}
+          <div style={{ fontSize: 13, color: C.slate, marginBottom: 10 }}>{label}</div>
+          <div style={{ fontSize: 42, fontWeight: 800, color: C.text, lineHeight: 1.1 }}>
+            {value ?? '—'}{suffix && <span style={{ fontSize: 18, fontWeight: 600, color: C.slate, marginLeft: 4 }}>{suffix}</span>}
           </div>
-          <div style={{ fontSize: 13, color: C.slate }}>{label}</div>
           {hasTrend && (
-            <div style={{ fontSize: 11, marginTop: 4, color: trendGood ? C.green : C.red, fontWeight: 500 }}>
+            <div style={{ fontSize: 12, marginTop: 6, color: trendGood ? C.green : C.red, fontWeight: 500 }}>
               {isUp ? '↑' : '↓'} {Math.abs(change)}% geçen dönem
             </div>
           )}
         </div>
         <div style={{
-          width: 50, height: 50, background: borderColor + '20',
-          borderRadius: 10, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: borderColor, fontSize: 22,
+          width: 64, height: 64, background: borderColor + '20',
+          borderRadius: 12, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', color: borderColor, fontSize: 28, flexShrink: 0,
         }}>
           {icon}
         </div>

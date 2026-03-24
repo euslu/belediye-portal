@@ -1,96 +1,98 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+/* Tailwind - only utilities, no preflight (Fasto/Bootstrap handles base reset) */
+@import "tailwindcss/utilities";
 
-/* ── Marka renkleri (Fasto primary override) ─────────────────────── */
+/* ── Brand CSS variables ─────────────────────────────────────── */
 :root {
   --primary:        #26af68;
   --primary-rgb:    38, 175, 104;
   --primary-dark:   #1d8a52;
+  --fasto-green:    #43DC80;
   --secondary:      #7B2FBE;
   --accent:         #3ab0ff;
   --warning:        #FFA500;
   --danger:         #f82649;
-  --bg:             #f4f5fb;
+  --bg:             #f9f9f9;
   --surface:        #ffffff;
-  --text:           #374557;
-  --text-muted:     #888888;
-  --border:         #e6e6e6;
-  --sidebar-w:      260px;
-  --header-h:       60px;
+  --text:           #212529;
+  --text-muted:     #7e7e7e;
+  --border:         #EEEEEE;
   --radius:         12px;
-  --shadow:         0 4px 24px rgba(0,0,0,0.06);
+  --shadow:         0 2px 12px rgba(0,0,0,0.06);
 }
 
-/* Force Inter font */
-* {
-  font-family: 'Inter', sans-serif !important;
+/* ── Global font ─────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  font-family: 'Poppins', 'Roboto', sans-serif !important;
 }
 
 body {
-  background-color: var(--bg) !important;
+  font-family: 'Poppins', sans-serif !important;
+  background-color: var(--bg);
   color: var(--text);
+  margin: 0;
 }
 
-/* ── Fasto primary color override ───────────────────────────────── */
-/* Fasto CSS sets primary via [data-primary="color_1"] – override here */
-[data-primary="color_1"] {
-  --primary: #26af68 !important;
-}
-
-/* nav header background = primary color */
+/* ── Fasto nav-header: brand green background ────────────────── */
 .nav-header,
 [data-nav-headerbg="color_1"] .nav-header {
   background: var(--primary) !important;
 }
 
-/* sidebar bg = white for our design */
+/* ── Sidebar: white, not colored ─────────────────────────────── */
 [data-sibebarbg="color_1"] .deznav,
 .deznav {
   background: #fff !important;
   border-right: 1px solid var(--border);
 }
 
-/* sidebar text + icons color */
-[data-sibebarbg="color_1"] .deznav .metismenu > li > a {
+/* ── Sidebar nav text color ──────────────────────────────────── */
+[data-sibebarbg="color_1"] .deznav .metismenu > li > a,
+.deznav .metismenu > li > a {
   color: var(--text-muted) !important;
 }
 
-/* active/hover sidebar item */
+/* ── Active & hover sidebar item ────────────────────────────── */
 [data-sibebarbg="color_1"] .deznav .metismenu > li:hover > a,
 [data-sibebarbg="color_1"] .deznav .metismenu > li.mm-active > a,
 .deznav .metismenu > li:hover > a,
 .deznav .metismenu > li.mm-active > a {
-  background: rgba(38,175,104,0.08) !important;
+  background: rgba(38, 175, 104, 0.08) !important;
   color: var(--primary) !important;
 }
 
-/* Override Fasto's default green (#43DC80) with our brand green */
-.bg-primary, .btn-primary, .badge.bg-primary { background-color: var(--primary) !important; }
-.text-primary { color: var(--primary) !important; }
-
-/* nav-label (section header in sidebar) */
+/* ── Nav section labels ──────────────────────────────────────── */
 .deznav .metismenu .nav-label {
-  color: #bbb !important;
+  color: #adb5bd !important;
   font-size: 11px !important;
   letter-spacing: 0.1em !important;
   text-transform: uppercase !important;
   font-weight: 600 !important;
+  padding: 20px 30px 8px !important;
+  margin: 0 !important;
 }
 
-/* header background = white */
-[data-headerbg="color_1"] .header {
+/* ── Header: white background ───────────────────────────────── */
+[data-headerbg="color_1"] .header,
+.header {
   background: #fff !important;
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
 }
 
-/* content-body bg */
+/* ── Content body background ────────────────────────────────── */
 .content-body {
   background: var(--bg) !important;
 }
 
-/* ── Animations ──────────────────────────────────────────────────── */
+/* ── Bootstrap/Fasto primary color overrides ─────────────────── */
+.bg-primary, .btn-primary { background-color: var(--primary) !important; }
+.text-primary { color: var(--primary) !important; }
+
+/* ── Animations (used in dashboard pages) ───────────────────── */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
