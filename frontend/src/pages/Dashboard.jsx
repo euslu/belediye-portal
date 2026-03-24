@@ -20,11 +20,12 @@ function buildGroups(role) {
     {
       label: 'TALEPLERİM',
       items: [
-        { label: 'Talep / Arıza Bildir', icon: 'bi-plus-circle',      to: '/itsm/new'          },
-        { label: 'Tüm Başvurularım',     icon: 'bi-list-ul',          to: '/my-tickets'         },
-        { label: 'Tüm Talepler',         icon: 'bi-ticket-detailed',  to: '/itsm',
+        { label: 'Bilgi İşlem Talebi',     icon: 'bi-laptop',           to: '/itsm/new'               },
+        { label: 'Destek Hizmetleri',      icon: 'bi-wrench-adjustable', to: '/tickets/new/destek'    },
+        { label: 'Tüm Başvurularım',       icon: 'bi-list-ul',          to: '/my-tickets'             },
+        { label: 'Tüm Talepler',           icon: 'bi-ticket-detailed',  to: '/itsm',
           roles: ['admin', 'manager'] },
-        { label: 'Onay Bekleyenler',     icon: 'bi-clipboard-check',  to: '/pending-approvals',
+        { label: 'Onay Bekleyenler',       icon: 'bi-clipboard-check',  to: '/pending-approvals',
           roles: ['admin', 'manager'], approvalBadge: true },
       ],
     },

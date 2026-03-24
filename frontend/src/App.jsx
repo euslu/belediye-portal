@@ -22,7 +22,8 @@ import MyTickets            from './pages/MyTickets';
 import Departments          from './pages/admin/Departments';
 import WorkOrders           from './pages/WorkOrders';
 import UlakbellIncidents    from './pages/UlakbellIncidents';
-import PDKSDashboard        from './pages/PDKSDashboard';
+import PDKSDashboard             from './pages/PDKSDashboard';
+import DestekHizmetleriTicket   from './pages/DestekHizmetleriTicket';
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="work-orders"           element={<WorkOrders />} />
             <Route path="ulakbell-incidents"    element={<UlakbellIncidents />} />
             <Route path="pdks"                  element={<PDKSDashboard />} />
+            <Route path="tickets/new/destek"    element={<DestekHizmetleriTicket />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
             <Route path="*"               element={<Navigate to="/" replace />} />
