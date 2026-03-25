@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -286,7 +286,7 @@ export default function Dashboard() {
               if (group.label) firstLabel = false;
 
               return (
-                <span key={gIdx}>
+                <Fragment key={gIdx}>
                   {group.label && (
                     <li className={`nav-label${isFirstLabel ? ' first' : ''}`}>{group.label}</li>
                   )}
@@ -298,7 +298,7 @@ export default function Dashboard() {
                       adBadge={adBadge}
                     />
                   ))}
-                </span>
+                </Fragment>
               );
             });
             })()}
