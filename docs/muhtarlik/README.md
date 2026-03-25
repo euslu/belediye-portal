@@ -38,7 +38,7 @@ portal üzerinden görselleştiren modül.
 | CP-002 | 25 Mar 2026   | DB Bağlantısı Kuruldu            | ✅ Tamam                  |
 | CP-003 | 25 Mar 2026   | Veri Analizi Tamamlandı          | ✅ Tamam                  |
 | CP-004 | 25 Mar 2026   | Dashboard + Takip Ekranı Yapıldı | ✅ Tamam                  |
-| CP-005 | —             | Firewall + Canlı Test            | 🟡 Firewall Bekleniyor    |
+| CP-005 | 25 Mar 2026   | Firewall Açıldı, Backend Canlıya Alındı | ✅ Tamam           |
 
 ---
 
