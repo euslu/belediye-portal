@@ -249,14 +249,14 @@ export default function DestekHizmetleriTicket() {
 
   if (done) {
     return (
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
+      <div style={{ padding: '32px 40px' }}>
         <SuccessScreen ticketId={done.ticketId} onNew={reset} />
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
+    <div style={{ padding: '32px 40px' }}>
 
       {/* Sayfa başlığı */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>

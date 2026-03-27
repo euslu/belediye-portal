@@ -24,6 +24,11 @@ import WorkOrders           from './pages/WorkOrders';
 import UlakbellIncidents    from './pages/UlakbellIncidents';
 import PDKSDashboard             from './pages/PDKSDashboard';
 import DestekHizmetleriTicket   from './pages/DestekHizmetleriTicket';
+import Muhtarlik                from './pages/Muhtarlik';
+import MahalleDetay             from './pages/MahalleDetay';
+import MuhtarlarPage            from './pages/MuhtarlarPage';
+import RaporlarPage             from './pages/RaporlarPage';
+import MuhtarlikAyarlar         from './pages/MuhtarlikAyarlar';
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -87,6 +92,11 @@ export default function App() {
             <Route path="ulakbell-incidents"    element={<UlakbellIncidents />} />
             <Route path="pdks"                  element={<PDKSDashboard />} />
             <Route path="tickets/new/destek"    element={<DestekHizmetleriTicket />} />
+            <Route path="muhtarlik"             element={<Muhtarlik />} />
+            <Route path="muhtarlik/mahalle/:ilce/:mahalle" element={<MahalleDetay />} />
+            <Route path="muhtarlik/muhtarlar"             element={<MuhtarlarPage />} />
+            <Route path="muhtarlik/raporlar"              element={<RaporlarPage />} />
+            <Route path="muhtarlik/ayarlar"              element={<MuhtarlikAyarlar />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
             <Route path="*"               element={<Navigate to="/" replace />} />

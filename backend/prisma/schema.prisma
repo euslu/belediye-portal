@@ -420,6 +420,18 @@ model FlexcityOrgut {
   syncedAt   DateTime @default(now())
 }
 
+// ─── Muhtarbis Düzenleme Logu ────────────────────────────────────────────────
+model MuhtarbisEditLog {
+  id           Int      @id @default(autoincrement())
+  objectId     Int
+  alan         String
+  eskiDeger    String?
+  yeniDeger    String?
+  duzenleyenId String
+  duzenleyenAd String
+  tarih        DateTime @default(now())
+}
+
 // ─── Kullanıcı Cihazları (eski, geriye dönük uyumluluk) ───────────────────────
 model UserDevice {
   id           Int      @id @default(autoincrement())

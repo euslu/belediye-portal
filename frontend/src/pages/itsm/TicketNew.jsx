@@ -99,7 +99,7 @@ function Step1TypeSelect({ onSelect }) {
                 {st.description && <p className="text-sm text-gray-500 leading-relaxed">{st.description}</p>}
                 <div className={`mt-5 flex items-center gap-1.5 text-xs font-semibold ${c.action}`}>
                   Devam Et
-                  <svg className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" style={{width:14,height:14,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -128,7 +128,7 @@ function Step2CategorySelect({ submitType, onSelect, onBack }) {
     <div>
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" style={{width:20,height:20,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -165,6 +165,7 @@ function Step2CategorySelect({ submitType, onSelect, onBack }) {
               </div>
               {/* Ok */}
               <svg className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform"
+                style={{width:16,height:16,flexShrink:0}}
                 fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
@@ -407,7 +408,7 @@ function Step3Form({ submitType, category, onBack }) {
       {/* Başlık */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" style={{width:20,height:20,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -462,7 +463,7 @@ function Step3Form({ submitType, category, onBack }) {
           )}
           {selectedSubj?.defaultGroup && (
             <p className="mt-3 text-xs text-gray-400 flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" style={{width:14,height:14,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               Otomatik yönlendirilecek grup: <strong className="text-gray-600">{selectedSubj.defaultGroup.name}</strong>
@@ -654,7 +655,7 @@ function Step3Form({ submitType, category, onBack }) {
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Ekler</h3>
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl px-6 py-6 cursor-pointer hover:border-gray-300 transition">
-            <svg className="w-7 h-7 text-gray-300 mb-2" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <svg className="w-7 h-7 text-gray-300 mb-2" style={{width:28,height:28}} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1" />
             </svg>
             <span className="text-sm text-gray-400">Dosya seçin veya sürükleyin</span>

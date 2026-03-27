@@ -126,6 +126,42 @@ router.get('/directorates', async (req, res) => {
   }
 });
 
+// ─── GET /api/inventory/by-directorate ───────────────────────────────────────
+router.get('/by-directorate', async (req, res) => {
+  try {
+    const counts = await prisma.$queryRaw`
+      SELECT
+        COALESCE(d.directorate, u.directorate, 'Atanmamış') AS directorate,
+        COUNT(*)::int                                                          AS total,
+        COUNT(CASE WHEN d.type = 'BILGISAYAR' THEN 1 END)::int               AS bilgisayar,
+        COUNT(CASE WHEN d.type = 'DIZUSTU'    THEN 1 END)::int               AS dizustu,
+        COUNT(CASE WHEN d.type = 'IP_TELEFON' THEN 1 END)::int               AS ip_telefon,
+        COUNT(CASE WHEN d.type = 'YAZICI'     THEN 1 END)::int               AS yazici,
+        COUNT(CASE WHEN d.type NOT IN ('BILGISAYAR','DIZUSTU','IP_TELEFON','YAZICI') THEN 1 END)::int AS diger,
+        COUNT(CASE WHEN d."lastSyncAt" > NOW() - INTERVAL '1 day'  THEN 1 END)::int AS online,
+        COUNT(CASE WHEN d."lastSyncAt" IS NULL                      THEN 1 END)::int AS unknown_epc
+      FROM "Device" d
+      LEFT JOIN "User" u ON LOWER(d."assignedTo") = LOWER(u.username)
+      WHERE d.active = true
+      GROUP BY COALESCE(d.directorate, u.directorate, 'Atanmamış')
+      ORDER BY total DESC
+    `;
+    res.json(counts.map(c => ({
+      directorate: c.directorate,
+      total:      Number(c.total),
+      bilgisayar: Number(c.bilgisayar),
+      dizustu:    Number(c.dizustu),
+      ip_telefon: Number(c.ip_telefon),
+      yazici:     Number(c.yazici),
+      diger:      Number(c.diger),
+      online:     Number(c.online),
+      unknownEpc: Number(c.unknown_epc),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/inventory ───────────────────────────────────────────────────────
 // Raw SQL — Prisma ORM'nin LEFT JOIN + OR kısıtlamasını aşmak için
 router.get('/', async (req, res) => {

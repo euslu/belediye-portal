@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
-import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -20,30 +20,37 @@ function buildGroups(role) {
     {
       label: 'TALEPLERİM',
       items: [
-        { label: 'Bilgi İşlem Talebi',     icon: 'bi-laptop',           to: '/itsm/new'               },
-        { label: 'Destek Hizmetleri',      icon: 'bi-wrench-adjustable', to: '/tickets/new/destek'    },
-        { label: 'Tüm Başvurularım',       icon: 'bi-list-ul',          to: '/my-tickets'             },
-        { label: 'Tüm Talepler',           icon: 'bi-ticket-detailed',  to: '/itsm',
-          roles: ['admin', 'manager'] },
-        { label: 'Onay Bekleyenler',       icon: 'bi-clipboard-check',  to: '/pending-approvals',
-          roles: ['admin', 'manager'], approvalBadge: true },
+        { label: 'Bilgi İşlem Talebi',  icon: 'bi-laptop',            to: '/itsm/new',           exactEnd: true },
+        { label: 'Destek Hizmetleri',   icon: 'bi-wrench-adjustable', to: '/tickets/new/destek', exactEnd: true },
+        { label: 'Tüm Başvurularım',    icon: 'bi-list-ul',           to: '/my-tickets'          },
       ],
     },
     ...(isMgr ? [{
       label: 'GÖREVLERİM',
       items: [
-        { label: 'Aktif Görevlerim', icon: 'bi-check2-square', to: '/my-tasks'          },
-        { label: 'Birim Raporu',     icon: 'bi-bar-chart-line', to: '/manager-dashboard' },
+        { label: 'Tüm Talepler',     icon: 'bi-ticket-detailed',  to: '/itsm'                                       },
+        { label: 'Onay Bekleyenler', icon: 'bi-clipboard-check',  to: '/pending-approvals', approvalBadge: true     },
+        { label: 'Aktif Görevlerim', icon: 'bi-check2-square',    to: '/my-tasks'                                   },
+        { label: 'Birim Raporu',     icon: 'bi-bar-chart-line',   to: '/manager-dashboard'                          },
       ],
     }] : []),
     ...(isMgr ? [{
       label: 'ARAÇLAR',
       items: [
-        { label: 'Personel',            icon: 'bi-people',          to: '/personel'           },
-        { label: 'Envanter',            icon: 'bi-server',          to: '/admin/envanter'     },
-        { label: 'ulakBELL Talepleri',  icon: 'bi-bell',            to: '/ulakbell-incidents' },
-        { label: 'PDKS',                icon: 'bi-clock',           to: '/pdks'               },
-        { label: 'Bilgi Tabanı',        icon: 'bi-book',            to: '/kb', disabled: true },
+        { label: 'Personel',           icon: 'bi-people', to: '/personel'           },
+        { label: 'Envanter',           icon: 'bi-server', to: '/admin/envanter'     },
+        { label: 'ulakBELL Talepleri', icon: 'bi-bell',   to: '/ulakbell-incidents' },
+        { label: 'PDKS',               icon: 'bi-clock',  to: '/pdks'               },
+        { label: 'Bilgi Tabanı',       icon: 'bi-book',   to: '/kb', disabled: true },
+      ],
+    }] : []),
+    ...(isMgr ? [{
+      label: 'MUHTARLIKLAR',
+      items: [
+        { label: 'Başvuru Takibi', icon: 'bi-journal-text',   to: '/muhtarlik',             exactEnd: true },
+        { label: 'Muhtarlar',      icon: 'bi-person-badge',   to: '/muhtarlik/muhtarlar'                   },
+        { label: 'Raporlar',       icon: 'bi-bar-chart-line', to: '/muhtarlik/raporlar'                    },
+        { label: 'Ayarlar',        icon: 'bi-gear',           to: '/muhtarlik/ayarlar'                     },
       ],
     }] : []),
     ...(isAdmin ? [{
@@ -290,14 +297,11 @@ export default function Dashboard() {
                   {group.label && (
                     <li className={`nav-label${isFirstLabel ? ' first' : ''}`}>{group.label}</li>
                   )}
-                  {visibleItems.map(item => (
-                    <SidebarItem
-                      key={item.to}
-                      item={item}
-                      approvalBadge={approvalBadge}
-                      adBadge={adBadge}
-                    />
-                  ))}
+                  {visibleItems.map(item =>
+                    item.subGroup
+                      ? <SidebarGroupItem key={item.label} item={item} />
+                      : <SidebarItem key={item.to} item={item} approvalBadge={approvalBadge} adBadge={adBadge} />
+                  )}
                 </Fragment>
               );
             });
@@ -319,6 +323,64 @@ export default function Dashboard() {
       </div>
 
     </div>
+  );
+}
+
+// ─── SidebarGroupItem (her zaman açık alt menü) ──────────────────────────────
+function SidebarGroupItem({ item }) {
+  const location = useLocation();
+  const isAnyActive = item.subItems.some(s => location.pathname.startsWith(s.to === '/muhtarlik' ? '/muhtarlik' : s.to));
+
+  return (
+    <li className={isAnyActive ? 'mm-active' : ''}>
+      {/* Grup etiketi — tıklanamaz, sadece başlık */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 20px',
+        color: isAnyActive ? 'var(--primary)' : 'inherit',
+      }}>
+        <i className={`bi ${item.icon}`} style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }} />
+        <span className="nav-text">{item.label}</span>
+      </div>
+
+      {/* Alt öğeler — her zaman görünür */}
+      <ul style={{ listStyle: 'none', margin: 0, padding: '2px 0 6px 0' }}>
+        {item.subItems.map(sub => (
+          <SidebarSubItem key={sub.to} item={sub} />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function SidebarSubItem({ item }) {
+  const resolved = useResolvedPath(item.to);
+  const match    = useMatch({ path: resolved.pathname, end: item.exactEnd ?? false });
+  const isActive = !!match;
+
+  return (
+    <li style={{ margin: 0 }}>
+      <NavLink
+        to={item.to}
+        end={item.exactEnd}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 20px 8px 36px',
+          color: isActive ? 'var(--primary)' : '#888',
+          fontWeight: isActive ? 600 : 400,
+          fontSize: 13,
+          borderLeft: isActive ? '3px solid var(--primary)' : '3px solid transparent',
+          marginLeft: 20,
+          transition: 'color 0.15s, border-color 0.15s',
+          textDecoration: 'none',
+        }}
+        onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = 'var(--primary)'; }}
+        onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#888'; }}
+      >
+        <i className={`bi ${item.icon}`} style={{ fontSize: 14, width: 16, textAlign: 'center', flexShrink: 0 }} />
+        <span>{item.label}</span>
+      </NavLink>
+    </li>
   );
 }
 

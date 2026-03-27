@@ -44,7 +44,7 @@ async function fetchOrgut() {
   });
   if (!r.ok) throw new Error(`KBS HTTP ${r.status}`);
   const data = await r.json();
-  return Array.isArray(data) ? data : (data.resultSet || data.data || []);
+  return Array.isArray(data) ? data : (data.kbsOrgutDtoList || data.resultSet || data.data || []);
 }
 
 module.exports = { fetchPersonel, fetchOrgut, getAuthHeader };

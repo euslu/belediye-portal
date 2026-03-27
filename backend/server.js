@@ -25,6 +25,7 @@ const pdksRoutes            = require('./routes/pdks');
 const servicedeskRoutes     = require('./routes/servicedesk');
 const servicesRoutes        = require('./routes/services');
 const flexcityRoutes        = require('./routes/flexcity');
+const muhtarbisRoutes       = require('./routes/muhtarbis');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
@@ -68,6 +69,7 @@ app.use('/api/pdks',            pdksRoutes);
 app.use('/api/servicedesk',     servicedeskRoutes);
 app.use('/api/services',        servicesRoutes);
 app.use('/api/flexcity',        flexcityRoutes);
+app.use('/api/muhtarbis',       muhtarbisRoutes);
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 

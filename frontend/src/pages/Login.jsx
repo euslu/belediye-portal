@@ -27,161 +27,15 @@ export default function Login() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', background: '#f8fafc' }}>
 
-      {/* SOL TARAF — Hero */}
+      {/* Login formu */}
       <div style={{
-        flex: 1,
-        display: 'none',
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #1e3a8a 100%)'
-      }} className="lg-flex">
-        <style>{`
-          @media (min-width: 1024px) { .lg-flex { display: flex !important; flex-direction: column; justify-content: center; padding: 64px; } }
-        `}</style>
-
-        {/* Arka plan resmi */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'url(https://images.unsplash.com/photo-1719550371336-7bb64b5cacfa?w=1080&q=80)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          opacity: 0.2,
-          mixBlendMode: 'overlay'
-        }} />
-
-        {/* SVG network çizgileri */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.15 }}>
-          <defs>
-            <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.6" />
-            </linearGradient>
-          </defs>
-          <line x1="10%" y1="20%" x2="40%" y2="50%" stroke="url(#lg1)" strokeWidth="2" />
-          <line x1="40%" y1="50%" x2="70%" y2="30%" stroke="url(#lg1)" strokeWidth="2" />
-          <line x1="40%" y1="50%" x2="60%" y2="80%" stroke="url(#lg1)" strokeWidth="2" />
-          <line x1="70%" y1="30%" x2="90%" y2="60%" stroke="url(#lg1)" strokeWidth="2" />
-          <circle cx="10%" cy="20%" r="6" fill="#8b5cf6" opacity="0.8" />
-          <circle cx="40%" cy="50%" r="8" fill="#3b82f6" opacity="0.9" />
-          <circle cx="70%" cy="30%" r="6" fill="#8b5cf6" opacity="0.8" />
-          <circle cx="60%" cy="80%" r="5" fill="#6366f1" opacity="0.7" />
-          <circle cx="90%" cy="60%" r="6" fill="#3b82f6" opacity="0.8" />
-        </svg>
-
-        {/* İçerik */}
-        <div style={{ position: 'relative', zIndex: 10, color: 'white' }}>
-          {/* Logo + başlık */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '48px' }}>
-            <div style={{ position: 'relative' }}>
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: '#a855f7', filter: 'blur(16px)',
-                opacity: 0.5, borderRadius: '50%'
-              }} />
-              <div style={{
-                position: 'relative',
-                padding: '16px',
-                background: 'linear-gradient(135deg, #a855f7, #3b82f6)',
-                borderRadius: '16px',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-              }}>
-                <img
-                  src="https://www.mugla.bel.tr/mbb/tema/mbb/img/mbblogo.svg"
-                  alt="Muğla BB"
-                  style={{ width: '40px', height: '40px', objectFit: 'contain' }}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<span style="color:white;font-size:24px;font-weight:700">M</span>';
-                  }}
-                />
-              </div>
-            </div>
-            <h1 style={{
-              fontSize: '40px', fontWeight: 700, margin: 0,
-              background: 'linear-gradient(to right, #ffffff, #bfdbfe)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}>
-              Kurumsal Muğla
-            </h1>
-          </div>
-
-          {/* Ana başlık */}
-          <div style={{ position: 'relative', paddingLeft: '16px', marginBottom: '40px' }}>
-            <div style={{
-              position: 'absolute', left: 0, top: 0,
-              width: '4px', height: '100%',
-              background: 'linear-gradient(to bottom, #a855f7, #3b82f6)',
-              borderRadius: '4px'
-            }} />
-            <h2 style={{ fontSize: '44px', fontWeight: 700, margin: '0 0 16px', lineHeight: 1.2 }}>
-              Muğla Belediyesinin
-              <span style={{
-                display: 'block',
-                background: 'linear-gradient(to right, #d8b4fe, #93c5fd)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}>
-                Dijital Beyni
-              </span>
-            </h2>
-            <p style={{ color: '#bfdbfe', fontSize: '16px', lineHeight: 1.6, margin: 0 }}>
-              Tüm belediye operasyonlarını tek merkezden yöneten,<br />
-              akıllı ve entegre platform.
-            </p>
-          </div>
-
-          {/* Özellik kartları */}
-          {[
-            { icon: '🏛️', title: 'Merkezi Kontrol', desc: 'Tüm birimler tek platformda birleşik' },
-            { icon: '⚡', title: 'Anlık Veri Akışı', desc: 'Gerçek zamanlı raporlama ve analiz' },
-            { icon: '🔒', title: 'Güvenli Altyapı', desc: 'Kurumsal düzeyde veri güvenliği' },
-          ].map((item, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'flex-start', gap: '16px',
-              padding: '16px',
-              background: 'rgba(255,255,255,0.05)',
-              backdropFilter: 'blur(8px)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.1)',
-              marginBottom: '12px'
-            }}>
-              <div style={{
-                padding: '10px',
-                background: i === 0
-                  ? 'linear-gradient(135deg, #a855f7, #9333ea)'
-                  : i === 1
-                  ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
-                  : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                borderRadius: '10px',
-                fontSize: '18px',
-                flexShrink: 0
-              }}>
-                {item.icon}
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '2px' }}>
-                  {item.title}
-                </div>
-                <div style={{ color: '#bfdbfe', fontSize: '13px' }}>
-                  {item.desc}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SAĞ TARAF — Login formu */}
-      <div style={{
-        flex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '32px',
-        background: '#f8fafc'
+        width: '100%',
       }}>
         <div style={{ width: '100%', maxWidth: '420px' }}>
 
@@ -211,9 +65,6 @@ export default function Login() {
               <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: 0 }}>
                 Kurumsal Muğla
               </h1>
-              <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0' }}>
-                Muğla Belediyesinin Dijital Beyni
-              </p>
             </div>
           </div>
 
