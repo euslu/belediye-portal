@@ -573,7 +573,7 @@ export default function Muhtarlik() {
       <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '2px solid #EEEEEE' }}>
         {[
           { key: 'dashboard', label: '📊 Dashboard' },
-          { key: 'takip',     label: '📋 Başvuru Takibi' },
+          { key: 'takip',     label: '📋 Tüm Başvurular' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '10px 24px', background: 'none', border: 'none', cursor: 'pointer',

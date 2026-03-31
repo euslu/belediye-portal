@@ -288,6 +288,52 @@ function PieCenterLabel({ cx, cy, total }) {
   );
 }
 
+// ─── Muhtarlık Özet Kartı ─────────────────────────────────────────────────────
+function MuhtarlikOzetCard() {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API}/api/muhtarbis/rapor/ozet`, { headers: H() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!data)   return null;
+
+  const items = [
+    { label: 'Toplam Başvuru',  value: data.toplamBasvuru?.toLocaleString('tr') || '—', color: '#6366f1' },
+    { label: 'Tamamlandı',      value: data.tamamlandi?.toLocaleString('tr')    || '—', color: '#10b981' },
+    { label: 'Devam Etmekte',   value: data.devamEtmekte?.toLocaleString('tr')  || '—', color: '#f97316' },
+    { label: 'Ort. Süre (gün)', value: data.ortSure != null ? `${data.ortSure}` : '—', color: C.slate },
+    { label: 'Toplam Yatırım',  value: data.toplamYatirim?.toLocaleString('tr') || '—', color: '#7B2FBE' },
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl p-5" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.07)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-bold" style={{ color: C.text }}>
+          <span style={{ marginRight: 8 }}>🏡</span>Muhtarlık Başvuruları
+        </h3>
+        <a href="/muhtarliksis/" target="_blank" rel="noopener noreferrer"
+          className="text-xs font-semibold hover:underline" style={{ color: C.blue }}>
+          Detay →
+        </a>
+      </div>
+      <div className="grid grid-cols-5 gap-3">
+        {items.map(it => (
+          <div key={it.label} className="text-center">
+            <p className="text-xl font-extrabold" style={{ color: it.color }}>{it.value}</p>
+            <p className="text-xs mt-0.5" style={{ color: C.slate }}>{it.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── ANA BILEŞEN ──────────────────────────────────────────────────────────────
 export default function ManagerDashboard() {
   const { user } = useAuth();
@@ -480,6 +526,9 @@ export default function ManagerDashboard() {
               </Link>
             </div>
           </div>
+
+          {/* ── Muhtarlık Özet ─────────────────────────────────────────────── */}
+          <MuhtarlikOzetCard />
 
           {/* ── Alt bölüm ──────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

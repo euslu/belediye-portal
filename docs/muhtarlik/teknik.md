@@ -116,3 +116,82 @@ const config = {
 ## Frontend Route'ları
 
 > *Geliştirme süreci içinde eklenecek*
+
+---
+
+## muhtarlik_api.js — Servis Katmanı
+
+Dosya: `muhtarlik-sis/src/lib/muhtarlik_api.js`
+
+Tüm API çağrıları bu dosyadan yapılır.
+Base URL: `/api/` (relative, nginx proxy üzerinden)
+Auth: Her istek `Authorization: Bearer <token>` header'ı ekler.
+
+### muhtarlikApi
+
+| Metod | Endpoint | Açıklama |
+|-------|----------|----------|
+| `getFiltreler(ilce?)` | GET /api/muhtarbis/filtreler | İlçe, mahalle, daire listeleri |
+| `getBasvurular(params)` | GET /api/muhtarbis/liste | Sayfalı başvuru listesi |
+| `getStats(params)` | GET /api/muhtarbis/stats | Özet istatistikler |
+| `getIlceDagilim()` | GET /api/muhtarbis/ilce-dagilim | İlçe bazlı dağılım |
+| `getDaireDagilim()` | GET /api/muhtarbis/daire-dagilim | Daire bazlı dağılım |
+| `getMahalleDetay(ilce, mahalle)` | GET /api/muhtarbis/mahalle/:ilce/:mahalle | Muhtar bilgisi + özet |
+| `getMahalleBasvurular(ilce, mahalle, params)` | GET /api/muhtarbis/mahalle/:ilce/:mahalle/basvurular | Mahalle başvuruları |
+| `getMahalleYatirimlar(ilce, mahalle)` | GET /api/muhtarbis/mahalle/:ilce/:mahalle/yatirimlar | Mahalle yatırımları |
+| `updateBasvuru(objectId, data)` | PUT /api/muhtarbis/basvuru/:objectId | Başvuru düzenle |
+| `updateYatirim(ilce, mahalle, index, data)` | PUT /api/muhtarbis/yatirim/:ilce/:mahalle/:index | Yatırım düzenle |
+| `getBasvuruLog(objectId)` | GET /api/muhtarbis/basvuru/:objectId/log | Değişiklik geçmişi |
+| `createBasvuru(data)` | POST /api/muhtarbis/basvuru | Yeni başvuru |
+| `createYatirim(data)` | POST /api/muhtarbis/yatirim | Yeni yatırım |
+
+### raporApi
+
+| Metod | Endpoint | Açıklama |
+|-------|----------|----------|
+| `getOzet()` | GET /api/muhtarbis/rapor/ozet | Genel özet (başkan ekranı için) |
+| `getIlceOzet(ilce)` | GET /api/muhtarbis/rapor/ilce/:ilce | İlçe bazlı özet |
+
+### Kullanım Örneği
+```js
+import { muhtarlikApi, raporApi } from '../lib/muhtarlik_api';
+
+// Başvuru listesi
+const data = await muhtarlikApi.getBasvurular({ ilce: 'BODRUM', limit: 50 });
+
+// Özet rapor (başkan ekranı widget'ı için)
+const ozet = await raporApi.getOzet();
+// ozet.toplamBasvuru, ozet.tamamlandi, ozet.ilceDagilim...
+```
+
+### Başka Uygulamalardan Kullanım
+
+Bu API endpoint'leri bağımsız olarak da tüketilebilir.
+Örneğin ana portal dashboard'unda muhtarlık özet widget'ı:
+```js
+// Ana portal — ManagerDashboard.jsx
+const ozet = await fetch('/api/muhtarbis/rapor/ozet', {
+  headers: { Authorization: `Bearer ${token}` }
+}).then(r => r.json());
+```
+
+Dönen `ozet` objesi:
+```json
+{
+  "toplamBasvuru": 12852,
+  "tamamlandi": 6993,
+  "devamEtmekte": 2048,
+  "tamamlanmadi": 561,
+  "beklemede": 76,
+  "ortSure": 23.6,
+  "toplamYatirim": 547,
+  "ilceDagilim": [
+    { "ilce": "MİLAS", "sayi": 3557 },
+    { "ilce": "BODRUM", "sayi": 1900 }
+  ],
+  "daireDagilim": [
+    { "daire": "MUSKI Genel Müdürlüğü", "sayi": 5721 }
+  ],
+  "sonGuncelleme": "2026-03-28T00:00:00.000Z"
+}
+```

@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path    = require('path');
 const express = require('express');
 const cors = require('cors');
 
@@ -26,11 +27,16 @@ const servicedeskRoutes     = require('./routes/servicedesk');
 const servicesRoutes        = require('./routes/services');
 const flexcityRoutes        = require('./routes/flexcity');
 const muhtarbisRoutes       = require('./routes/muhtarbis');
+const muhtarbisAdminRoutes  = require('./routes/muhtarbisAdmin');
+const randevuRoutes         = require('./routes/randevu');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
 
 const app = express();
+
+// Muhtar fotoğrafları static dosya servisi
+app.use('/muhtar-foto', express.static(path.join(__dirname, 'public/muhtar-fotolari')));
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',').map(o => o.trim());
@@ -70,6 +76,9 @@ app.use('/api/servicedesk',     servicedeskRoutes);
 app.use('/api/services',        servicesRoutes);
 app.use('/api/flexcity',        flexcityRoutes);
 app.use('/api/muhtarbis',       muhtarbisRoutes);
+app.use('/api/muhtarbis/admin', muhtarbisAdminRoutes);
+app.use('/api/muhtarbis/auth',  muhtarbisAdminRoutes);
+app.use('/api/randevu',         randevuRoutes);
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 

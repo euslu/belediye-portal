@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { Client } = require('ldapts');
 const authMiddleware = require('../middleware/authMiddleware');
+const { getMuhtarlikRole, ROL_SEVIYE } = require('../middleware/muhtarlikAuth');
 
 // ---------------------------------------------------------------------------
 // Mock kullanıcılar — MOCK_AUTH=true iken kullanılır
@@ -102,9 +103,15 @@ router.post('/login', async (req, res) => {
       },
     }).catch(() => {}); // DB hatası login'i engellemesin
 
-    const token = signToken(mockUser.payload);
+    const muhtarlikRole = await getMuhtarlikRole(username);
+    const payload = {
+      ...mockUser.payload,
+      muhtarlikRole: muhtarlikRole || null,
+      muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
+    };
+    const token = signToken(payload);
     console.log(`[MOCK] Giriş: ${username} (${mockUser.payload.role})`);
-    return res.json({ token, user: mockUser.payload });
+    return res.json({ token, user: payload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
   }
 
   // --- LDAP / AD MOD ---
@@ -222,8 +229,14 @@ router.post('/login', async (req, res) => {
       },
     }).catch((e) => console.warn('[DB upsert] kullanıcı kaydedilemedi:', e.message));
 
-    const token = signToken(payload);
-    return res.json({ token, user: payload });
+    const muhtarlikRole = await getMuhtarlikRole(payload.username);
+    const finalPayload = {
+      ...payload,
+      muhtarlikRole: muhtarlikRole || null,
+      muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
+    };
+    const token = signToken(finalPayload);
+    return res.json({ token, user: finalPayload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
   } catch (err) {
     console.error('Login hatası:', err.message);
     const isTimeout = err.message.includes('yanıt vermedi');

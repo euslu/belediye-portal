@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getToken } from '../lib/muhtarlik_api';
 
 const S = {
   label:   { display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' },
@@ -8,7 +9,7 @@ const S = {
 };
 
 function authFetch(url, opts = {}) {
-  return fetch(url, { ...opts, headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, ...opts.headers } });
+  return fetch(url, { ...opts, headers: { Authorization: `Bearer ${getToken()}`, ...opts.headers } });
 }
 
 function FotoCell({ ilce, mahalle, fotoUrl, onUploaded }) {
@@ -33,12 +34,14 @@ function FotoCell({ ilce, mahalle, fotoUrl, onUploaded }) {
 
   if (uploading) return (
     <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 16, height: 16, border: '2px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'mhspin 0.8s linear infinite' }} />
+      <div style={{ width: 16, height: 16, border: '2px solid #26af68', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
     </div>
   );
 
   if (fotoUrl) return (
-    <img src={fotoUrl} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e5e7eb', display: 'block' }}
+    <img src={fotoUrl} alt="" loading="eager"
+      style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e5e7eb', display: 'block', opacity: 0, transition: 'opacity 0.2s' }}
+      onLoad={e => { e.target.style.opacity = 1; }}
       onError={e => { e.target.style.display = 'none'; }} />
   );
 
@@ -49,7 +52,7 @@ function FotoCell({ ilce, mahalle, fotoUrl, onUploaded }) {
       <button onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
         title="Fotoğraf Ekle"
         style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6', border: '2px dashed #d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#9ca3af', fontSize: 15 }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#6366f1'; }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#26af68'; e.currentTarget.style.color = '#26af68'; }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#9ca3af'; }}>
         <i className="bi bi-camera" />
       </button>
@@ -61,7 +64,7 @@ export default function MuhtarlarPage() {
   const navigate = useNavigate();
   const [rows,    setRows]    = useState([]);
   const [ilceler, setIlceler] = useState([]);
-  const [fotolar, setFotolar] = useState({});   // { "İLÇE_MAHALLE": url }
+  const [fotolar, setFotolar] = useState({});   // { "MAHALLE_ADI": url }
   const [loading, setLoading] = useState(true);
   const [q,       setQ]       = useState('');
   const [ilce,    setIlce]    = useState('');
@@ -85,6 +88,33 @@ export default function MuhtarlarPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Fotoları ilçe bazlı tek istekle çek
+  useEffect(() => {
+    const url = ilce
+      ? `/api/muhtarbis/muhtar-fotolar?ilce=${encodeURIComponent(ilce)}`
+      : '/api/muhtarbis/muhtar-fotolar';
+    authFetch(url)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => {
+        // { ILCE: { "MAHALLE MUHTARI": { foto, ad_soyad } } }
+        const map = {};
+        Object.values(data).forEach(ilceData => {
+          Object.entries(ilceData).forEach(([mahalleKey, info]) => {
+            // "ADAKÖY MAHALLESİ MUHTARI" → mahalle adını çıkar
+            const mahalle = mahalleKey
+              .replace(/\s+MUHTARI\s*$/i, '')
+              .replace(/\s+MAHALLESİ\s*$/i, ' MAHALLESİ')
+              .trim();
+            if (info.foto) map[mahalle] = info.foto;
+            // Orijinal key ile de kaydet (fallback)
+            if (info.foto) map[mahalleKey] = info.foto;
+          });
+        });
+        setFotolar(map);
+      })
+      .catch(() => {});
+  }, [ilce]);
+
   // Filtrelenmiş satırlar (client-side)
   const filtered = useMemo(() => {
     const ql = q.toLocaleLowerCase('tr');
@@ -97,34 +127,14 @@ export default function MuhtarlarPage() {
   const totalPages = Math.ceil(filtered.length / LIMIT);
   const page = filtered.slice((sayfa - 1) * LIMIT, sayfa * LIMIT);
 
-  // Fotoları lazy yükle — mevcut sayfadaki satırlar için
-  const pageKey = page.map(r => `${r.ilce}_${r.mahalle}`).join(',');
-  useEffect(() => {
-    if (!page.length) return;
-    const toFetch = page.filter(r => !((`${r.ilce}_${r.mahalle}`) in fotolar));
-    if (!toFetch.length) return;
-    Promise.all(
-      toFetch.map(r =>
-        authFetch(`/api/muhtarbis/muhtar-foto/${encodeURIComponent(r.ilce)}/${encodeURIComponent(r.mahalle)}`)
-          .then(res => res.ok ? res.json() : { var: false, url: null })
-          .then(data => ({ key: `${r.ilce}_${r.mahalle}`, url: data.url || null }))
-          .catch(() => ({ key: `${r.ilce}_${r.mahalle}`, url: null }))
-      )
-    ).then(results => {
-      const next = {};
-      results.forEach(({ key, url }) => { next[key] = url; });
-      setFotolar(prev => ({ ...prev, ...next }));
-    });
-  }, [pageKey]);
-
   function setFilter(fn) { fn(); setSayfa(1); }
 
   return (
     <div style={{ padding: '32px 40px' }}>
-      <style>{`@keyframes mhspin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(99,102,241,0.1)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(38,175,104,0.12)', color: '#26af68', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
           <i className="bi bi-person-badge" />
         </div>
         <div>
@@ -174,24 +184,27 @@ export default function MuhtarlarPage() {
               ) : page.length === 0 ? (
                 <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Kayıt bulunamadı</td></tr>
               ) : page.map((row, i) => {
-                const fKey = `${row.ilce}_${row.mahalle}`;
-                const fotoLoaded = fKey in fotolar;
-                const fotoUrl = fotolar[fKey];
+                // JSON mahalle key'i: "ADAKÖY MAHALLESİ MUHTARI" veya "ADAKÖY MAHALLESİ"
+                const fotoSrc = fotolar[row.mahalle]
+                  || fotolar[`${row.mahalle} MUHTARI`]
+                  || fotolar[`${row.mahalle} MUHTARLIĞI`]
+                  || null;
                 return (
                   <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
-                    onClick={() => navigate(`/muhtarlik/mahalle/${encodeURIComponent(row.ilce)}/${encodeURIComponent(row.mahalle)}`)}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+                    onClick={() => navigate(`/mahalle/${encodeURIComponent(row.ilce)}/${encodeURIComponent(row.mahalle)}`)}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}>
                     <td style={{ padding: '8px 12px 8px 16px' }} onClick={e => e.stopPropagation()}>
-                      {fotoLoaded ? (
-                        <FotoCell ilce={row.ilce} mahalle={row.mahalle} fotoUrl={fotoUrl}
-                          onUploaded={url => setFotolar(prev => ({ ...prev, [fKey]: url }))} />
+                      {fotoSrc ? (
+                        <FotoCell ilce={row.ilce} mahalle={row.mahalle} fotoUrl={fotoSrc}
+                          onUploaded={url => setFotolar(prev => ({ ...prev, [row.mahalle]: url }))} />
                       ) : (
-                        <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#f3f4f6' }} />
+                        <FotoCell ilce={row.ilce} mahalle={row.mahalle} fotoUrl={null}
+                          onUploaded={url => setFotolar(prev => ({ ...prev, [row.mahalle]: url }))} />
                       )}
                     </td>
                     <td style={{ padding: '10px 16px', color: '#6b7280', whiteSpace: 'nowrap' }}>{row.ilce}</td>
-                    <td style={{ padding: '10px 16px', fontWeight: 500, color: '#6366f1' }}>{row.mahalle}</td>
+                    <td style={{ padding: '10px 16px', fontWeight: 500, color: '#26af68' }}>{row.mahalle}</td>
                     <td style={{ padding: '10px 16px', color: '#212529' }}>{row.ad_soyad}</td>
                     <td style={{ padding: '10px 16px', color: '#374151', textAlign: 'right', whiteSpace: 'nowrap' }}>{row.nufus ? row.nufus.toLocaleString('tr') : '—'}</td>
                     <td style={{ padding: '10px 16px' }}>
@@ -213,7 +226,7 @@ export default function MuhtarlarPage() {
             {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
               const p = sayfa <= 4 ? i + 1 : sayfa - 3 + i;
               if (p < 1 || p > totalPages) return null;
-              return <button key={p} onClick={() => setSayfa(p)} style={{ ...S.pageBtn, background: p === sayfa ? '#6366f1' : '', color: p === sayfa ? '#fff' : '', borderColor: p === sayfa ? '#6366f1' : '' }}>{p}</button>;
+              return <button key={p} onClick={() => setSayfa(p)} style={{ ...S.pageBtn, background: p === sayfa ? '#26af68' : '', color: p === sayfa ? '#fff' : '', borderColor: p === sayfa ? '#26af68' : '' }}>{p}</button>;
             })}
             <button onClick={() => setSayfa(p => Math.min(totalPages, p+1))} disabled={sayfa === totalPages} style={S.pageBtn}>Sonraki ›</button>
           </div>

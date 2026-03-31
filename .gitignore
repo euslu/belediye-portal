@@ -23,6 +23,10 @@ prisma/dev.db
 # Build output
 frontend/dist/
 frontend/build/
+muhtarlik-sis/dist/
+
+# Muhtar fotoğrafları — büyük dosyalar
+backend/public/muhtar-fotolari/
 
 # OS files
 .DS_Store

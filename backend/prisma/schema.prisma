@@ -519,3 +519,16 @@ enum DeviceStatus {
   BROKEN
   TRANSFERRED
 }
+
+model MuhtarlikRole {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  displayName String?
+  role        String   @default("user")
+  directorate String?
+  department  String?
+  active      Boolean  @default(true)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}

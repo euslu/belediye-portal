@@ -382,6 +382,94 @@ async function updateYatirim({ ilce, mahalle, index, fields, user }) {
   return { success: true };
 }
 
+// ─── Yeni başvuru ekle (Muhtarbis MSSQL) ──────────────────────────────────
+async function createBasvuru({ ilce, mahalle, konu, aciklama, daire, tur, tarih }) {
+  const p = await getPool();
+  const { basvuruTable } = await getBaseTables();
+  if (!basvuruTable) throw new Error('Başvuru tablosu bulunamadı');
+
+  // Tablo sütunlarını keşfet
+  const colRes = await p.request().query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = '${basvuruTable}'
+    ORDER BY ORDINAL_POSITION
+  `);
+  const cols = colRes.recordset.map(r => r.COLUMN_NAME.toUpperCase());
+
+  const tarihVal = tarih ? new Date(tarih) : new Date();
+  const colMap   = {};
+  if (cols.includes('KONUSU')         && konu)    colMap.KONUSU         = { type: sql.NVarChar, val: konu };
+  if (cols.includes('TALEP_GENE')     && aciklama) colMap.TALEP_GENE    = { type: sql.NVarChar, val: aciklama };
+  if (cols.includes('BASVURU_TU')     && tur)      colMap.BASVURU_TU    = { type: sql.NVarChar, val: tur };
+  if (cols.includes('BASVURU_TA'))                 colMap.BASVURU_TA    = { type: sql.DateTime,  val: tarihVal };
+  if (cols.includes('MAHALLE_AD')     && mahalle)  colMap.MAHALLE_AD    = { type: sql.NVarChar, val: mahalle };
+  if (cols.includes('MAHALLE_AD_1')   && ilce)     colMap.MAHALLE_AD_1  = { type: sql.NVarChar, val: ilce };
+  if (cols.includes('DAIRE_BASK_ADI') && daire)    colMap.DAIRE_BASK_ADI = { type: sql.NVarChar, val: daire };
+
+  if (!Object.keys(colMap).length) throw new Error('Insert için uygun alan bulunamadı');
+
+  const colNames  = Object.keys(colMap).join(', ');
+  const paramList = Object.keys(colMap).map((_, i) => `@f${i}`).join(', ');
+  const req = p.request();
+  Object.values(colMap).forEach(({ type, val }, i) => req.input(`f${i}`, type, val));
+
+  const result = await req.query(
+    `INSERT INTO ${basvuruTable} (${colNames}) OUTPUT INSERTED.OBJECTID AS newId VALUES (${paramList})`
+  );
+  return { success: true, id: result.recordset?.[0]?.newId || null };
+}
+
+// ─── Yeni yatırım ekle (yatirimlar.json) ──────────────────────────────────
+async function createYatirim({ ilce, mahalle, aciklama, tahmini_bedel, daire, durum, tarih, user }) {
+  const fs       = require('fs');
+  const dataPath = path.join(__dirname, '../data/yatirimlar.json');
+  const veri     = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+
+  const ilceData = veri[ilce];
+  if (!ilceData) throw new Error(`İlçe bulunamadı: ${ilce}`);
+
+  // Toleranslı mahalle eşleştirme
+  let mahalleKey = mahalle;
+  if (!ilceData[mahalleKey]) {
+    const stripped = mahalle.replace(/\s+MAHALLESİ$/i, '').trim();
+    if (ilceData[stripped]) {
+      mahalleKey = stripped;
+    } else {
+      const withSuffix = mahalle + ' MAHALLESİ';
+      if (ilceData[withSuffix]) mahalleKey = withSuffix;
+      else throw new Error(`Mahalle bulunamadı: ${mahalle}`);
+    }
+  }
+
+  const mahalleData = ilceData[mahalleKey];
+  if (!Array.isArray(mahalleData[3])) mahalleData[3] = [];
+
+  // Tarih formatla: DD.MM.YYYY (görüntü) + YYYY-MM-DD (sıralama)
+  const tarihIso  = tarih || new Date().toISOString().split('T')[0];
+  const [y, m, d] = tarihIso.split('-');
+  const tarihGoru = `${d}.${m}.${y}`;
+
+  // [tarih, tarih_sort, aciklama, daire, cevap, durum, tahmini_bedel]
+  const yeniKayit = [tarihGoru, tarihIso, aciklama || '', daire || '', '', durum || 'İşlemde', tahmini_bedel || ''];
+  mahalleData[3].push(yeniKayit);
+
+  fs.writeFileSync(dataPath, JSON.stringify(veri, null, 2), 'utf8');
+
+  await prisma.muhtarbisEditLog.create({
+    data: {
+      objectId:     0,
+      alan:         'yatirim_yeni',
+      eskiDeger:    null,
+      yeniDeger:    JSON.stringify(yeniKayit),
+      duzenleyenId: String(user?.id || user?.username || 'system'),
+      duzenleyenAd: user?.displayName || user?.username || 'system',
+    },
+  });
+
+  return { success: true };
+}
+
 // ─── Başvuru güncelle (Muhtarbis MSSQL) ───────────────────────────────────
 async function updateBasvuru({ objectId, fields }) {
   const p = await getPool();
@@ -446,6 +534,144 @@ async function updateBasvuru({ objectId, fields }) {
   return { degisiklik: true, changes };
 }
 
+// ─── Rapor: yatırım ilçe özeti (senkron — sadece JSON) ────────────────────
+function getRaporYatirimOzet() {
+  const fs       = require('fs');
+  const dataPath = path.join(__dirname, '../data/yatirimlar.json');
+  const veri     = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+
+  const result = [];
+  for (const [ilce, mahalleler] of Object.entries(veri)) {
+    let toplamMahalle = 0, toplamYatirim = 0, tamamlanan = 0;
+    for (const mahalleData of Object.values(mahalleler)) {
+      toplamMahalle++;
+      const talepler = Array.isArray(mahalleData[3]) ? mahalleData[3] : [];
+      toplamYatirim += talepler.length;
+      tamamlanan    += talepler.filter(t => t[5] === 'Tamamlandı').length;
+    }
+    result.push({
+      ilce,
+      toplamMahalle,
+      toplamYatirim,
+      tamamlanan,
+      tamamlanmaOrani: toplamYatirim > 0 ? Math.round((tamamlanan / toplamYatirim) * 100) : 0,
+    });
+  }
+  return result.sort((a, b) => a.ilce.localeCompare(b.ilce, 'tr'));
+}
+
+// ─── Rapor: genel özet ─────────────────────────────────────────────────────
+async function getRaporOzet() {
+  const p = await getPool();
+  const fs = require('fs');
+
+  // MSSQL başvuru özeti
+  const r = await p.request().query(`
+    SELECT
+      COUNT(*)                                                           AS toplamBasvuru,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı'    THEN 1 ELSE 0 END)    AS tamamlandi,
+      SUM(CASE WHEN BIRIM_ISLE = 'Devam Etmekte' THEN 1 ELSE 0 END)    AS devamEtmekte,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlanmadı'  THEN 1 ELSE 0 END)    AS tamamlanmadi,
+      SUM(CASE WHEN BIRIM_ISLE = 'Beklemede'     THEN 1 ELSE 0 END)    AS beklemede,
+      ROUND(AVG(CAST(CEVAP_SURE AS FLOAT)), 1)                         AS ortSure
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+  `);
+
+  // Top 5 daire
+  const daire = await p.request().query(`
+    SELECT TOP 5
+      ISNULL(DAIRE_BASK_ADI, 'Diğer') AS daire,
+      COUNT(*) AS toplam
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+    GROUP BY DAIRE_BASK_ADI
+    ORDER BY toplam DESC
+  `);
+
+  // İlçe dağılım
+  const ilce = await p.request().query(`
+    SELECT
+      ISNULL(MAHALLE_AD_1, 'Bilinmiyor') AS ilce,
+      COUNT(*) AS toplam
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+    GROUP BY MAHALLE_AD_1
+    ORDER BY toplam DESC
+  `);
+
+  // Yatırım sayısı (JSON)
+  let toplamYatirim = 0;
+  try {
+    const dataPath = path.join(__dirname, '../data/yatirimlar.json');
+    const veri = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    for (const ilceData of Object.values(veri)) {
+      for (const mahalleData of Object.values(ilceData)) {
+        if (Array.isArray(mahalleData[3])) toplamYatirim += mahalleData[3].length;
+      }
+    }
+  } catch (_) {}
+
+  return {
+    ...r.recordset[0],
+    toplamYatirim,
+    ilceDagilim:  ilce.recordset,
+    daireDagilim: daire.recordset,
+    sonGuncelleme: new Date().toISOString(),
+  };
+}
+
+// ─── Rapor: ilçe özeti ─────────────────────────────────────────────────────
+async function getRaporIlce(ilce) {
+  const p = await getPool();
+  const req1 = p.request();
+  req1.input('ilce', sql.NVarChar, ilce);
+
+  const r = await req1.query(`
+    SELECT
+      COUNT(*)                                                           AS toplamBasvuru,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı'    THEN 1 ELSE 0 END)    AS tamamlandi,
+      SUM(CASE WHEN BIRIM_ISLE = 'Devam Etmekte' THEN 1 ELSE 0 END)    AS devamEtmekte
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE MAHALLE_AD_1 = @ilce
+      AND YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+  `);
+
+  const req2 = p.request();
+  req2.input('ilce2', sql.NVarChar, ilce);
+  const mahalle = await req2.query(`
+    SELECT
+      ISNULL(MAHALLE_AD, 'Bilinmiyor') AS mahalle,
+      COUNT(*) AS toplam,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlandi
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE MAHALLE_AD_1 = @ilce2
+      AND YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+    GROUP BY MAHALLE_AD
+    ORDER BY toplam DESC
+  `);
+
+  const req3 = p.request();
+  req3.input('ilce3', sql.NVarChar, ilce);
+  const daire = await req3.query(`
+    SELECT TOP 5
+      ISNULL(DAIRE_BASK_ADI, 'Diğer') AS daire,
+      COUNT(*) AS toplam
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE MAHALLE_AD_1 = @ilce3
+      AND YEAR(BASVURU_TA) BETWEEN 2020 AND 2027
+    GROUP BY DAIRE_BASK_ADI
+    ORDER BY toplam DESC
+  `);
+
+  return {
+    ilce,
+    ...r.recordset[0],
+    mahalleDagilim: mahalle.recordset,
+    topDaireler:    daire.recordset,
+  };
+}
+
 // ─── Edit log kaydet (PostgreSQL) ─────────────────────────────────────────
 async function saveEditLog({ objectId, changes, user }) {
   const entries = Object.entries(changes).map(([alan, { eski, yeni }]) => ({
@@ -467,10 +693,41 @@ async function getEditLog(objectId) {
   });
 }
 
+async function getRaporDonem(tip) {
+  const p = await getPool();
+  let whereClause;
+  if (tip === 'hafta') {
+    whereClause = `BASVURU_TA >= DATEADD(day, -7, GETDATE())`;
+  } else if (tip === 'yil') {
+    whereClause = `YEAR(BASVURU_TA) = YEAR(GETDATE())`;
+  } else {
+    // ay (default)
+    whereClause = `MONTH(BASVURU_TA) = MONTH(GETDATE()) AND YEAR(BASVURU_TA) = YEAR(GETDATE())`;
+  }
+  const r = await p.request().query(`
+    SELECT
+      COUNT(*)                                                           AS toplam,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı'    THEN 1 ELSE 0 END)    AS tamamlandi,
+      SUM(CASE WHEN BIRIM_ISLE = 'Devam Etmekte' THEN 1 ELSE 0 END)    AS devam,
+      SUM(CASE WHEN BIRIM_ISLE = 'Tamamlanmadı'  THEN 1 ELSE 0 END)    AS tamamlanmadi
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE ${whereClause}
+  `);
+  const row = r.recordset[0] || {};
+  return {
+    toplam:       row.toplam       || 0,
+    tamamlandi:   row.tamamlandi   || 0,
+    devam:        row.devam        || 0,
+    tamamlanmadi: row.tamamlanmadi || 0,
+  };
+}
+
 module.exports = {
   getStats, getDaireDagilim, getIlceDagilim,
   getListe, getFilterOptions,
   getMahalleDetay, getMahalleBasvurular, getMahalleYatirimlar,
   updateBasvuru, saveEditLog, getEditLog,
-  updateYatirim,
+  updateYatirim, createBasvuru, createYatirim,
+  getRaporOzet, getRaporIlce, getRaporYatirimOzet, getRaporDonem,
+  getPool,
 };

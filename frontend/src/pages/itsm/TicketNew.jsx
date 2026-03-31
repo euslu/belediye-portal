@@ -13,14 +13,14 @@ function authFetch(path) {
 
 // ─── Renk haritası (SubmitType.color → Tailwind sınıfları) ────────────────────
 const TYPE_COLORS = {
-  red:    { gradient: 'from-red-500 to-orange-500',    hover: 'hover:border-red-400',    hoverbg: 'from-red-50 to-orange-50',     action: 'text-red-600',    badge: 'bg-red-100 text-red-700',       btn: 'bg-red-600 hover:bg-red-700',    ring: 'focus:ring-red-200 focus:border-red-400',     selCat: 'border-red-500 bg-red-50 text-red-700',     catHover: 'hover:border-red-300 hover:bg-red-50'   },
-  indigo: { gradient: 'from-indigo-500 to-blue-500',   hover: 'hover:border-indigo-400', hoverbg: 'from-indigo-50 to-blue-50',    action: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', btn: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-200 focus:border-indigo-300', selCat: 'border-indigo-500 bg-indigo-50 text-indigo-700', catHover: 'hover:border-indigo-300 hover:bg-indigo-50' },
-  orange: { gradient: 'from-orange-500 to-amber-500',  hover: 'hover:border-orange-400', hoverbg: 'from-orange-50 to-amber-50',   action: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', btn: 'bg-orange-600 hover:bg-orange-700', ring: 'focus:ring-orange-200 focus:border-orange-400', selCat: 'border-orange-500 bg-orange-50 text-orange-700', catHover: 'hover:border-orange-300 hover:bg-orange-50' },
-  green:  { gradient: 'from-green-500 to-emerald-500', hover: 'hover:border-green-400',  hoverbg: 'from-green-50 to-emerald-50',  action: 'text-green-600',  badge: 'bg-green-100 text-green-700',   btn: 'bg-green-600 hover:bg-green-700',  ring: 'focus:ring-green-200 focus:border-green-400',   selCat: 'border-green-500 bg-green-50 text-green-700',   catHover: 'hover:border-green-300 hover:bg-green-50'  },
-  blue:   { gradient: 'from-blue-500 to-cyan-500',     hover: 'hover:border-blue-400',   hoverbg: 'from-blue-50 to-cyan-50',      action: 'text-blue-600',   badge: 'bg-blue-100 text-blue-700',     btn: 'bg-blue-600 hover:bg-blue-700',    ring: 'focus:ring-blue-200 focus:border-blue-400',     selCat: 'border-blue-500 bg-blue-50 text-blue-700',     catHover: 'hover:border-blue-300 hover:bg-blue-50'    },
-  purple: { gradient: 'from-purple-500 to-violet-500', hover: 'hover:border-purple-400', hoverbg: 'from-purple-50 to-violet-50',  action: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', btn: 'bg-purple-600 hover:bg-purple-700', ring: 'focus:ring-purple-200 focus:border-purple-400', selCat: 'border-purple-500 bg-purple-50 text-purple-700', catHover: 'hover:border-purple-300 hover:bg-purple-50' },
-  gray:   { gradient: 'from-gray-500 to-slate-500',    hover: 'hover:border-gray-400',   hoverbg: 'from-gray-50 to-slate-50',     action: 'text-gray-600',   badge: 'bg-gray-100 text-gray-700',     btn: 'bg-gray-600 hover:bg-gray-700',    ring: 'focus:ring-gray-200 focus:border-gray-400',     selCat: 'border-gray-500 bg-gray-50 text-gray-700',     catHover: 'hover:border-gray-300 hover:bg-gray-50'    },
-  amber:  { gradient: 'from-amber-500 to-yellow-500',  hover: 'hover:border-amber-400',  hoverbg: 'from-amber-50 to-yellow-50',   action: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',   btn: 'bg-amber-600 hover:bg-amber-700',  ring: 'focus:ring-amber-200 focus:border-amber-400',   selCat: 'border-amber-500 bg-amber-50 text-amber-700',   catHover: 'hover:border-amber-300 hover:bg-amber-50'  },
+  red:    { gradient: 'from-red-500 to-orange-500',    hover: 'hover:border-red-400',    hoverbg: 'from-red-50 to-orange-50',     action: 'text-red-600',    badge: 'bg-red-100 text-red-700',       btn: 'bg-red-600 hover:bg-red-700',    ring: 'focus:ring-red-200 focus:border-red-400',     selCat: 'border-red-500 bg-red-50 text-red-700',     catHover: 'hover:border-red-300 hover:bg-red-50',    borderHex: '#ef4444', hoverBorderHex: '#dc2626', iconBg: '#fee2e2', iconFg: '#ef4444' },
+  indigo: { gradient: 'from-indigo-500 to-blue-500',   hover: 'hover:border-indigo-400', hoverbg: 'from-indigo-50 to-blue-50',    action: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', btn: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-200 focus:border-indigo-300', selCat: 'border-indigo-500 bg-indigo-50 text-indigo-700', catHover: 'hover:border-indigo-300 hover:bg-indigo-50', borderHex: '#4f46e5', hoverBorderHex: '#4338ca', iconBg: '#eef2ff', iconFg: '#4f46e5' },
+  orange: { gradient: 'from-orange-500 to-amber-500',  hover: 'hover:border-orange-400', hoverbg: 'from-orange-50 to-amber-50',   action: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', btn: 'bg-orange-600 hover:bg-orange-700', ring: 'focus:ring-orange-200 focus:border-orange-400', selCat: 'border-orange-500 bg-orange-50 text-orange-700', catHover: 'hover:border-orange-300 hover:bg-orange-50', borderHex: '#f97316', hoverBorderHex: '#ea580c', iconBg: '#fff7ed', iconFg: '#f97316' },
+  green:  { gradient: 'from-green-500 to-emerald-500', hover: 'hover:border-green-400',  hoverbg: 'from-green-50 to-emerald-50',  action: 'text-green-600',  badge: 'bg-green-100 text-green-700',   btn: 'bg-green-600 hover:bg-green-700',  ring: 'focus:ring-green-200 focus:border-green-400',   selCat: 'border-green-500 bg-green-50 text-green-700',   catHover: 'hover:border-green-300 hover:bg-green-50',   borderHex: '#22c55e', hoverBorderHex: '#16a34a', iconBg: '#dcfce7', iconFg: '#16a34a' },
+  blue:   { gradient: 'from-blue-500 to-cyan-500',     hover: 'hover:border-blue-400',   hoverbg: 'from-blue-50 to-cyan-50',      action: 'text-blue-600',   badge: 'bg-blue-100 text-blue-700',     btn: 'bg-blue-600 hover:bg-blue-700',    ring: 'focus:ring-blue-200 focus:border-blue-400',     selCat: 'border-blue-500 bg-blue-50 text-blue-700',     catHover: 'hover:border-blue-300 hover:bg-blue-50',     borderHex: '#3b82f6', hoverBorderHex: '#2563eb', iconBg: '#dbeafe', iconFg: '#3b82f6' },
+  purple: { gradient: 'from-purple-500 to-violet-500', hover: 'hover:border-purple-400', hoverbg: 'from-purple-50 to-violet-50',  action: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', btn: 'bg-purple-600 hover:bg-purple-700', ring: 'focus:ring-purple-200 focus:border-purple-400', selCat: 'border-purple-500 bg-purple-50 text-purple-700', catHover: 'hover:border-purple-300 hover:bg-purple-50', borderHex: '#a855f7', hoverBorderHex: '#9333ea', iconBg: '#f3e8ff', iconFg: '#a855f7' },
+  gray:   { gradient: 'from-gray-500 to-slate-500',    hover: 'hover:border-gray-400',   hoverbg: 'from-gray-50 to-slate-50',     action: 'text-gray-600',   badge: 'bg-gray-100 text-gray-700',     btn: 'bg-gray-600 hover:bg-gray-700',    ring: 'focus:ring-gray-200 focus:border-gray-400',     selCat: 'border-gray-500 bg-gray-50 text-gray-700',     catHover: 'hover:border-gray-300 hover:bg-gray-50',     borderHex: '#6b7280', hoverBorderHex: '#4b5563', iconBg: '#f3f4f6', iconFg: '#6b7280' },
+  amber:  { gradient: 'from-amber-500 to-yellow-500',  hover: 'hover:border-amber-400',  hoverbg: 'from-amber-50 to-yellow-50',   action: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',   btn: 'bg-amber-600 hover:bg-amber-700',  ring: 'focus:ring-amber-200 focus:border-amber-400',   selCat: 'border-amber-500 bg-amber-50 text-amber-700',   catHover: 'hover:border-amber-300 hover:bg-amber-50',   borderHex: '#f59e0b', hoverBorderHex: '#d97706', iconBg: '#fef3c7', iconFg: '#f59e0b' },
 };
 function tc(color) { return TYPE_COLORS[color] || TYPE_COLORS.indigo; }
 
@@ -66,10 +66,18 @@ function StepIndicator({ step, submitType }) {
   );
 }
 
+// ─── Tip başvuru ikonu haritası ────────────────────────────────────────────────
+const KEY_ICONS = {
+  ARIZA:         'bi-lightning-charge-fill',
+  TALEP:         'bi-clipboard-check',
+  HIZMET_TALEBI: 'bi-clipboard-check',
+};
+
 // ─── ADIM 1: Başvuru Tipi ──────────────────────────────────────────────────────
 function Step1TypeSelect({ onSelect }) {
-  const [types, setTypes]   = useState([]);
+  const [types, setTypes]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hoveredKey, setHoveredKey] = useState(null);
 
   useEffect(() => {
     getSubmitTypes().then(setTypes).finally(() => setLoading(false));
@@ -79,21 +87,45 @@ function Step1TypeSelect({ onSelect }) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Yeni Başvuru</h1>
-        <p className="text-sm text-gray-500 mt-1">Başvurunuzun türünü seçin</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: '#f0fdf4',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <i className="bi bi-laptop" style={{ fontSize: 22, color: '#43DC80' }} />
+        </div>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>
+            Bilgi İşlem Talebi
+          </h1>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '2px 0 0' }}>
+            Bilgi İşlem Dairesi Başkanlığı
+          </p>
+        </div>
       </div>
       <div className={`grid gap-5 ${types.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {types.map((st) => {
           const c = tc(st.color);
+          const isHovered = hoveredKey === st.key;
           return (
             <button key={st.key} onClick={() => onSelect(st)}
-              className={`group relative overflow-hidden rounded-2xl border-2 border-transparent
-                bg-white p-7 text-left shadow-sm ${c.hover} hover:shadow-md transition-all duration-200`}>
+              onMouseEnter={() => setHoveredKey(st.key)}
+              onMouseLeave={() => setHoveredKey(null)}
+              className="group relative overflow-hidden rounded-2xl bg-white p-7 text-left shadow-sm hover:shadow-md transition-all duration-200"
+              style={{ border: `1.5px solid ${isHovered ? c.hoverBorderHex : c.borderHex}` }}>
               <div className={`absolute inset-0 bg-gradient-to-br ${c.hoverbg} opacity-0 group-hover:opacity-100 transition-opacity`} />
               <div className="relative">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${c.gradient} flex items-center justify-center mb-5 shadow-md text-2xl`}>
-                  {st.icon || '📋'}
+                <div style={{
+                  width: 56, height: 56, borderRadius: 16, marginBottom: 20,
+                  background: c.iconBg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {KEY_ICONS[st.key]
+                    ? <i className={`bi ${KEY_ICONS[st.key]}`} style={{ fontSize: 26, color: c.iconFg }} />
+                    : <span className="text-2xl">{st.icon || '📋'}</span>
+                  }
                 </div>
                 <h2 className="text-lg font-bold text-gray-900 mb-1.5">{st.name}</h2>
                 {st.description && <p className="text-sm text-gray-500 leading-relaxed">{st.description}</p>}

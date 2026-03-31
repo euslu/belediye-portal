@@ -1,14 +1,18 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
 import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import muglaLogo from '../assets/mugla_logo.png';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
 // ─── Menü Yapısı ──────────────────────────────────────────────────────────────
-function buildGroups(role) {
+const GS_YETKILI = ['ethem.usluoglu', 'tayfun.yilmaz'];
+
+function buildGroups(role, username) {
   const isAdmin = role === 'admin';
   const isMgr   = ['admin', 'manager'].includes(role);
+  const isGS    = GS_YETKILI.includes(username || '');
   const homeRoute = isMgr ? '/' : '/home';
 
   return [
@@ -47,10 +51,18 @@ function buildGroups(role) {
     ...(isMgr ? [{
       label: 'MUHTARLIKLAR',
       items: [
-        { label: 'Başvuru Takibi', icon: 'bi-journal-text',   to: '/muhtarlik',             exactEnd: true },
+        { label: 'Tüm Başvurular', icon: 'bi-journal-text',   to: '/muhtarlik',              exactEnd: true },
+        { label: 'Yeni Başvuru',   icon: 'bi-plus-circle',    to: '/muhtarlik/yeni-basvuru', exactEnd: true },
+        { label: 'Yeni Yatırım',   icon: 'bi-graph-up-arrow', to: '/muhtarlik/yeni-yatirim', exactEnd: true },
         { label: 'Muhtarlar',      icon: 'bi-person-badge',   to: '/muhtarlik/muhtarlar'                   },
         { label: 'Raporlar',       icon: 'bi-bar-chart-line', to: '/muhtarlik/raporlar'                    },
         { label: 'Ayarlar',        icon: 'bi-gear',           to: '/muhtarlik/ayarlar'                     },
+      ],
+    }] : []),
+    ...(isGS ? [{
+      label: 'YÖNETİM',
+      items: [
+        { label: 'Genel Sekreter', icon: 'bi-speedometer2', to: '/genel-sekreter' },
       ],
     }] : []),
     ...(isAdmin ? [{
@@ -177,7 +189,7 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [user]);
 
-  const groups = buildGroups(user?.role || 'user');
+  const groups = buildGroups(user?.role || 'user', user?.username);
 
   return (
     <div id="main-wrapper" className={[mounted ? 'show' : '', sideMenu ? 'menu-toggle' : ''].join(' ').trim()}>
@@ -191,11 +203,12 @@ export default function Dashboard() {
         >
           {/* Logo icon */}
           <div style={{
-            width: 42, height: 42, background: 'rgba(255,255,255,0.2)', borderRadius: 10,
+            width: 36, height: 36, borderRadius: 8, background: '#ffffff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 800, fontSize: 20, flexShrink: 0,
+            padding: 3, flexShrink: 0,
           }}>
-            M
+            <img src={muglaLogo} alt="MBB"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div className="brand-title" style={{ lineHeight: 1.2 }}>
             <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Muğla BB</div>

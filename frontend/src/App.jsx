@@ -29,6 +29,9 @@ import MahalleDetay             from './pages/MahalleDetay';
 import MuhtarlarPage            from './pages/MuhtarlarPage';
 import RaporlarPage             from './pages/RaporlarPage';
 import MuhtarlikAyarlar         from './pages/MuhtarlikAyarlar';
+import MuhtarlikYeniBasvuru     from './pages/MuhtarlikYeniBasvuru';
+import MuhtarlikYeniYatirim     from './pages/MuhtarlikYeniYatirim';
+import GenelSekreterDashboard   from './pages/GenelSekreterDashboard';
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -39,6 +42,17 @@ function RequireAuth({ children }) {
     </div>
   );
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// Genel Sekreter — sadece yetkili kullanıcılara
+const GS_YETKILI = ['ethem.usluoglu', 'tayfun.yilmaz'];
+function GenelSekreterRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  const yetkili = GS_YETKILI.includes(user.username);
+  if (!yetkili) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -96,9 +110,14 @@ export default function App() {
             <Route path="muhtarlik/mahalle/:ilce/:mahalle" element={<MahalleDetay />} />
             <Route path="muhtarlik/muhtarlar"             element={<MuhtarlarPage />} />
             <Route path="muhtarlik/raporlar"              element={<RaporlarPage />} />
-            <Route path="muhtarlik/ayarlar"              element={<MuhtarlikAyarlar />} />
+            <Route path="muhtarlik/ayarlar"               element={<MuhtarlikAyarlar />} />
+            <Route path="muhtarlik/yeni-basvuru"          element={<MuhtarlikYeniBasvuru />} />
+            <Route path="muhtarlik/yeni-yatirim"          element={<MuhtarlikYeniYatirim />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
+            <Route path="genel-sekreter" element={
+              <GenelSekreterRoute><GenelSekreterDashboard /></GenelSekreterRoute>
+            } />
             <Route path="*"               element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
