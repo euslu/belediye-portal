@@ -103,9 +103,9 @@ export default function AdminCategories() {
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+          style={{ display:'flex', alignItems:'center', gap:6, background:'#1d4ed8', color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer' }}
         >
-          <span className="text-lg leading-none">+</span> Yeni Başvuru Konusu
+          <span style={{ fontSize:18, lineHeight:1 }}>+</span> Yeni Başvuru Konusu
         </button>
       </div>
 
@@ -131,33 +131,42 @@ export default function AdminCategories() {
                   <td className="px-5 py-3.5 font-medium text-gray-800">{cat.name}</td>
                   <td className="px-5 py-3.5 text-gray-500">{cat._count?.tickets ?? 0}</td>
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <button
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      {/* Toggle switch */}
+                      <div
                         onClick={() => toggleActive(cat)}
                         title={cat.active ? 'Pasife al' : 'Aktife al'}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
-                          ${cat.active ? 'bg-blue-600' : 'bg-gray-200'}`}
+                        style={{
+                          width:36, height:20, borderRadius:10, cursor:'pointer',
+                          background: cat.active ? '#2563eb' : '#d1d5db',
+                          position:'relative', flexShrink:0,
+                          transition:'background .2s',
+                        }}
                       >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform`}
-                          style={{ transform: cat.active ? 'translateX(18px)' : 'translateX(2px)' }}
-                        />
-                      </button>
-                      <span className={`text-sm font-medium whitespace-nowrap ${cat.active ? 'text-green-600' : 'text-gray-400'}`}>
+                        <div style={{
+                          position:'absolute', top:2,
+                          left: cat.active ? 18 : 2,
+                          width:16, height:16, borderRadius:'50%',
+                          background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,.25)',
+                          transition:'left .2s',
+                        }} />
+                      </div>
+                      <span style={{ fontSize:12, fontWeight:600, whiteSpace:'nowrap', color: cat.active ? '#16a34a' : '#9ca3af' }}>
                         {cat.active ? 'Aktif' : 'Pasif'}
                       </span>
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
                       <button
                         onClick={() => openEdit(cat)}
-                        className="text-xs text-blue-600 hover:text-blue-800 px-2.5 py-1 rounded-lg hover:bg-blue-50 transition"
+                        style={{ background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', borderRadius:6, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer' }}
                       >
                         Düzenle
                       </button>
                       <button
                         onClick={() => handleDelete(cat)}
-                        className="text-xs text-red-500 hover:text-red-700 px-2.5 py-1 rounded-lg hover:bg-red-50 transition"
+                        style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'4px 12px', fontSize:12, fontWeight:600, cursor:'pointer' }}
                       >
                         Sil
                       </button>
@@ -187,17 +196,17 @@ export default function AdminCategories() {
               placeholder="örn. Talep"
             />
             {formError && <p className="text-xs text-red-500 mt-1.5">{formError}</p>}
-            <div className="flex justify-end gap-2 mt-5">
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:20 }}>
               <button
                 onClick={closeModal}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition"
+                style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:500, cursor:'pointer' }}
               >
                 İptal
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-2 text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white rounded-lg transition disabled:opacity-50"
+                style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? 'Kaydediliyor...' : 'Kaydet'}
               </button>

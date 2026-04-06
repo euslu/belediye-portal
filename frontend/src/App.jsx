@@ -24,14 +24,12 @@ import WorkOrders           from './pages/WorkOrders';
 import UlakbellIncidents    from './pages/UlakbellIncidents';
 import PDKSDashboard             from './pages/PDKSDashboard';
 import DestekHizmetleriTicket   from './pages/DestekHizmetleriTicket';
-import Muhtarlik                from './pages/Muhtarlik';
-import MahalleDetay             from './pages/MahalleDetay';
-import MuhtarlarPage            from './pages/MuhtarlarPage';
-import RaporlarPage             from './pages/RaporlarPage';
-import MuhtarlikAyarlar         from './pages/MuhtarlikAyarlar';
-import MuhtarlikYeniBasvuru     from './pages/MuhtarlikYeniBasvuru';
-import MuhtarlikYeniYatirim     from './pages/MuhtarlikYeniYatirim';
 import GenelSekreterDashboard   from './pages/GenelSekreterDashboard';
+import FlexCityPage             from './pages/FlexCityPage';
+import PersonelDashboard        from './pages/PersonelDashboard';
+import GsmHat                  from './pages/arge/GsmHat';
+import TutanakOlustur          from './pages/arge/TutanakOlustur';
+
 
 // Giriş yapılmamışsa /login'e yönlendir
 function RequireAuth({ children }) {
@@ -56,12 +54,15 @@ function GenelSekreterRoute({ children }) {
   return children;
 }
 
+const SISTEM_ROL_SEVIYE = { admin:5, daire_baskani:4, mudur:3, sef:2, personel:1 };
+
 // Role göre index sayfası
 function IndexRoute() {
   const { user } = useAuth();
   if (!user) return null;
-  if (['admin', 'manager'].includes(user.role)) return <NewManagerDashboard />;
-  return <Navigate to="/home" replace />;
+  const seviye = SISTEM_ROL_SEVIYE[user.sistemRol] || (user.role === 'admin' ? 5 : user.role === 'manager' ? 3 : 1);
+  if (seviye >= 3) return <NewManagerDashboard />;
+  return <PersonelDashboard />;
 }
 
 // Zaten giriş yapılmışsa ana sayfaya yönlendir
@@ -101,20 +102,17 @@ export default function App() {
             <Route path="admin/ad-changes"  element={<AdChanges />} />
             <Route path="admin/envanter"     element={<Envanter />} />
             <Route path="admin/departments" element={<Departments />} />
-            <Route path="home"              element={<UserDashboard />} />
+            <Route path="home"              element={<PersonelDashboard />} />
             <Route path="work-orders"           element={<WorkOrders />} />
             <Route path="ulakbell-incidents"    element={<UlakbellIncidents />} />
             <Route path="pdks"                  element={<PDKSDashboard />} />
             <Route path="tickets/new/destek"    element={<DestekHizmetleriTicket />} />
-            <Route path="muhtarlik"             element={<Muhtarlik />} />
-            <Route path="muhtarlik/mahalle/:ilce/:mahalle" element={<MahalleDetay />} />
-            <Route path="muhtarlik/muhtarlar"             element={<MuhtarlarPage />} />
-            <Route path="muhtarlik/raporlar"              element={<RaporlarPage />} />
-            <Route path="muhtarlik/ayarlar"               element={<MuhtarlikAyarlar />} />
-            <Route path="muhtarlik/yeni-basvuru"          element={<MuhtarlikYeniBasvuru />} />
-            <Route path="muhtarlik/yeni-yatirim"          element={<MuhtarlikYeniYatirim />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />
             <Route path="manager-dashboard" element={<ManagerDashboard />} />
+            <Route path="flexcity"        element={<FlexCityPage />} />
+            <Route path="arge/gsm-hat"   element={<GsmHat />} />
+            <Route path="arge/tutanak"   element={<TutanakOlustur />} />
+
             <Route path="genel-sekreter" element={
               <GenelSekreterRoute><GenelSekreterDashboard /></GenelSekreterRoute>
             } />

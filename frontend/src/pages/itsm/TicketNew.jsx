@@ -113,8 +113,12 @@ function Step1TypeSelect({ onSelect }) {
             <button key={st.key} onClick={() => onSelect(st)}
               onMouseEnter={() => setHoveredKey(st.key)}
               onMouseLeave={() => setHoveredKey(null)}
-              className="group relative overflow-hidden rounded-2xl bg-white p-7 text-left shadow-sm hover:shadow-md transition-all duration-200"
-              style={{ border: `1.5px solid ${isHovered ? c.hoverBorderHex : c.borderHex}` }}>
+              className="group relative overflow-hidden rounded-2xl bg-white p-7 text-left transition-all duration-200"
+              style={{
+                border: `1.5px solid ${isHovered ? c.hoverBorderHex : c.borderHex}`,
+                transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
+                boxShadow: isHovered ? '0 12px 32px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
               <div className={`absolute inset-0 bg-gradient-to-br ${c.hoverbg} opacity-0 group-hover:opacity-100 transition-opacity`} />
               <div className="relative">
                 <div style={{

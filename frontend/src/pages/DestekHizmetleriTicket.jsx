@@ -147,7 +147,8 @@ function BirimKart({ birim, onClick }) {
         flexDirection: 'column',
         transition: 'all 0.15s',
         fontFamily: 'inherit',
-        boxShadow: hover ? '0 4px 12px rgba(67,220,128,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+        boxShadow: hover ? '0 12px 32px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+        transform: hover ? 'translateY(-4px)' : 'translateY(0)',
       }}
     >
       <div style={{
@@ -187,7 +188,8 @@ function KonuKart({ konu, birimId, onClick }) {
         gap: 12,
         transition: 'all 0.15s',
         fontFamily: 'inherit',
-        boxShadow: hover ? '0 4px 12px rgba(67,220,128,0.12)' : '0 1px 3px rgba(0,0,0,0.05)',
+        boxShadow: hover ? '0 12px 32px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+        transform: hover ? 'translateY(-4px)' : 'translateY(0)',
       }}
     >
       <div style={{

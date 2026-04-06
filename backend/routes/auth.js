@@ -60,6 +60,36 @@ function getRole(groups) {
   return 'user';
 }
 
+// AD gruplarından sistemRol çıkar (UserRole tablosu yoksa fallback)
+function getADSistemRol(groups = []) {
+  // Sadece kesin bilinen portal grup adlarıyla eşleştir — substring match kullanma
+  if (groups.some(g => ['portal-admin', 'IT-Admin', 'Domain Admins'].includes(g)))
+    return 'admin';
+  if (groups.some(g => ['portal-manager', 'int_bislem'].includes(g)))
+    return 'mudur';
+  return 'personel';
+}
+
+// Mevcut User.role → sistemRol mapping (UserRole tablosu yoksa)
+function rolToSistemRol(role) {
+  if (role === 'admin')   return 'admin';
+  if (role === 'manager') return 'mudur';
+  return 'personel';
+}
+
+// UserRole tablosundan sistemRol bak (async)
+async function getSistemRol(username, groups, role) {
+  try {
+    const prisma = require('../lib/prisma');
+    const ur = await prisma.userRole.findUnique({ where: { username } });
+    if (ur?.active && ur?.role) return ur.role;
+  } catch {}
+  // Fallback: AD gruplarından veya mevcut role'den
+  const fromAD = getADSistemRol(groups || []);
+  if (fromAD !== 'personel') return fromAD;
+  return rolToSistemRol(role);
+}
+
 function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
@@ -104,14 +134,50 @@ router.post('/login', async (req, res) => {
     }).catch(() => {}); // DB hatası login'i engellemesin
 
     const muhtarlikRole = await getMuhtarlikRole(username);
+    const sistemRol = await getSistemRol(username, mockUser.payload.groups, mockUser.payload.role);
     const payload = {
       ...mockUser.payload,
+      sistemRol,
       muhtarlikRole: muhtarlikRole || null,
       muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
     };
     const token = signToken(payload);
-    console.log(`[MOCK] Giriş: ${username} (${mockUser.payload.role})`);
+    console.log(`[MOCK] Giriş: ${username} (${mockUser.payload.role} / sistemRol: ${sistemRol})`);
     return res.json({ token, user: payload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
+  }
+
+  // --- YEREL KULLANICI KONTROLÜ (şifreli DB kaydı varsa AD'e gerek yok) ---
+  try {
+    const prisma = require('../lib/prisma');
+    const bcrypt = require('bcryptjs');
+    const localUser = await prisma.user.findUnique({ where: { username } });
+    if (localUser?.password) {
+      const valid = await bcrypt.compare(password, localUser.password);
+      if (!valid) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+
+      const userRole   = await prisma.userRole.findUnique({ where: { username } });
+      const muhtarlikRole = await getMuhtarlikRole(username);
+      const sistemRol  = userRole?.active ? (userRole.role || 'personel') : rolToSistemRol(localUser.role);
+
+      const payload = {
+        username:    localUser.username,
+        displayName: localUser.displayName,
+        email:       localUser.email,
+        role:        localUser.role,
+        sistemRol,
+        directorate: localUser.directorate,
+        department:  localUser.department,
+        title:       localUser.title,
+        groups:      [],
+        muhtarlikRole: muhtarlikRole || null,
+        muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
+      };
+      const token = signToken(payload);
+      console.log(`[LOCAL] Giriş: ${username} sistemRol=${sistemRol}`);
+      return res.json({ token, user: payload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
+    }
+  } catch (localErr) {
+    console.warn('[LOCAL auth] hata:', localErr.message);
   }
 
   // --- LDAP / AD MOD ---
@@ -230,12 +296,15 @@ router.post('/login', async (req, res) => {
     }).catch((e) => console.warn('[DB upsert] kullanıcı kaydedilemedi:', e.message));
 
     const muhtarlikRole = await getMuhtarlikRole(payload.username);
+    const sistemRol = await getSistemRol(payload.username, payload.groups, payload.role);
     const finalPayload = {
       ...payload,
+      sistemRol,
       muhtarlikRole: muhtarlikRole || null,
       muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
     };
     const token = signToken(finalPayload);
+    console.log(`[AD] Token: ${payload.username} rol=${payload.role} sistemRol=${sistemRol}`);
     return res.json({ token, user: finalPayload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
   } catch (err) {
     console.error('Login hatası:', err.message);

@@ -7,18 +7,41 @@ const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
 
 // ─── Menü Yapısı ──────────────────────────────────────────────────────────────
-const GS_YETKILI = ['ethem.usluoglu', 'tayfun.yilmaz'];
+const GS_YETKILI = ['portal.admin', 'tayfun.yilmaz'];
 
-function buildGroups(role, username) {
-  const isAdmin = role === 'admin';
-  const isMgr   = ['admin', 'manager'].includes(role);
-  const isGS    = GS_YETKILI.includes(username || '');
+// sistemRol hiyerarşisi
+const SISTEM_ROL_SEVIYE = { admin: 5, daire_baskani: 4, mudur: 3, sef: 2, personel: 1 };
+function getSistemRolSeviye(user) {
+  const sr = user?.sistemRol;
+  if (sr && SISTEM_ROL_SEVIYE[sr]) return SISTEM_ROL_SEVIYE[sr];
+  // Fallback → mevcut role
+  if (user?.role === 'admin')   return 5;
+  if (user?.role === 'manager') return 3;
+  return 1;
+}
+
+function buildGroups(role, username, user) {
+  const sistemRol = user?.sistemRol;
+  const seviye    = getSistemRolSeviye(user || { role });
+
+  // sistemRol varsa onu esas al (RBAC), yoksa JWT role'a dön
+  const isAdmin   = sistemRol ? sistemRol === 'admin' : role === 'admin';
+  // daire_baskani ve üzeri yönetici menüsünü görür
+  const isMgr     = seviye >= 3 || ['admin', 'manager'].includes(role);
+  // AR-GE: admin | Bilgi İşlem daire_baskani | Sistem Ağ müdürlüğü personeli
+  const biDir     = user?.directorate || '';
+  const biDept    = user?.department  || '';
+  const isArge    = isAdmin
+    || (sistemRol === 'daire_baskani' && /bilgi.i[̇i]şlem/i.test(biDir))
+    || /sistem.*ağ.*veri güvenliği/i.test(biDept);
+  const isGS      = GS_YETKILI.includes(username || '');
   const homeRoute = isMgr ? '/' : '/home';
 
   return [
     {
       items: [
-        { label: 'Anasayfa', icon: 'bi-house-door', to: homeRoute, exactEnd: true },
+        { label: 'Anasayfa',      icon: 'bi-house-door',    to: homeRoute,         exactEnd: true },
+        ...(isGS ? [{ label: 'Genel Sekreter', icon: 'bi-speedometer2', to: '/genel-sekreter' }] : []),
       ],
     },
     {
@@ -38,7 +61,7 @@ function buildGroups(role, username) {
         { label: 'Birim Raporu',     icon: 'bi-bar-chart-line',   to: '/manager-dashboard'                          },
       ],
     }] : []),
-    ...(isMgr ? [{
+    ...(isAdmin ? [{
       label: 'ARAÇLAR',
       items: [
         { label: 'Personel',           icon: 'bi-people', to: '/personel'           },
@@ -46,26 +69,17 @@ function buildGroups(role, username) {
         { label: 'ulakBELL Talepleri', icon: 'bi-bell',   to: '/ulakbell-incidents' },
         { label: 'PDKS',               icon: 'bi-clock',  to: '/pdks'               },
         { label: 'Bilgi Tabanı',       icon: 'bi-book',   to: '/kb', disabled: true },
+        { label: 'FlexCity',           icon: 'bi-database-check', to: '/flexcity' },
       ],
     }] : []),
-    ...(isMgr ? [{
-      label: 'MUHTARLIKLAR',
+    ...(isArge ? [{
+      label: 'AR-GE',
       items: [
-        { label: 'Tüm Başvurular', icon: 'bi-journal-text',   to: '/muhtarlik',              exactEnd: true },
-        { label: 'Yeni Başvuru',   icon: 'bi-plus-circle',    to: '/muhtarlik/yeni-basvuru', exactEnd: true },
-        { label: 'Yeni Yatırım',   icon: 'bi-graph-up-arrow', to: '/muhtarlik/yeni-yatirim', exactEnd: true },
-        { label: 'Muhtarlar',      icon: 'bi-person-badge',   to: '/muhtarlik/muhtarlar'                   },
-        { label: 'Raporlar',       icon: 'bi-bar-chart-line', to: '/muhtarlik/raporlar'                    },
-        { label: 'Ayarlar',        icon: 'bi-gear',           to: '/muhtarlik/ayarlar'                     },
+        { label: 'GSM / Data Hatları', icon: 'bi-phone',        to: '/arge/gsm-hat' },
+        { label: 'Teslim Tutanağı',   icon: 'bi-file-earmark-text', to: '/arge/tutanak' },
       ],
     }] : []),
-    ...(isGS ? [{
-      label: 'YÖNETİM',
-      items: [
-        { label: 'Genel Sekreter', icon: 'bi-speedometer2', to: '/genel-sekreter' },
-      ],
-    }] : []),
-    ...(isAdmin ? [{
+    ...(isAdmin || sistemRol === 'daire_baskani' ? [{
       label: 'SİSTEM',
       items: [
         { label: 'Ayarlar', icon: 'bi-gear', to: '/admin/settings' },
@@ -176,9 +190,10 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [user]);
 
-  // Onay bekleyen badge'i (admin + manager)
+  // Onay bekleyen badge'i (admin + daire_baskani + mudur + manager)
   useEffect(() => {
-    if (!['admin', 'manager'].includes(user?.role)) return;
+    const seviye = getSistemRolSeviye(user);
+    if (seviye < 3 && !['admin', 'manager'].includes(user?.role)) return;
     const load = () =>
       fetch(`${API}/api/tickets/pending-approval/count`, { headers: authHeaders() })
         .then(r => r.ok ? r.json() : { count: 0 })
@@ -189,7 +204,7 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [user]);
 
-  const groups = buildGroups(user?.role || 'user', user?.username);
+  const groups = buildGroups(user?.role || 'user', user?.username, user);
 
   return (
     <div id="main-wrapper" className={[mounted ? 'show' : '', sideMenu ? 'menu-toggle' : ''].join(' ').trim()}>
@@ -321,8 +336,28 @@ export default function Dashboard() {
             })()}
           </ul>
 
+          {/* Çıkış Yap */}
+          <div style={{ padding: '8px 12px 4px' }}>
+            <button
+              onClick={() => { logout(); navigate('/login', { replace: true }); }}
+              style={{
+                width: '100%', padding: '9px 16px',
+                background: 'transparent', border: '1px solid #fca5a5',
+                borderRadius: 8, color: '#dc2626',
+                cursor: 'pointer', fontSize: 13,
+                display: 'flex', alignItems: 'center', gap: 8,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <i className="bi bi-box-arrow-right" style={{ fontSize: 15 }} />
+              <span className="nav-text">Çıkış Yap</span>
+            </button>
+          </div>
+
           {/* Alt bilgi */}
-          <div className="copyright" style={{ padding: '16px 20px', fontSize: 11, color: '#bbb', marginTop: 8 }}>
+          <div className="copyright" style={{ padding: '12px 20px 16px', fontSize: 11, color: '#bbb' }}>
             <p style={{ margin: 0 }}>© {new Date().getFullYear()} Muğla Büyükşehir Belediyesi</p>
           </div>
         </div>
@@ -342,7 +377,7 @@ export default function Dashboard() {
 // ─── SidebarGroupItem (her zaman açık alt menü) ──────────────────────────────
 function SidebarGroupItem({ item }) {
   const location = useLocation();
-  const isAnyActive = item.subItems.some(s => location.pathname.startsWith(s.to === '/muhtarlik' ? '/muhtarlik' : s.to));
+  const isAnyActive = item.subItems.some(s => location.pathname.startsWith(s.to));
 
   return (
     <li className={isAnyActive ? 'mm-active' : ''}>

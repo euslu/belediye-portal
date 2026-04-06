@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login } from '../api/auth';
+import muglaLogo from '../assets/mugla_logo.png';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -51,15 +52,8 @@ export default function Login() {
               borderRadius: '16px',
               boxShadow: '0 8px 24px rgba(168,85,247,0.3)'
             }}>
-              <img
-                src="https://www.mugla.bel.tr/mbb/tema/mbb/img/mbblogo.svg"
-                alt="Muğla BB"
-                style={{ width: '36px', height: '36px', objectFit: 'contain' }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentNode.innerHTML = '<span style="color:white;font-size:20px;font-weight:700">M</span>';
-                }}
-              />
+              <img src={muglaLogo} alt="Muğla BB"
+                style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
             </div>
             <div>
               <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: 0 }}>

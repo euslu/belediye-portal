@@ -2,10 +2,13 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const multer  = require('multer');
+const sql     = require('mssql');
 const router  = express.Router();
 const auth    = require('../middleware/authMiddleware');
-const { checkMuhtarlikAccess } = require('../middleware/muhtarlikAuth');
+const { checkMuhtarlikAccess, filterIlce, checkYazmaYetkisi } = require('../middleware/muhtarlikAuth');
 const svc     = require('../services/muhtarbis');
+const prisma  = require('../lib/prisma');
+const { logIslem } = require('../middleware/auditLog');
 
 // ─── Muhtar fotoğraf upload ────────────────────────────────────────────────
 const FOTO_DIR      = path.join(__dirname, '../public/muhtar-fotolari');
@@ -66,34 +69,62 @@ const fotoUpload = multer({
 
 router.use(auth, checkMuhtarlikAccess);
 
+// GET /api/muhtarbis/benim-yetkim — kullanıcının ilçe yetki bilgisi
+router.get('/benim-yetkim', (req, res) => {
+  res.json({
+    muhtarlikRole:    req.user.muhtarlikRole,
+    tamErisim:        req.user.muhtarlikTamErisim,
+    ilceler:          req.user.muhtarlikIlceler,
+    yetkiMap:         req.user.muhtarlikYetkiMap,
+  });
+});
+
 // GET /api/muhtarbis/stats?yil=2025
 router.get('/stats', async (req, res) => {
-  try { res.json(await svc.getStats({ yil: req.query.yil })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const ilce = filterIlce(req, req.query.ilce);
+    if (ilce === false) return res.status(403).json({ error: 'Bu ilçe için yetkiniz yok' });
+    res.json(await svc.getStatsPG({ yil: req.query.yil, ilce: Array.isArray(ilce) ? ilce : (ilce || undefined) }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/daire-dagilim?yil=2025
 router.get('/daire-dagilim', async (req, res) => {
-  try { res.json(await svc.getDaireDagilim({ yil: req.query.yil })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const ilce = filterIlce(req, req.query.ilce);
+    if (ilce === false) return res.status(403).json({ error: 'Bu ilçe için yetkiniz yok' });
+    res.json(await svc.getDaireDagilimPG({ yil: req.query.yil, ilce: Array.isArray(ilce) ? ilce : (ilce || undefined) }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/ilce-dagilim?yil=2025
 router.get('/ilce-dagilim', async (req, res) => {
-  try { res.json(await svc.getIlceDagilim({ yil: req.query.yil })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const ilce = filterIlce(req, null);
+    if (ilce === false) return res.json([]); // hiç yetki yok
+    res.json(await svc.getIlceDagilimPG({ yil: req.query.yil, ilceler: Array.isArray(ilce) ? ilce : null }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/liste?ilce=..&mahalle=..&daire=..&durum=..&yil=..&q=..&sayfa=1&limit=50
 router.get('/liste', async (req, res) => {
-  try { res.json(await svc.getListe(req.query)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const ilce = filterIlce(req, req.query.ilce);
+    if (ilce === false) return res.status(403).json({ error: 'Bu ilçe için yetkiniz yok' });
+    const params = { ...req.query };
+    if (Array.isArray(ilce)) params.ilceler = ilce;
+    else if (ilce) params.ilce = ilce;
+    res.json(await svc.getListePG(params));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/filtreler?ilce=BODRUM
 router.get('/filtreler', async (req, res) => {
-  try { res.json(await svc.getFilterOptions({ ilce: req.query.ilce })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const ilce = filterIlce(req, req.query.ilce);
+    if (ilce === false) return res.json({ ilceler: [], mahalleler: [] });
+    res.json(await svc.getFilterOptionsPG({ ilce: Array.isArray(ilce) ? null : (ilce || null), ilceler: Array.isArray(ilce) ? ilce : null }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Başvuru CRUD ──────────────────────────────────────────────────────────
@@ -116,39 +147,61 @@ const ekDosyaUpload = multer({
 // POST /api/muhtarbis/basvuru  — yeni başvuru (multipart destekli)
 router.post('/basvuru', ekDosyaUpload.single('ekDosya'), async (req, res) => {
   try {
+    const ilce = req.body.ilce;
+    if (!checkYazmaYetkisi(req, ilce)) {
+      return res.status(403).json({ error: `${ilce} ilçesi için yazma yetkiniz yok` });
+    }
     const body = { ...req.body, user: req.user };
     if (req.file) body.ekDosyaUrl = `/basvuru-eklentileri/${req.file.filename}`;
     if (body.koordinasyonDaireleri && typeof body.koordinasyonDaireleri === 'string') {
       try { body.koordinasyonDaireleri = JSON.parse(body.koordinasyonDaireleri); } catch (_) {}
     }
-    res.json(await svc.createBasvuru(body));
+    const result = await svc.createBasvuruPG(body);
+    logIslem({ kullanici: req.user?.username, kullaniciAd: req.user?.displayName, islem: 'CREATE', modul: 'basvuru', kayitId: result?.id, detay: { konu: body.konu, ilce: body.ilce, mahalle: body.mahalle }, ip: req.ip });
+    res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/muhtarbis/yatirim  — yeni yatırım
 router.post('/yatirim', async (req, res) => {
-  try { res.json(await svc.createYatirim({ ...req.body, user: req.user })); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    if (!checkYazmaYetkisi(req, req.body.ilce)) {
+      return res.status(403).json({ error: `${req.body.ilce} ilçesi için yazma yetkiniz yok` });
+    }
+    const result = await svc.createYatirim({ ...req.body, user: req.user });
+    logIslem({ kullanici: req.user?.username, kullaniciAd: req.user?.displayName, islem: 'CREATE', modul: 'yatirim', detay: { ilce: req.body.ilce, mahalle: req.body.mahalle }, ip: req.ip });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PUT /api/muhtarbis/basvuru/:objectId
 router.put('/basvuru/:objectId', async (req, res) => {
   try {
-    const result = await svc.updateBasvuru({
+    const result = await svc.updateBasvuruPG({
       objectId: req.params.objectId,
       fields:   req.body,
+      user:     req.user,
     });
-    if (result.degisiklik) {
-      await svc.saveEditLog({
-        objectId: req.params.objectId,
-        changes:  result.changes,
-        user:     req.user,
-      });
-    }
+    logIslem({ kullanici: req.user?.username, kullaniciAd: req.user?.displayName, islem: 'UPDATE', modul: 'basvuru', kayitId: req.params.objectId, detay: result.changes, ip: req.ip });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// GET /api/muhtarbis/basvuru/:id  — tekil başvuru + aktiviteler
+router.get('/basvuru/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const basvuru = await prisma.basvuru.findFirst({
+      where: { OR: [{ id: +id || 0 }, { muhtarbisId: id }] },
+    });
+    if (!basvuru) return res.status(404).json({ error: 'Başvuru bulunamadı' });
+    const aktiviteler = await prisma.basvuruAktivite.findMany({
+      where: { basvuruId: basvuru.id }, orderBy: { tarih: 'asc' },
+    });
+    res.json({ ...basvuru, aktiviteler });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/basvuru/:objectId/log
@@ -157,15 +210,58 @@ router.get('/basvuru/:objectId/log', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/muhtarbis/basvuru/:id/aktiviteler
+router.get('/basvuru/:id/aktiviteler', auth, async (req, res) => {
+  try { res.json(await svc.getAktiviteler(req.params.id)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/muhtarbis/basvuru/:id/aktivite  — manuel yorum
+router.post('/basvuru/:id/aktivite', auth, async (req, res) => {
+  try {
+    const { icerik } = req.body;
+    if (!icerik?.trim()) return res.status(400).json({ error: 'İçerik gerekli' });
+    const basvuruId = +req.params.id;
+    const a = await svc.aktiviteEkle({
+      basvuruId, tip: 'yorum', icerik: icerik.trim(),
+      yapan:   req.user?.username || 'sistem',
+      yapanAd: req.user?.displayName || req.user?.username || null,
+    });
+    res.json(a);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Mahalle detay ────────────────────────────────────────────────────────
+
+// GET /api/muhtarbis/muhtar-bilgi/:ilce/:mahalle
+router.get('/muhtar-bilgi/:ilce/:mahalle', async (req, res) => {
+  try {
+    const ilce    = decodeURIComponent(req.params.ilce);
+    const mahalle = decodeURIComponent(req.params.mahalle);
+    const muhtar  = await svc.getMuhtarBilgi(ilce, mahalle);
+    if (!muhtar) return res.status(404).json({ error: 'Muhtar kaydı bulunamadı' });
+    res.json(muhtar);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/muhtarbis/muhtar-bilgi/:ilce/:mahalle
+router.put('/muhtar-bilgi/:ilce/:mahalle', async (req, res) => {
+  try {
+    const ilce    = decodeURIComponent(req.params.ilce);
+    const mahalle = decodeURIComponent(req.params.mahalle);
+    const result  = await svc.updateMuhtarBilgi(ilce, mahalle, req.body, req.user);
+    logIslem({ kullanici: req.user?.username, kullaniciAd: req.user?.displayName, islem: 'UPDATE', modul: 'muhtar', kayitId: `${ilce}/${mahalle}`, detay: req.body, ip: req.ip });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // GET /api/muhtarbis/mahalle/:ilce/:mahalle
 router.get('/mahalle/:ilce/:mahalle', async (req, res) => {
   try {
-    res.json(await svc.getMahalleDetay({
-      ilce:    decodeURIComponent(req.params.ilce),
-      mahalle: decodeURIComponent(req.params.mahalle),
-    }));
+    const ilce = decodeURIComponent(req.params.ilce);
+    const izin = filterIlce(req, ilce);
+    if (izin === false) return res.status(403).json({ error: `${ilce} ilçesi için yetkiniz yok` });
+    res.json(await svc.getMahalleDetayPG({ ilce, mahalle: decodeURIComponent(req.params.mahalle) }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -174,7 +270,7 @@ router.get('/mahalle/:ilce/:mahalle', async (req, res) => {
 // GET /api/muhtarbis/mahalle/:ilce/:mahalle/basvurular?durum=&sayfa=1
 router.get('/mahalle/:ilce/:mahalle/basvurular', async (req, res) => {
   try {
-    res.json(await svc.getMahalleBasvurular({
+    res.json(await svc.getMahalleBasvurularPG({
       ilce:    decodeURIComponent(req.params.ilce),
       mahalle: decodeURIComponent(req.params.mahalle),
       durum:   req.query.durum,
@@ -201,13 +297,13 @@ router.get('/mahalle/:ilce/:mahalle/yatirimlar', async (req, res) => {
 // PUT /api/muhtarbis/yatirim/:ilce/:mahalle/:index
 router.put('/yatirim/:ilce/:mahalle/:index', async (req, res) => {
   try {
-    const result = await svc.updateYatirim({
-      ilce:    decodeURIComponent(req.params.ilce),
-      mahalle: decodeURIComponent(req.params.mahalle),
-      index:   req.params.index,
-      fields:  req.body,
-      user:    req.user,
-    });
+    const ilce    = decodeURIComponent(req.params.ilce);
+    const mahalle = decodeURIComponent(req.params.mahalle);
+    if (!checkYazmaYetkisi(req, ilce)) {
+      return res.status(403).json({ error: `${ilce} ilçesi için yazma yetkiniz yok` });
+    }
+    const result  = await svc.updateYatirim({ ilce, mahalle, index: req.params.index, fields: req.body, user: req.user });
+    logIslem({ kullanici: req.user?.username, kullaniciAd: req.user?.displayName, islem: 'UPDATE', modul: 'yatirim', kayitId: `${ilce}/${mahalle}/${req.params.index}`, detay: req.body, ip: req.ip });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -264,10 +360,12 @@ router.get('/yatirimlar/liste', auth, (req, res) => {
   try {
     const data = require('../data/yatirimlar.json');
     const { ilce, mahalle, durum, arama, sayfa = 1, limit = 50 } = req.query;
+    const izinliIlceler = filterIlce(req, ilce);
     const rows = [];
 
     for (const [il, mahalleler] of Object.entries(data)) {
-      if (ilce && il !== ilce) continue;
+      if (Array.isArray(izinliIlceler) && !izinliIlceler.includes(il)) continue;
+      if (!Array.isArray(izinliIlceler) && ilce && il !== ilce) continue;
       for (const [mah, d] of Object.entries(mahalleler)) {
         if (mahalle && mah !== mahalle) continue;
         const talepler = Array.isArray(d[3]) ? d[3] : [];
@@ -305,92 +403,95 @@ router.get('/yatirimlar/liste', auth, (req, res) => {
 // ─── Muhtarlar listesi ────────────────────────────────────────────────────
 
 // GET /api/muhtarbis/muhtarlar?ilce=&sayfa=1&limit=50&q=
-router.get('/muhtarlar', auth, (req, res) => {
+router.get('/muhtarlar', auth, async (req, res) => {
   try {
-    const data    = require('../data/yatirimlar.json');
-    const { ilce, sayfa = 1, limit = 50, q } = req.query;
-    const rows = [];
-    for (const [il, mahalleler] of Object.entries(data)) {
-      if (ilce && il !== ilce) continue;
-      for (const [mahalle, d] of Object.entries(mahalleler)) {
-        const talepler = Array.isArray(d[3]) ? d[3] : [];
-        rows.push({
-          ilce: il,
-          mahalle,
-          ad_soyad: d[0] || '—',
-          nufus: d[1] || 0,
-          kirsal_merkez: d[2] || '',
-          toplamTalep: talepler.length,
-          tamamlanan: talepler.filter(t => t[5] === 'Tamamlandı').length,
-        });
-      }
-    }
-    rows.sort((a, b) => a.ilce.localeCompare(b.ilce, 'tr') || a.mahalle.localeCompare(b.mahalle, 'tr'));
-    const filtered = q
-      ? rows.filter(r => r.mahalle.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr')) || r.ad_soyad.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr')))
-      : rows;
-    const pg    = Math.max(1, +sayfa);
-    const lm    = Math.min(10000, Math.max(1, +limit));
-    const start = (pg - 1) * lm;
-    res.json({ rows: filtered.slice(start, start + lm), toplam: filtered.length, sayfa: pg, limit: lm });
+    const ilce = filterIlce(req, req.query.ilce);
+    if (ilce === false) return res.status(403).json({ error: 'Bu ilçe için yetkiniz yok' });
+    const params = { ...req.query };
+    if (Array.isArray(ilce)) params.ilceler = ilce;
+    else if (ilce) params.ilce = ilce;
+    res.json(await svc.getMuhtarlarPG(params));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─── Muhtar fotoğraf toplu endpoint ──────────────────────────────────────
-let fotolarCache = null, fotolarCacheTime = 0;
 
 // GET /api/muhtarbis/muhtar-fotolar?ilce=BODRUM
-// Tüm JSON'u veya ilçe bazlı döner — 60s in-memory cache
-router.get('/muhtar-fotolar', auth, (req, res) => {
-  const now = Date.now();
-  if (!fotolarCache || now - fotolarCacheTime > 60000) {
-    try {
-      fotolarCache = JSON.parse(fs.readFileSync(FOTO_JSON_PATH, 'utf8'));
-      fotolarCacheTime = now;
-    } catch { return res.json({}); }
-  }
-  const ilce = req.query.ilce;
-  if (ilce && fotolarCache[ilce]) return res.json({ [ilce]: fotolarCache[ilce] });
-  res.json(fotolarCache);
+// PostgreSQL Muhtar tablosundan gruplu döner
+router.get('/muhtar-fotolar', auth, async (req, res) => {
+  try {
+    const { ilce } = req.query;
+    const muhtarlar = await prisma.muhtar.findMany({
+      where: ilce ? { ilce } : {},
+      orderBy: [{ ilce: 'asc' }, { mahalle: 'asc' }],
+    });
+    const grouped = {};
+    for (const m of muhtarlar) {
+      if (!grouped[m.ilce]) grouped[m.ilce] = {};
+      grouped[m.ilce][m.mahalle] = {
+        ad_soyad: m.muhtarAdi,
+        nufus:    m.nufus,
+        gsm:      m.gsm,
+        foto: `/api/muhtarbis/muhtar-foto/${encodeURIComponent(m.ilce)}/${encodeURIComponent(m.mahalle)}`,
+      };
+    }
+    res.json(grouped);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Muhtar fotoğraf GET / POST ───────────────────────────────────────────
 
 // GET /api/muhtarbis/muhtar-foto/:ilce/:mahalle
-// Döner: { var: bool, url: string|null, ad_soyad: string|null }
-router.get('/muhtar-foto/:ilce/:mahalle', auth, (req, res) => {
-  const ilceRaw    = decodeURIComponent(req.params.ilce);
-  const mahalleRaw = decodeURIComponent(req.params.mahalle);
-  const ilce       = normalizeKey(ilceRaw);
-  const mahalle    = normalizeKey(mahalleRaw);
+// Önce MSSQL binary, sonra statik fallback
+router.get('/muhtar-foto/:ilce/:mahalle', auth, async (req, res) => {
+  const ilce    = decodeURIComponent(req.params.ilce);
+  const mahalle = decodeURIComponent(req.params.mahalle);
 
-  // JSON'dan muhtar adı
-  const bilgi    = lookupMuhtar(ilceRaw, mahalleRaw);
-  const ad_soyad = bilgi?.ad_soyad ?? null;
+  // 1. MSSQL binary stream
+  try {
+    const pool = await svc.getPool();
+    const result = await pool.request()
+      .input('ilce',    sql.NVarChar, ilce)
+      .input('mahalle', sql.NVarChar, mahalle)
+      .query(`
+        SELECT TOP 1 a.DATA, a.CONTENT_TYPE
+        FROM MUHTARLIK_MAHALLE m
+        INNER JOIN MUHTARLIK_MAHALLE__ATTACH a ON m.GLOBALID = a.REL_GLOBALID
+        WHERE m.AD_1 = @ilce AND m.AD = @mahalle
+          AND (m.GDB_TO_DATE IS NULL OR YEAR(m.GDB_TO_DATE) > 2100)
+      `);
+    if (result.recordset.length && result.recordset[0].DATA) {
+      const foto   = result.recordset[0];
+      const buffer = Buffer.isBuffer(foto.DATA) ? foto.DATA : Buffer.from(foto.DATA);
+      res.set({
+        'Content-Type':   foto.CONTENT_TYPE || 'image/jpeg',
+        'Content-Length': buffer.length,
+        'Cache-Control':  'public, max-age=86400',
+      });
+      return res.send(buffer);
+    }
+  } catch (e) {
+    console.error('MSSQL foto hatası:', e.message);
+  }
 
-  // Önce JSON'dan dosya adını dene
+  // 2. Statik dosya fallback
+  const ilceN    = normalizeKey(ilce);
+  const mahalleN = normalizeKey(mahalle);
+  const base     = `${ilceN}_${mahalleN}`;
+  const bilgi    = lookupMuhtar(ilce, mahalle);
   if (bilgi?.foto) {
-    const jsonFname = bilgi.foto;
-    if (fs.existsSync(path.join(FOTO_DIR, jsonFname))) {
-      return res.json({ var: true, url: `/muhtar-foto/${jsonFname}`, ad_soyad });
+    const p = path.join(FOTO_DIR, bilgi.foto);
+    if (fs.existsSync(p)) return res.sendFile(p);
+  }
+  for (const sfx of ['', '_MUHTARI', '_MUHTARLIGI']) {
+    for (const ext of ['.jpg', '.jpeg', '.png', '.PNG', '.JPG']) {
+      const p = path.join(FOTO_DIR, `${base}${sfx}${ext}`);
+      if (fs.existsSync(p)) return res.sendFile(p);
     }
   }
-
-  // Fallback: dosya adı tahmin et
-  const base     = `${ilce}_${mahalle}`;
-  const suffixes = ['', '_MUHTARI', '_MUHTARLIGI'];
-  const exts     = ['.jpg', '.jpeg', '.png', '.PNG', '.JPG'];
-  for (const sfx of suffixes) {
-    for (const ext of exts) {
-      const fname = `${base}${sfx}${ext}`;
-      if (fs.existsSync(path.join(FOTO_DIR, fname))) {
-        return res.json({ var: true, url: `/muhtar-foto/${fname}`, ad_soyad });
-      }
-    }
-  }
-  res.json({ var: false, url: null, ad_soyad });
+  res.status(404).json({ error: 'Fotoğraf bulunamadı' });
 });
 
 // POST /api/muhtarbis/muhtar-foto/:ilce/:mahalle
@@ -401,24 +502,9 @@ router.post('/muhtar-foto/:ilce/:mahalle', auth, fotoUpload.single('foto'), (req
 
 // ─── Konu autocomplete ────────────────────────────────────────────────────
 
-let konularCache = null;
-let konularCacheTime = 0;
-
 router.get('/konular', async (req, res) => {
   try {
-    const now = Date.now();
-    if (konularCache && now - konularCacheTime < 3600000) {
-      return res.json({ konular: konularCache });
-    }
-    const pool = await svc.getPool();
-    const result = await pool.request().query(
-      `SELECT DISTINCT KONUSU FROM view_Mahalle_Basvuru_AtananIs
-       WHERE KONUSU IS NOT NULL AND LEN(KONUSU) > 2
-       ORDER BY KONUSU`
-    );
-    konularCache = result.recordset.map(r => r.KONUSU);
-    konularCacheTime = now;
-    res.json({ konular: konularCache });
+    res.json({ konular: await svc.getKonularPG() });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -497,7 +583,7 @@ router.get('/rapor/konu-dagilim', async (req, res) => {
 // GET /api/muhtarbis/rapor/daire-tamamlanma
 router.get('/rapor/daire-tamamlanma', async (req, res) => {
   try {
-    const rows = await svc.getDaireDagilim({});
+    const rows = await svc.getDaireDagilimPG({});
     const result = rows
       .filter(r => r.toplam > 0)
       .map(r => ({
@@ -517,7 +603,7 @@ router.get('/rapor/daire-tamamlanma', async (req, res) => {
 // GET /api/muhtarbis/rapor/ilce-tamamlanma
 router.get('/rapor/ilce-tamamlanma', async (req, res) => {
   try {
-    const rows = await svc.getIlceDagilim({});
+    const rows = await svc.getIlceDagilimPG({});
     const result = rows
       .filter(r => r.toplam > 0)
       .map(r => ({
@@ -531,10 +617,129 @@ router.get('/rapor/ilce-tamamlanma', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/muhtarbis/rapor/donem?tip=hafta|ay|yil
+// GET /api/muhtarbis/rapor/donem?tip=gunluk|haftalik|aylik|hafta|ay|yil
 router.get('/rapor/donem', async (req, res) => {
   try { res.json(await svc.getRaporDonem(req.query.tip || 'ay')); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/muhtarbis/rapor/aylik-karsilastirma?ay1=2025-03&ay2=2025-04
+router.get('/rapor/aylik-karsilastirma', async (req, res) => {
+  try {
+    const ay1 = req.query.ay1 || new Date().toISOString().slice(0,7);
+    const prev = new Date(); prev.setMonth(prev.getMonth() - 1);
+    const ay2 = req.query.ay2 || prev.toISOString().slice(0,7);
+    res.json(await svc.getRaporAylikKarsilastirma(ay1, ay2));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/muhtarbis/rapor/olustur
+router.post('/rapor/olustur', async (req, res) => {
+  try { res.json(await svc.getRaporOlustur(req.body || {})); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/muhtarbis/rapor/export?ilce=&daire=&durum=&baslangic=&bitis=
+router.get('/rapor/export', async (req, res) => {
+  try {
+    let ExcelJS;
+    try { ExcelJS = require('exceljs'); } catch (_) {
+      return res.status(500).json({ error: 'exceljs paketi yüklü değil. npm install exceljs' });
+    }
+    const data = await svc.getRaporExportData(req.query);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Başvurular');
+    ws.columns = [
+      { header: 'İlçe',       key: 'ilce',      width: 16 },
+      { header: 'Mahalle',    key: 'mahalle',   width: 20 },
+      { header: 'Konu',       key: 'konu',      width: 40 },
+      { header: 'Daire',      key: 'daire',     width: 30 },
+      { header: 'Durum',      key: 'durum',     width: 16 },
+      { header: 'Tarih',      key: 'tarih',     width: 14 },
+      { header: 'Cevap',      key: 'cevap',     width: 40 },
+      { header: 'Süre (gün)', key: 'cevapSure', width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A2F' } };
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    data.rows.forEach(row => ws.addRow(row));
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="basvurular_${new Date().toISOString().slice(0,10)}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── MuhtarlikYetki Admin API ────────────────────────────────────────────────
+// GET /api/muhtarbis/admin/kullanicilar — MuhtarlikRole listesi
+router.get('/admin/kullanicilar', async (req, res) => {
+  if (!['admin', 'daire_baskani'].includes(req.user.muhtarlikRole) && req.user.sistemRol !== 'admin') {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+  try {
+    const roller = await prisma.muhtarlikRole.findMany({
+      where: { active: true },
+      orderBy: [{ role: 'asc' }, { displayName: 'asc' }],
+    });
+    res.json(roller);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/muhtarbis/admin/yetkiler?username=
+router.get('/admin/yetkiler', async (req, res) => {
+  if (!['admin', 'daire_baskani'].includes(req.user.muhtarlikRole) && req.user.sistemRol !== 'admin') {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+  try {
+    const where = req.query.username ? { username: req.query.username } : {};
+    const yetkiler = await prisma.muhtarlikYetki.findMany({
+      where, orderBy: [{ username: 'asc' }, { ilce: 'asc' }],
+    });
+    res.json(yetkiler);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/muhtarbis/admin/yetkiler
+router.post('/admin/yetkiler', async (req, res) => {
+  if (!['admin', 'daire_baskani'].includes(req.user.muhtarlikRole) && req.user.sistemRol !== 'admin') {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+  try {
+    const { username, ilce, yetkiTuru = 'okuma' } = req.body;
+    if (!username || !ilce) return res.status(400).json({ error: 'username ve ilce gerekli' });
+    const yetki = await prisma.muhtarlikYetki.upsert({
+      where: { username_ilce: { username, ilce } },
+      create: { username, ilce, yetkiTuru, active: true, updatedBy: req.user.username },
+      update: { yetkiTuru, active: true, updatedBy: req.user.username },
+    });
+    res.json(yetki);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/muhtarbis/admin/yetkiler/:id
+router.delete('/admin/yetkiler/:id', async (req, res) => {
+  if (!['admin', 'daire_baskani'].includes(req.user.muhtarlikRole) && req.user.sistemRol !== 'admin') {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+  try {
+    await prisma.muhtarlikYetki.delete({ where: { id: +req.params.id } });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/muhtarbis/admin/yetkiler/:id
+router.patch('/admin/yetkiler/:id', async (req, res) => {
+  if (!['admin', 'daire_baskani'].includes(req.user.muhtarlikRole) && req.user.sistemRol !== 'admin') {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+  try {
+    const { yetkiTuru, active } = req.body;
+    const yetki = await prisma.muhtarlikYetki.update({
+      where: { id: +req.params.id },
+      data: { ...(yetkiTuru !== undefined && { yetkiTuru }), ...(active !== undefined && { active }), updatedBy: req.user.username },
+    });
+    res.json(yetki);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

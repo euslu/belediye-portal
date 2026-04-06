@@ -23,7 +23,9 @@ prisma/dev.db
 # Build output
 frontend/dist/
 frontend/build/
-muhtarlik-sis/dist/
+
+# Muhtarlık SIS — ayrı repo: euslu/mugla-bb-muhtarbis
+muhtarlik-sis/
 
 # Muhtar fotoğrafları — büyük dosyalar
 backend/public/muhtar-fotolari/

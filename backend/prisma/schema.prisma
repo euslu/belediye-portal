@@ -80,6 +80,7 @@ model User {
   kadro            String?   // KADRO unvanı (FlexCity'den)
   gorev            String?   // GOREV (FlexCity'den)
   flexSyncedAt     DateTime? // Son FlexCity sync tarihi
+  password         String?  // bcrypt hash — yerel test kullanıcıları için
   role             String   @default("user") // "admin" | "manager" | "user"
   locationId  Int?
   location    Location? @relation("UserLocation", fields: [locationId], references: [id])
@@ -218,9 +219,11 @@ model Ticket {
   rejectedReason String?
 
   // Çok birimli yapı
-  departmentId Int?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  targetDeptId Int?        // cross-transfer hedef daire
+  departmentId       Int?
+  department         Department? @relation(fields: [departmentId], references: [id])
+  targetDeptId       Int?        // cross-transfer hedef daire
+  targetDirectorate  String?     // RBAC: hangi daire işleyecek (string)
+  targetDepartment   String?     // RBAC: hangi müdürlük işleyecek (string)
   transferNote String?
   transferAt   DateTime?
   transferBy   String?
@@ -531,4 +534,264 @@ model MuhtarlikRole {
   updatedBy   String?
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
+}
+
+// ─── Muhtarlık İlçe Yetki Tablosu ────────────────────────────────────────────
+// Kullanıcının hangi ilçe(lerde) ne tür yetkisi olduğunu tanımlar.
+// yetkiTuru: okuma | yazma | tam
+// Daire başkanı (sistemRol=daire_baskani) → tüm ilçeler (bu tablo bypass edilir)
+model MuhtarlikYetki {
+  id         Int      @id @default(autoincrement())
+  username   String
+  ilce       String
+  yetkiTuru  String   @default("okuma") // okuma | yazma | tam
+  active     Boolean  @default(true)
+  updatedBy  String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([username, ilce])
+}
+
+// ─── Sistem Rol Yönetimi ──────────────────────────────────────────────────────
+// admin | daire_baskani | mudur | sef | personel
+// Mevcut User.role (admin|manager|user) ile birlikte çalışır.
+// Bu tablodaki kayıt varsa sistemRol olarak öncelikli kullanılır.
+model UserRole {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  displayName   String?
+  role          String   // admin | daire_baskani | mudur | sef | personel
+  directorate   String?  // Daire Başkanlığı adı
+  department    String?  // Müdürlük adı
+  group         String?  // Şeflik/birim
+  active        Boolean  @default(true)
+  updatedBy     String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model Toplanti {
+  id               Int                  @id @default(autoincrement())
+  baslik           String
+  tarih            DateTime
+  saat             String
+  yer              String?
+  tip              String               @default("muhtarlar")
+  durum            String               @default("planli")
+  aciklama         String?
+  not              String?
+  olusturan        String
+  olusturmaTarih   DateTime             @default(now())
+  guncellenmeTarih DateTime             @updatedAt
+  tutanakDosya     String?
+  tutanakYukleme   DateTime?
+  tutanakYukleyen  String?
+  katilimcilar     ToplantiKatilimci[]
+  gundemler        ToplantiGundem[]
+}
+
+model ToplantiKatilimci {
+  id         Int      @id @default(autoincrement())
+  toplantiId Int
+  toplanti   Toplanti @relation(fields: [toplantiId], references: [id], onDelete: Cascade)
+  tip        String
+  ad         String
+  ilce       String?
+  mahalle    String?
+  katildi    Boolean  @default(false)
+}
+
+model ToplantiGundem {
+  id         Int      @id @default(autoincrement())
+  toplantiId Int
+  toplanti   Toplanti @relation(fields: [toplantiId], references: [id], onDelete: Cascade)
+  sira       Int
+  konu       String
+  aciklama   String?
+  sure       Int?
+  tamamlandi Boolean  @default(false)
+}
+
+model Muhtar {
+  id                Int      @id @default(autoincrement())
+  ilce              String
+  mahalle           String
+  muhtarAdi         String
+  gsm               String?
+  nufus             Int?
+  uavt              Int?
+  muhtarOfisi       String?
+  saglikOcagi       String?
+  diniTesis         String?
+  okul              String?
+  hastane           String?
+  sosyalTesis       String?
+  cocukOyun         String?
+  sporTesisi        String?
+  muhtarbisGlobalId String?  @unique
+  aktif             Boolean  @default(true)
+  sonGuncelleme     DateTime @updatedAt
+  olusturmaTarih    DateTime @default(now())
+  guncelleyen       String?
+
+  @@unique([ilce, mahalle])
+}
+
+model Basvuru {
+  id                    Int      @id @default(autoincrement())
+  ilce                  String
+  mahalle               String
+  muhtarAdi             String?
+  basvuruTuru           String?
+  konu                  String
+  aciklama              String?
+  daire                 String?
+  koordinasyonDaireleri String?
+  durum                 String   @default("Beklemede")
+  cevap                 String?
+  resmiYaziNo           String?
+  ekDosya               String?
+  tarih                 DateTime @default(now())
+  giren                 String
+  girenAd               String?
+  kaynak                String   @default("muhtarbis")
+  muhtarbisId           String?
+  guncellemeTarih       DateTime @updatedAt
+  guncelleyen           String?
+}
+
+model BasvuruAktivite {
+  id        Int      @id @default(autoincrement())
+  basvuruId Int
+  tip       String   // yorum|durum_degisim|daire_atama|sistem
+  icerik    String
+  eskiDeger String?
+  yeniDeger String?
+  yapan     String
+  yapanAd   String?
+  tarih     DateTime @default(now())
+
+  @@index([basvuruId])
+}
+
+model GelistirmeTalebi {
+  id              Int      @id @default(autoincrement())
+  talepEden       String
+  talepEdenAd     String?
+  baskaAdina      String?
+  konu            String
+  icerik          String
+  aciliyet        String   @default("normal")
+  durum           String   @default("beklemede")
+  yanit           String?
+  olusturmaTarih  DateTime @default(now())
+  guncellemeTarih DateTime @updatedAt
+}
+
+model IslemGecmisi {
+  id          Int      @id @default(autoincrement())
+  kullanici   String
+  kullaniciAd String?
+  islem       String
+  modul       String
+  kayitId     String?
+  detay       String?
+  tarih       DateTime @default(now())
+  ip          String?
+}
+
+// ─── Çalışma Grupları ──────────────────────────────────────────────────────────
+model CalismaGrubu {
+  id               Int       @id @default(autoincrement())
+  ad               String
+  aciklama         String?
+  directorate      String
+  department       String?
+  lider            String?
+  liderAd          String?
+  olusturan        String
+  aktif            Boolean   @default(true)
+  olusturmaTarih   DateTime  @default(now())
+  guncellenmeTarih DateTime  @updatedAt
+  uyeler           CalismaGrubuUye[]
+}
+
+model CalismaGrubuUye {
+  id           Int          @id @default(autoincrement())
+  grubuId      Int
+  grubu        CalismaGrubu @relation(fields: [grubuId], references: [id], onDelete: Cascade)
+  username     String
+  displayName  String?
+  rol          String       @default("uye")
+  eklenmeTarih DateTime     @default(now())
+
+  @@unique([grubuId, username])
+}
+
+// ─── Personel Lokasyonu (AD city alanından türetilen çalışma yerleri) ──────────
+model Lokasyon {
+  id             Int      @id @default(autoincrement())
+  ad             String   @unique // "Menteşe 2 Nolu Hizmet Binası"
+  kisaAd         String?          // "MHB-2"
+  adres          String?
+  ilce           String?          // "Menteşe", "Bodrum" vb.
+  lat            Float?           // KMZ gelince doldurulacak
+  lng            Float?
+  tip            String   @default("hizmet_binasi") // hizmet_binasi|mudurluk|saha|istasyon|diger
+  aktif          Boolean  @default(true)
+  personelSayisi Int?             // cache — güncellenir
+  olusturmaTarih DateTime @default(now())
+}
+
+// ─── AR-GE: Hat Atama ─────────────────────────────────────────────────────────
+model HatAtamasi {
+  id               Int       @id @default(autoincrement())
+  username         String?
+  displayName      String?
+  directorate      String?
+  department       String?
+
+  hatTipi          String    @default("m2m_data") // ses | m2m_data | ses_data
+  hatNo            String?
+  operator         String?   // Turkcell | Vodafone | Türk Telekom
+  simNo            String?
+  iccid            String?   // GSM Hat Seri No (ICCID)
+  network          String?   // ARVENTO, mbbapnvf, STATIC IP vb.
+  ip               String?   // Static IP varsa
+  cihaz            String?   // Araç Takip Cihazı, Telsiz, Tablet vb.
+  teslimDurumu     String?   // TESLİM EDİLDİ | YENİ HAT TESLİM EDİLMEDİ
+
+  paket            String?
+  aylikUcret       Float?
+  baslangicTarih   DateTime?
+  bitisTarih       DateTime?
+
+  aktif            Boolean   @default(true)
+  notlar           String?
+
+  olusturan        String?
+  olusturmaTarih   DateTime  @default(now())
+  guncellenmeTarih DateTime  @updatedAt
+}
+
+// ─── AR-GE: Cihaz Envanteri ──────────────────────────────────────────────────
+model CihazEnvanter {
+  id               Int       @id @default(autoincrement())
+  daireBaskanlik   String?
+  kullanici        String?   // personel adı (serbest metin)
+  username         String?   // AD username (eşleşirse)
+  cihazMarka       String?
+  cihazModel       String?
+  cihazSeriNo      String?
+  cihazTuru        String?   // TABLET | MODEM | IPAD | DİZ ÜSTÜ vb.
+  cihazImei        String?
+  gsmHatSeriNo     String?   // ICCID
+  gsmHatTelNo      String?
+  paketTuru        String?
+  paketGb          String?
+  aktif            Boolean   @default(true)
+  notlar           String?
+  olusturmaTarih   DateTime  @default(now())
+  guncellenmeTarih DateTime  @updatedAt
 }

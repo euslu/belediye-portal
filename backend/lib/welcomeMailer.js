@@ -8,7 +8,6 @@ async function sendWelcomeMails() {
 
   const users = await prisma.user.findMany({
     where: {
-      isActive:        true,
       adCreatedAt:     { gte: since },
       email:           { not: null },
       welcomeMailSent: false,

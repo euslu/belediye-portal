@@ -4,6 +4,7 @@ const path    = require('path');
 const fs      = require('fs');
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const { getTicketFilter, getPendingApprovalFilter, canApprove, getSistemRol, hasMinRole } = require('../middleware/rbac');
 const { logActivity } = require('../lib/activity');
 const { notifyTicketCreated, notifyTicketAssigned, notifyTicketResolved } = require('../lib/notifications');
 const upload  = require('../lib/upload');
@@ -29,20 +30,30 @@ router.get('/categories', async (req, res) => {
 router.get('/', async (req, res) => {
   const { status, priority, categoryId, createdBy, assignedTo, directorate, limit, source } = req.query;
 
-  const where = {};
-  if (status)     where.status     = status;
-  if (priority)   where.priority   = priority;
-  if (source)     where.source     = source;
-  if (categoryId) where.categoryId = parseInt(categoryId);
-  if (directorate) where.createdBy = { directorate };
+  // RBAC filtresi — kullanıcının sadece görmesi gereken ticket'ları döndür
+  const rbacFilter = await getTicketFilter(req.user);
 
+  const extraFilters = {};
+  if (status)     extraFilters.status     = status;
+  if (priority)   extraFilters.priority   = priority;
+  if (source)     extraFilters.source     = source;
+  if (categoryId) extraFilters.categoryId = parseInt(categoryId);
+  if (directorate) extraFilters.createdBy = { directorate };
+
+  // ?createdBy=me veya ?assignedTo=me — kendi kayıtları (RBAC zaten kapsar ama explicit override)
   if (createdBy === 'me' || assignedTo === 'me') {
     const me = await prisma.user.findUnique({ where: { username: req.user.username }, select: { id: true } });
     if (me) {
-      if (createdBy  === 'me') where.createdById  = me.id;
-      if (assignedTo === 'me') where.assignedToId = me.id;
+      if (createdBy  === 'me') extraFilters.createdById  = me.id;
+      if (assignedTo === 'me') extraFilters.assignedToId = me.id;
     }
   }
+
+  // RBAC filtresi ile extraFilters'ı AND ile birleştir
+  // rbacFilter boş ise ({}) extraFilters doğrudan kullanılır
+  const where = Object.keys(rbacFilter).length
+    ? { AND: [rbacFilter, extraFilters] }
+    : extraFilters;
 
   try {
     const tickets = await prisma.ticket.findMany({
@@ -65,19 +76,14 @@ router.get('/', async (req, res) => {
 });
 
 // ─── GET /api/tickets/pending-approval ───────────────────────────────────────
-// Manager: kendi müdürlüğündeki onay bekleyen talepler; Admin: hepsi
+// admin/daire_baskani/mudur → kendi biriminin onay bekleyen talepleri
 router.get('/pending-approval', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  const sistemRol = getSistemRol(req.user);
+  if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   try {
-    const where = { status: 'PENDING_APPROVAL' };
-
-    // Manager ise yalnızca kendi müdürlüğündeki kullanıcıların taleplerini görsün
-    if (req.user.role === 'manager' && req.user.directorate) {
-      where.createdBy = { directorate: req.user.directorate };
-    }
-
+    const where = getPendingApprovalFilter(req.user);
     const tickets = await prisma.ticket.findMany({
       where,
       include: {
@@ -88,7 +94,6 @@ router.get('/pending-approval', async (req, res) => {
       },
       orderBy: { createdAt: 'asc' },
     });
-
     res.json(tickets);
   } catch (err) {
     console.error(err);
@@ -98,14 +103,11 @@ router.get('/pending-approval', async (req, res) => {
 
 // ─── GET /api/tickets/pending-approval/count ─────────────────────────────────
 router.get('/pending-approval/count', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
     return res.json({ count: 0 });
 
   try {
-    const where = { status: 'PENDING_APPROVAL' };
-    if (req.user.role === 'manager' && req.user.directorate) {
-      where.createdBy = { directorate: req.user.directorate };
-    }
+    const where = getPendingApprovalFilter(req.user);
     const count = await prisma.ticket.count({ where });
     res.json({ count });
   } catch (err) {
@@ -228,24 +230,36 @@ router.post('/', async (req, res) => {
       initialStatus = autoGroupId ? 'ASSIGNED' : 'OPEN';
     }
 
+    // RBAC: targetDirectorate — grubun dairesini veya category'den belirle
+    let targetDirectorate = null;
+    let targetDepartment  = null;
+    if (autoGroupId) {
+      const grp = await prisma.group.findUnique({ where: { id: autoGroupId }, select: { department: true } });
+      targetDepartment  = grp?.department || null;
+    }
+    // Konu üzerinden directorate/department de gelebilir (subject.category.department vb.)
+    // Şimdilik grubun department'ını kullan; ilerletme için genişletilebilir
+
     const ticket = await prisma.ticket.create({
       data: {
         title,
         description,
-        priority:      priority   || 'MEDIUM',
-        type:          resolvedType,
-        dueDate:       dueDate    ? new Date(dueDate) : null,
-        categoryId:    categoryId ? parseInt(categoryId) : null,
-        subjectId:     subjectId  ? parseInt(subjectId)  : null,
-        groupId:       resolvedType === 'REQUEST' ? null : autoGroupId,
-        status:        initialStatus,
-        approvalStatus: resolvedType === 'REQUEST' ? 'PENDING_APPROVAL' : null,
-        source:        source || 'PORTAL',
-        ilceId:        ilceId     ? parseInt(ilceId)    : null,
-        mahalleId:     mahalleId  ? parseInt(mahalleId) : null,
-        sokakId:       sokakId    ? parseInt(sokakId)   : null,
-        binaId:        binaId     ? parseInt(binaId)    : null,
-        createdById:   user.id,
+        priority:          priority   || 'MEDIUM',
+        type:              resolvedType,
+        dueDate:           dueDate    ? new Date(dueDate) : null,
+        categoryId:        categoryId ? parseInt(categoryId) : null,
+        subjectId:         subjectId  ? parseInt(subjectId)  : null,
+        groupId:           resolvedType === 'REQUEST' ? null : autoGroupId,
+        status:            initialStatus,
+        approvalStatus:    resolvedType === 'REQUEST' ? 'PENDING_APPROVAL' : null,
+        source:            source || 'PORTAL',
+        targetDirectorate,
+        targetDepartment,
+        ilceId:            ilceId     ? parseInt(ilceId)    : null,
+        mahalleId:         mahalleId  ? parseInt(mahalleId) : null,
+        sokakId:           sokakId    ? parseInt(sokakId)   : null,
+        binaId:            binaId     ? parseInt(binaId)    : null,
+        createdById:       user.id,
       },
       include: {
         createdBy: { select: { id: true, displayName: true } },

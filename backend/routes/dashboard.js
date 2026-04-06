@@ -317,4 +317,126 @@ router.get('/my-devices', async (req, res) => {
   }
 });
 
+// ─── GET /api/dashboard/benim ─────────────────────────────────────────────────
+// Giriş yapan kullanıcının kişisel dashboard verisi
+router.get('/benim', async (req, res) => {
+  try {
+    const { username } = req.user;
+
+    // Kullanıcı ID'sini çek
+    const me = await prisma.user.findUnique({
+      where:  { username },
+      select: { id: true },
+    });
+    if (!me) return res.json({ ozet: {}, taleplerim: [], gorevlerim: [] });
+
+    const now = new Date();
+
+    const [taleplerim, gorevlerim, acikGorev, bekleyenOnay, tamamlanan, slaIhlali] = await Promise.all([
+      // Yarattıklarım
+      prisma.ticket.findMany({
+        where:    { createdById: me.id },
+        orderBy:  { createdAt: 'desc' },
+        take:     10,
+        include: {
+          createdBy: { select: { displayName: true } },
+          assignedTo: { select: { displayName: true } },
+          category:   true,
+          group:      { select: { name: true } },
+        },
+      }),
+      // Atananlar
+      prisma.ticket.findMany({
+        where:   { assignedToId: me.id, status: { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] } },
+        orderBy: { updatedAt: 'desc' },
+        take:    10,
+        include: {
+          createdBy: { select: { displayName: true, directorate: true } },
+          category:  true,
+          group:     { select: { name: true } },
+        },
+      }),
+      // Açık görevler
+      prisma.ticket.count({
+        where: { assignedToId: me.id, status: { in: ['ASSIGNED', 'IN_PROGRESS'] } },
+      }),
+      // Onay bekleyen taleplerim
+      prisma.ticket.count({
+        where: { createdById: me.id, status: 'PENDING_APPROVAL' },
+      }),
+      // Tamamlanan taleplerim
+      prisma.ticket.count({
+        where: { createdById: me.id, status: { in: ['RESOLVED', 'CLOSED'] } },
+      }),
+      // SLA ihlali (dueDate geçmiş, hâlâ açık)
+      prisma.ticket.count({
+        where: {
+          assignedToId: me.id,
+          dueDate:      { not: null, lt: now },
+          status:       { notIn: ['RESOLVED', 'CLOSED', 'REJECTED'] },
+        },
+      }),
+    ]);
+
+    res.json({
+      ozet: { acikGorev, bekleyenOnay, tamamlanan, slaIhlali },
+      taleplerim,
+      gorevlerim,
+    });
+  } catch (err) {
+    console.error('[dashboard/benim]', err);
+    res.status(500).json({ error: 'Veriler alınamadı' });
+  }
+});
+
+// ─── GET /api/dashboard/daire-talepleri ──────────────────────────────────────
+// Daire başkanı / müdür → birimlerine gelen talepler
+router.get('/daire-talepleri', async (req, res) => {
+  const rol = req.user.sistemRol || req.user.role;
+  if (!['admin', 'daire_baskani', 'mudur'].includes(rol)) {
+    return res.status(403).json({ error: 'Yetersiz yetki' });
+  }
+
+  try {
+    // Müdür → müdürlük bazlı; daire başkanı/admin → directorate bazlı
+    const where = rol === 'mudur'
+      ? {
+          OR: [
+            { assignedTo: { department: req.user.department } },
+            { targetDepartment: req.user.department },
+          ],
+        }
+      : {
+          OR: [
+            { assignedTo: { directorate: req.user.directorate } },
+            { targetDirectorate: req.user.directorate },
+          ],
+        };
+
+    const [talepler, statusGruplari] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take:    20,
+        include: {
+          createdBy:  { select: { displayName: true, directorate: true } },
+          assignedTo: { select: { displayName: true } },
+          category:   true,
+          group:      { select: { name: true } },
+        },
+      }),
+      prisma.ticket.groupBy({
+        by:     ['status'],
+        where,
+        _count: true,
+      }),
+    ]);
+
+    res.json({ talepler, statusGruplari });
+  } catch (err) {
+    console.error('[dashboard/daire-talepleri]', err);
+    res.status(500).json({ error: 'Veriler alınamadı' });
+  }
+});
+
 module.exports = router;

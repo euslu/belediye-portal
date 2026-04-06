@@ -695,14 +695,35 @@ async function getEditLog(objectId) {
 
 async function getRaporDonem(tip) {
   const p = await getPool();
-  let whereClause;
+  let whereClause, trendQuery;
   if (tip === 'hafta') {
     whereClause = `BASVURU_TA >= DATEADD(day, -7, GETDATE())`;
+    trendQuery = `
+      SELECT CAST(BASVURU_TA AS DATE) AS gun, COUNT(*) AS toplam,
+        SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlandi
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE BASVURU_TA >= DATEADD(day, -7, GETDATE())
+      GROUP BY CAST(BASVURU_TA AS DATE) ORDER BY gun`;
   } else if (tip === 'yil') {
     whereClause = `YEAR(BASVURU_TA) = YEAR(GETDATE())`;
+    trendQuery = `
+      SELECT MONTH(BASVURU_TA) AS ay, COUNT(*) AS toplam,
+        SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlandi
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE YEAR(BASVURU_TA) = YEAR(GETDATE())
+      GROUP BY MONTH(BASVURU_TA) ORDER BY ay`;
+  } else if (tip === 'gunluk') {
+    whereClause = `CAST(BASVURU_TA AS DATE) = CAST(GETDATE() AS DATE)`;
+    trendQuery = null;
   } else {
     // ay (default)
     whereClause = `MONTH(BASVURU_TA) = MONTH(GETDATE()) AND YEAR(BASVURU_TA) = YEAR(GETDATE())`;
+    trendQuery = `
+      SELECT DAY(BASVURU_TA) AS gun, COUNT(*) AS toplam,
+        SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlandi
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE MONTH(BASVURU_TA) = MONTH(GETDATE()) AND YEAR(BASVURU_TA) = YEAR(GETDATE())
+      GROUP BY DAY(BASVURU_TA) ORDER BY gun`;
   }
   const r = await p.request().query(`
     SELECT
@@ -714,12 +735,486 @@ async function getRaporDonem(tip) {
     WHERE ${whereClause}
   `);
   const row = r.recordset[0] || {};
+  let trend = [];
+  if (trendQuery) {
+    const tr = await p.request().query(trendQuery);
+    trend = tr.recordset;
+  }
   return {
     toplam:       row.toplam       || 0,
     tamamlandi:   row.tamamlandi   || 0,
     devam:        row.devam        || 0,
     tamamlanmadi: row.tamamlanmadi || 0,
+    trend,
   };
+}
+
+// ─── Rapor: aylık karşılaştırma ────────────────────────────────────────────
+async function getRaporAylikKarsilastirma(ay1, ay2) {
+  // ay1/ay2: 'YYYY-MM'
+  const p = await getPool();
+  async function ayStats(ayStr) {
+    const [yil, ay] = ayStr.split('-').map(Number);
+    const req = p.request();
+    const r = await req.query(`
+      SELECT
+        COUNT(*) AS toplam,
+        SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı'    THEN 1 ELSE 0 END) AS tamamlandi,
+        SUM(CASE WHEN BIRIM_ISLE = 'Devam Etmekte' THEN 1 ELSE 0 END) AS devam,
+        SUM(CASE WHEN BIRIM_ISLE = 'Tamamlanmadı'  THEN 1 ELSE 0 END) AS tamamlanmadi
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE YEAR(BASVURU_TA) = ${yil} AND MONTH(BASVURU_TA) = ${ay}
+    `);
+    // Daire dağılımı
+    const dr = await p.request().query(`
+      SELECT TOP 5 ISNULL(DAIRE_BASK_ADI,'Diğer') AS daire, COUNT(*) AS toplam
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE YEAR(BASVURU_TA) = ${yil} AND MONTH(BASVURU_TA) = ${ay}
+      GROUP BY DAIRE_BASK_ADI ORDER BY toplam DESC
+    `);
+    // Haftalık trend içinde
+    const tr = await p.request().query(`
+      SELECT DAY(BASVURU_TA) AS gun, COUNT(*) AS toplam
+      FROM view_Mahalle_Basvuru_AtananIs
+      WHERE YEAR(BASVURU_TA) = ${yil} AND MONTH(BASVURU_TA) = ${ay}
+      GROUP BY DAY(BASVURU_TA) ORDER BY gun
+    `);
+    const row = r.recordset[0] || {};
+    return {
+      ay: ayStr,
+      toplam:       row.toplam       || 0,
+      tamamlandi:   row.tamamlandi   || 0,
+      devam:        row.devam        || 0,
+      tamamlanmadi: row.tamamlanmadi || 0,
+      oran: row.toplam > 0 ? Math.round(((row.tamamlandi || 0) / row.toplam) * 100) : 0,
+      topDaireler: dr.recordset,
+      gunTrend:    tr.recordset,
+    };
+  }
+  const [s1, s2] = await Promise.all([ayStats(ay1), ayStats(ay2)]);
+  return { ay1: s1, ay2: s2 };
+}
+
+// ─── Rapor: özel rapor oluştur ─────────────────────────────────────────────
+async function getRaporOlustur({ ilce, mahalle, daire, durum, baslangic, bitis, sayfa = 1, limit = 100 }) {
+  const p = await getPool();
+  const conditions = [`YEAR(BASVURU_TA) BETWEEN 2018 AND 2030`];
+  if (ilce)     conditions.push(`MAHALLE_AD_1 = '${ilce.replace(/'/g,"''")}'`);
+  if (mahalle)  conditions.push(`MAHALLE_AD = '${mahalle.replace(/'/g,"''")}'`);
+  if (daire)    conditions.push(`DAIRE_BASK_ADI = '${daire.replace(/'/g,"''")}'`);
+  if (durum)    conditions.push(`BIRIM_ISLE = '${durum.replace(/'/g,"''")}'`);
+  if (baslangic) conditions.push(`CAST(BASVURU_TA AS DATE) >= '${baslangic}'`);
+  if (bitis)    conditions.push(`CAST(BASVURU_TA AS DATE) <= '${bitis}'`);
+
+  const where = conditions.join(' AND ');
+  const pg  = Math.max(1, +sayfa);
+  const lm  = Math.min(500, Math.max(1, +limit));
+  const off = (pg - 1) * lm;
+
+  const countR = await p.request().query(`SELECT COUNT(*) AS toplam FROM view_Mahalle_Basvuru_AtananIs WHERE ${where}`);
+  const toplam = countR.recordset[0]?.toplam || 0;
+
+  const rows = await p.request().query(`
+    SELECT MAHALLE_AD_1 AS ilce, MAHALLE_AD AS mahalle, KONUSU AS konu,
+           ISNULL(DAIRE_BASK_ADI,'') AS daire, BIRIM_ISLE AS durum,
+           CONVERT(VARCHAR(10), BASVURU_TA, 120) AS tarih,
+           ISNULL(BIRIM_CEVA,'') AS cevap, CEVAP_SURE AS cevapSure
+    FROM view_Mahalle_Basvuru_AtananIs
+    WHERE ${where}
+    ORDER BY BASVURU_TA DESC
+    OFFSET ${off} ROWS FETCH NEXT ${lm} ROWS ONLY
+  `);
+
+  return { rows: rows.recordset, toplam, sayfa: pg, limit: lm };
+}
+
+// ─── Rapor: Excel export verisi ───────────────────────────────────────────
+async function getRaporExportData({ ilce, mahalle, daire, durum, baslangic, bitis }) {
+  return getRaporOlustur({ ilce, mahalle, daire, durum, baslangic, bitis, sayfa: 1, limit: 5000 });
+}
+
+// ─── PostgreSQL tabanlı fonksiyonlar ──────────────────────────────────────
+
+function pgYilFilter(yil) {
+  if (yil) {
+    const y = +yil;
+    return { gte: new Date(`${y}-01-01`), lt: new Date(`${y + 1}-01-01`) };
+  }
+  return { gte: new Date('2020-01-01'), lt: new Date('2028-01-01') };
+}
+
+function basvuruToMssqlRow(b) {
+  return {
+    OBJECTID:             b.id,
+    BASVURU_OBJECTID:     b.muhtarbisId ? +b.muhtarbisId : b.id,
+    BIRIM_IS_OBJECTID:    null,
+    MAHALLE_AD:           b.mahalle,
+    MAHALLE_AD_1:         b.ilce,
+    MUHTAR_ADI:           b.muhtarAdi,
+    BASVURU_TU:           b.basvuruTuru,
+    BASVURU_TA:           b.tarih,
+    KONUSU:               b.konu,
+    TALEP_GENE:           b.aciklama,
+    DAIRE_BASK_ADI:       b.daire,
+    BIRIM_TALE:           null,
+    BIRIM_ISLE:           b.durum,
+    BIRIM_CEVA:           b.cevap,
+    BIRIM_CE_2:           null,
+    CEVAP_SURE:           null,
+    BASVURU_created_date: b.tarih,
+    kaynak:               b.kaynak,
+  };
+}
+
+async function getStatsPG({ yil } = {}) {
+  const tarihFilter = pgYilFilter(yil);
+  const [agg, toplam] = await Promise.all([
+    prisma.basvuru.groupBy({ by: ['durum'], where: { tarih: tarihFilter }, _count: { id: true } }),
+    prisma.basvuru.count({ where: { tarih: tarihFilter } }),
+  ]);
+  const byDurum = {};
+  for (const g of agg) byDurum[g.durum] = g._count.id;
+  return {
+    toplam,
+    tamamlandi:   byDurum['Tamamlandı']    || 0,
+    devam:        byDurum['Devam Etmekte'] || 0,
+    tamamlanmadi: byDurum['Tamamlanmadı']  || 0,
+    beklemede:    byDurum['Beklemede']     || 0,
+    atanmamis:    0,
+    ort_sure:     null,
+  };
+}
+
+async function getDaireDagilimPG({ yil } = {}) {
+  const tarihFilter = pgYilFilter(yil);
+  const rows = await prisma.basvuru.groupBy({
+    by: ['daire', 'durum'], where: { tarih: tarihFilter }, _count: { id: true },
+  });
+  const map = {};
+  for (const r of rows) {
+    const d = r.daire || 'Diğer / Tanımsız';
+    if (!map[d]) map[d] = { daire: d, toplam: 0, tamamlandi: 0, devam: 0, tamamlanmadi: 0 };
+    map[d].toplam += r._count.id;
+    if (r.durum === 'Tamamlandı')    map[d].tamamlandi   += r._count.id;
+    if (r.durum === 'Devam Etmekte') map[d].devam        += r._count.id;
+    if (r.durum === 'Tamamlanmadı')  map[d].tamamlanmadi += r._count.id;
+  }
+  return Object.values(map).sort((a, b) => b.toplam - a.toplam);
+}
+
+async function getIlceDagilimPG({ yil } = {}) {
+  const tarihFilter = pgYilFilter(yil);
+  const rows = await prisma.basvuru.groupBy({
+    by: ['ilce', 'durum'], where: { tarih: tarihFilter }, _count: { id: true },
+  });
+  const map = {};
+  for (const r of rows) {
+    const i = r.ilce || 'Bilinmiyor';
+    if (!map[i]) map[i] = { ilce: i, toplam: 0, tamamlandi: 0, devam: 0 };
+    map[i].toplam += r._count.id;
+    if (r.durum === 'Tamamlandı')    map[i].tamamlandi += r._count.id;
+    if (r.durum === 'Devam Etmekte') map[i].devam      += r._count.id;
+  }
+  return Object.values(map).sort((a, b) => b.toplam - a.toplam);
+}
+
+async function getListePG({ ilce, mahalle, daire, durum, tur, yil, q, sayfa = 1, limit = 50 } = {}) {
+  const tarihFilter = pgYilFilter(yil);
+  const where = {
+    tarih: tarihFilter,
+    ...(ilce    ? { ilce }    : {}),
+    ...(mahalle ? { mahalle } : {}),
+    ...(daire   ? { daire }   : {}),
+    ...(durum   ? { durum }   : {}),
+    ...(tur     ? { basvuruTuru: tur } : {}),
+    ...(q ? { OR: [
+      { konu:     { contains: q, mode: 'insensitive' } },
+      { aciklama: { contains: q, mode: 'insensitive' } },
+      { muhtarAdi: { contains: q, mode: 'insensitive' } },
+    ]} : {}),
+  };
+  const pg  = Math.max(1, +sayfa);
+  const lm  = +limit;
+  const off = (pg - 1) * lm;
+  const [total, rawRows] = await Promise.all([
+    prisma.basvuru.count({ where }),
+    prisma.basvuru.findMany({ where, orderBy: { tarih: 'desc' }, skip: off, take: lm }),
+  ]);
+
+  let rows = rawRows.map(basvuruToMssqlRow);
+
+  // Son aktiviteyi her satıra ekle
+  if (rows.length) {
+    const ids = rawRows.map(r => r.id);
+    const sonAkt = await prisma.$queryRaw`
+      SELECT DISTINCT ON ("basvuruId")
+        "basvuruId", icerik, tarih, tip, "yapanAd"
+      FROM "BasvuruAktivite"
+      WHERE "basvuruId" = ANY(${ids}::int[])
+      ORDER BY "basvuruId", tarih DESC
+    `;
+    const aktMap = {};
+    sonAkt.forEach(a => { aktMap[a.basvuruId] = a; });
+    rows = rows.map(r => ({ ...r, sonAktivite: aktMap[r.id] || null }));
+  }
+
+  return { toplam: total, sayfa: pg, limit: lm, rows };
+}
+
+async function getFilterOptionsPG({ ilce } = {}) {
+  const [ilceler, mahalleler, daireler] = await Promise.all([
+    prisma.muhtar.findMany({ select: { ilce: true }, distinct: ['ilce'], orderBy: { ilce: 'asc' } }),
+    ilce
+      ? prisma.muhtar.findMany({ select: { mahalle: true }, where: { ilce }, orderBy: { mahalle: 'asc' } })
+      : prisma.muhtar.findMany({ select: { mahalle: true }, distinct: ['mahalle'], orderBy: { mahalle: 'asc' } }),
+    prisma.basvuru.findMany({ select: { daire: true }, distinct: ['daire'], where: { daire: { not: null } }, orderBy: { daire: 'asc' } }),
+  ]);
+  const yillarRaw = await prisma.$queryRaw`
+    SELECT DISTINCT EXTRACT(YEAR FROM tarih)::int AS yil FROM "Basvuru"
+    WHERE tarih IS NOT NULL ORDER BY yil DESC
+  `;
+  const yillar = yillarRaw.map(r => Number(r.yil)).filter(y => y >= 2020 && y <= 2028);
+  return {
+    ilceler:    ilceler.map(r => r.ilce),
+    mahalleler: mahalleler.map(r => r.mahalle),
+    daireler:   daireler.map(r => r.daire).filter(Boolean),
+    yillar,
+    durumlar:   ['Tamamlandı', 'Devam Etmekte', 'Tamamlanmadı', 'Beklemede'],
+    turler:     ['İş Emri', 'Dilekçe'],
+  };
+}
+
+async function getMahalleDetayPG({ ilce, mahalle }) {
+  const [muhtar, istatistik] = await Promise.all([
+    prisma.muhtar.findUnique({ where: { ilce_mahalle: { ilce, mahalle } } }),
+    prisma.basvuru.groupBy({ by: ['durum'], where: { ilce, mahalle }, _count: { id: true } }),
+  ]);
+  const byDurum = {};
+  let total = 0;
+  for (const g of istatistik) { byDurum[g.durum] = g._count.id; total += g._count.id; }
+  return {
+    ilce,
+    mahalle,
+    muhtar:      muhtar?.muhtarAdi || null,
+    muhtarBilgi: muhtar ? { ad: muhtar.muhtarAdi, nufus: muhtar.nufus, kirsal: null } : null,
+    muhtarData:  muhtar || null,
+    istatistik: {
+      toplam:       total,
+      tamamlandi:   byDurum['Tamamlandı']    || 0,
+      devam:        byDurum['Devam Etmekte'] || 0,
+      tamamlanmadi: byDurum['Tamamlanmadı']  || 0,
+      beklemede:    byDurum['Beklemede']     || 0,
+      ort_sure:     null,
+    },
+  };
+}
+
+async function getMahalleBasvurularPG({ ilce, mahalle, durum, sayfa = 1, limit = 50 } = {}) {
+  const where = { ilce, mahalle, ...(durum ? { durum } : {}) };
+  const pg  = Math.max(1, +sayfa);
+  const lm  = +limit;
+  const off = (pg - 1) * lm;
+  const [total, rows] = await Promise.all([
+    prisma.basvuru.count({ where }),
+    prisma.basvuru.findMany({ where, orderBy: { tarih: 'desc' }, skip: off, take: lm }),
+  ]);
+  return { toplam: total, sayfa: pg, limit: lm, rows: rows.map(basvuruToMssqlRow) };
+}
+
+// ─── Aktivite yardımcı ──────────────────────────────────────────────────────
+async function aktiviteEkle({ basvuruId, tip, icerik, eskiDeger, yeniDeger, yapan, yapanAd }) {
+  return prisma.basvuruAktivite.create({
+    data: { basvuruId, tip, icerik, eskiDeger: eskiDeger ?? null, yeniDeger: yeniDeger ?? null, yapan, yapanAd: yapanAd || null },
+  });
+}
+
+async function getAktiviteler(basvuruId) {
+  return prisma.basvuruAktivite.findMany({
+    where:   { basvuruId: +basvuruId },
+    orderBy: { tarih: 'desc' },
+  });
+}
+
+async function createBasvuruPG({ ilce, mahalle, konu, aciklama, daire, tur, tarih, ekDosyaUrl, koordinasyonDaireleri, user }) {
+  const muhtar = await prisma.muhtar.findUnique({
+    where: { ilce_mahalle: { ilce, mahalle } }, select: { muhtarAdi: true },
+  });
+  const yeni = await prisma.basvuru.create({
+    data: {
+      ilce, mahalle,
+      muhtarAdi:            muhtar?.muhtarAdi || null,
+      konu:                 konu || 'Belirtilmemiş',
+      aciklama:             aciklama || null,
+      daire:                daire || null,
+      basvuruTuru:          tur || null,
+      tarih:                tarih ? new Date(tarih) : new Date(),
+      durum:                'Beklemede',
+      ekDosya:              ekDosyaUrl || null,
+      koordinasyonDaireleri: Array.isArray(koordinasyonDaireleri)
+        ? koordinasyonDaireleri.join(',') : koordinasyonDaireleri || null,
+      giren:   String(user?.id || user?.username || 'sistem'),
+      girenAd: user?.displayName || user?.username || null,
+      kaynak:  'portal',
+    },
+  });
+  await aktiviteEkle({
+    basvuruId: yeni.id, tip: 'sistem', icerik: 'Başvuru oluşturuldu',
+    yapan: String(user?.username || 'sistem'), yapanAd: user?.displayName || user?.username || 'Sistem',
+  });
+  return { success: true, id: yeni.id };
+}
+
+async function updateBasvuruPG({ objectId, fields, user }) {
+  let basvuru = await prisma.basvuru.findFirst({ where: { muhtarbisId: String(objectId) } });
+  if (!basvuru) {
+    try { basvuru = await prisma.basvuru.findUnique({ where: { id: +objectId } }); } catch (_) {}
+  }
+  if (!basvuru) throw new Error('Başvuru bulunamadı');
+
+  const allowed = ['durum', 'cevap', 'daire', 'konu', 'aciklama', 'resmiYaziNo', 'ilce', 'mahalle', 'muhtarAdi', 'basvuruTuru', 'koordinasyonDaireleri'];
+  const data = {};
+  for (const f of allowed) { if (fields[f] !== undefined) data[f] = fields[f]; }
+  data.guncelleyen = user?.displayName || user?.username || null;
+
+  const changes = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k === 'guncelleyen') continue;
+    if (basvuru[k] !== v) changes[k] = { eski: basvuru[k], yeni: v };
+  }
+
+  await prisma.basvuru.update({ where: { id: basvuru.id }, data });
+
+  const yapan   = String(user?.username || 'sistem');
+  const yapanAd = user?.displayName || user?.username || 'Sistem';
+
+  if (Object.keys(changes).length) {
+    // MuhtarbisEditLog — mevcut log tablosu
+    await prisma.muhtarbisEditLog.createMany({
+      data: Object.entries(changes).map(([alan, { eski, yeni }]) => ({
+        objectId:     basvuru.id,
+        alan,
+        eskiDeger:    eski != null ? String(eski) : null,
+        yeniDeger:    yeni != null ? String(yeni) : null,
+        duzenleyenId: String(user?.id || user?.username || 'sistem'),
+        duzenleyenAd: yapanAd,
+      })),
+    });
+
+    // BasvuruAktivite — aktivite zaman çizelgesi
+    const aktiviteler = [];
+    if (changes.durum) {
+      aktiviteler.push({ basvuruId: basvuru.id, tip: 'durum_degisim',
+        icerik: `Durum: ${changes.durum.eski || '—'} → ${changes.durum.yeni}`,
+        eskiDeger: changes.durum.eski != null ? String(changes.durum.eski) : null,
+        yeniDeger: changes.durum.yeni != null ? String(changes.durum.yeni) : null,
+        yapan, yapanAd });
+    }
+    if (changes.daire) {
+      aktiviteler.push({ basvuruId: basvuru.id, tip: 'daire_atama',
+        icerik: `Daire: ${changes.daire.eski || 'Belirtilmemiş'} → ${changes.daire.yeni || 'Belirtilmemiş'}`,
+        eskiDeger: changes.daire.eski != null ? String(changes.daire.eski) : null,
+        yeniDeger: changes.daire.yeni != null ? String(changes.daire.yeni) : null,
+        yapan, yapanAd });
+    }
+    // Konu değişimi
+    if (changes.konu) {
+      aktiviteler.push({ basvuruId: basvuru.id, tip: 'sistem',
+        icerik: `Konu: ${changes.konu.eski || '—'} → ${changes.konu.yeni}`,
+        eskiDeger: changes.konu.eski != null ? String(changes.konu.eski) : null,
+        yeniDeger: changes.konu.yeni != null ? String(changes.konu.yeni) : null,
+        yapan, yapanAd });
+    }
+    // Cevap güncellemesi (mevcut cevap varsa da kaydet)
+    if (changes.cevap && changes.cevap.yeni) {
+      aktiviteler.push({ basvuruId: basvuru.id, tip: 'yorum',
+        icerik: String(changes.cevap.yeni), eskiDeger: null, yeniDeger: null, yapan, yapanAd });
+    }
+    // Diğer alanlar
+    const digerAlanlar = ['aciklama', 'resmiYaziNo', 'ilce', 'mahalle', 'muhtarAdi', 'basvuruTuru', 'koordinasyonDaireleri'];
+    const degisen = digerAlanlar.filter(a => changes[a]);
+    if (degisen.length) {
+      aktiviteler.push({ basvuruId: basvuru.id, tip: 'sistem',
+        icerik: `Güncellenen alanlar: ${degisen.join(', ')}`,
+        eskiDeger: null, yeniDeger: null, yapan, yapanAd });
+    }
+    if (aktiviteler.length) {
+      await prisma.basvuruAktivite.createMany({ data: aktiviteler });
+    }
+  }
+  return { degisiklik: Object.keys(changes).length > 0, changes };
+}
+
+async function getMuhtarBilgi(ilce, mahalle) {
+  return prisma.muhtar.findUnique({ where: { ilce_mahalle: { ilce, mahalle } } });
+}
+
+async function updateMuhtarBilgi(ilce, mahalle, data, user) {
+  const allowed = ['muhtarAdi', 'gsm', 'nufus', 'muhtarOfisi', 'saglikOcagi', 'diniTesis', 'okul', 'hastane', 'sosyalTesis', 'cocukOyun', 'sporTesisi'];
+  const update = {};
+  for (const f of allowed) {
+    if (data[f] !== undefined) update[f] = data[f] === '' ? null : data[f];
+  }
+  if (update.nufus != null) update.nufus = +update.nufus || null;
+  update.guncelleyen = user?.displayName || user?.username || null;
+
+  return prisma.muhtar.upsert({
+    where: { ilce_mahalle: { ilce, mahalle } },
+    create: { ilce, mahalle, muhtarAdi: data.muhtarAdi || '', ...update },
+    update,
+  });
+}
+
+async function getMuhtarlarPG({ ilce, sayfa = 1, limit = 50, q } = {}) {
+  const where = {
+    ...(ilce ? { ilce } : {}),
+    ...(q ? { OR: [
+      { mahalle:   { contains: q, mode: 'insensitive' } },
+      { muhtarAdi: { contains: q, mode: 'insensitive' } },
+    ]} : {}),
+  };
+  const pg  = Math.max(1, +sayfa);
+  const lm  = Math.min(10000, Math.max(1, +limit));
+  const off = (pg - 1) * lm;
+
+  const [total, muhtarlar, basvuruStats] = await Promise.all([
+    prisma.muhtar.count({ where }),
+    prisma.muhtar.findMany({ where, orderBy: [{ ilce: 'asc' }, { mahalle: 'asc' }], skip: off, take: lm }),
+    prisma.basvuru.groupBy({
+      by: ['ilce', 'mahalle', 'durum'], _count: { id: true },
+      where: ilce ? { ilce } : {},
+    }),
+  ]);
+
+  const countMap = {};
+  for (const s of basvuruStats) {
+    const key = `${s.ilce}||${s.mahalle}`;
+    if (!countMap[key]) countMap[key] = { toplamTalep: 0, tamamlanan: 0 };
+    countMap[key].toplamTalep += s._count.id;
+    if (s.durum === 'Tamamlandı') countMap[key].tamamlanan += s._count.id;
+  }
+
+  const rows = muhtarlar.map(r => {
+    const stats = countMap[`${r.ilce}||${r.mahalle}`] || { toplamTalep: 0, tamamlanan: 0 };
+    return {
+      ilce:          r.ilce,
+      mahalle:       r.mahalle,
+      ad_soyad:      r.muhtarAdi || '—',
+      nufus:         r.nufus || 0,
+      gsm:           r.gsm || null,
+      kirsal_merkez: null,
+      toplamTalep:   stats.toplamTalep,
+      tamamlanan:    stats.tamamlanan,
+    };
+  });
+  return { rows, toplam: total, sayfa: pg, limit: lm };
+}
+
+async function getKonularPG() {
+  const rows = await prisma.basvuru.findMany({
+    select: { konu: true }, distinct: ['konu'],
+    where: { konu: { not: null } }, orderBy: { konu: 'asc' },
+  });
+  return rows.map(r => r.konu).filter(k => k && k.length > 2);
 }
 
 module.exports = {
@@ -729,5 +1224,13 @@ module.exports = {
   updateBasvuru, saveEditLog, getEditLog,
   updateYatirim, createBasvuru, createYatirim,
   getRaporOzet, getRaporIlce, getRaporYatirimOzet, getRaporDonem,
+  getRaporAylikKarsilastirma, getRaporOlustur, getRaporExportData,
   getPool,
+  // PostgreSQL tabanlı
+  getStatsPG, getDaireDagilimPG, getIlceDagilimPG, getListePG,
+  getFilterOptionsPG, getMahalleDetayPG, getMahalleBasvurularPG,
+  createBasvuruPG, updateBasvuruPG,
+  getMuhtarBilgi, updateMuhtarBilgi, getMuhtarlarPG, getKonularPG,
+  // Aktivite
+  aktiviteEkle, getAktiviteler,
 };

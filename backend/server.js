@@ -29,6 +29,13 @@ const flexcityRoutes        = require('./routes/flexcity');
 const muhtarbisRoutes       = require('./routes/muhtarbis');
 const muhtarbisAdminRoutes  = require('./routes/muhtarbisAdmin');
 const randevuRoutes         = require('./routes/randevu');
+const toplantiRoutes        = require('./routes/toplanti');
+const gelistirmeRoutes      = require('./routes/gelistirme');
+const islemGecmisiRoutes    = require('./routes/islemGecmisi');
+const calismaGrubuRoutes    = require('./routes/calismaGrubu');
+const rbacRoutes            = require('./routes/rbac');
+const lokasyonRoutes        = require('./routes/lokasyon');
+const argeRoutes            = require('./routes/arge');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
@@ -37,6 +44,9 @@ const app = express();
 
 // Muhtar fotoğrafları static dosya servisi
 app.use('/muhtar-foto', express.static(path.join(__dirname, 'public/muhtar-fotolari')));
+// İmzalı tutanaklar (auth korumalı)
+const authMiddleware = require('./middleware/authMiddleware');
+app.use('/tutanaklar', authMiddleware, express.static(path.join(__dirname, 'public/tutanaklar')));
 
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
   .split(',').map(o => o.trim());
@@ -79,6 +89,14 @@ app.use('/api/muhtarbis',       muhtarbisRoutes);
 app.use('/api/muhtarbis/admin', muhtarbisAdminRoutes);
 app.use('/api/muhtarbis/auth',  muhtarbisAdminRoutes);
 app.use('/api/randevu',         randevuRoutes);
+app.use('/api/toplanti',        toplantiRoutes);
+app.use('/api/gelistirme',      gelistirmeRoutes);
+app.use('/api/islem-gecmisi',   islemGecmisiRoutes);
+app.use('/api/calisma-grubu',   calismaGrubuRoutes);
+app.use('/api/rbac',            rbacRoutes);
+app.use('/api/lokasyon',        lokasyonRoutes);
+app.use('/api/arge',            argeRoutes);
+app.use('/api/tutanak',        require('./routes/tutanak'));
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 
