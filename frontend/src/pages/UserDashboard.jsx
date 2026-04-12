@@ -146,7 +146,7 @@ function SonBasvurularCard({ delay = '' }) {
         </div>
         <button
           onClick={() => navigate('/itsm/new')}
-          className="text-xs font-semibold bg-[#1e40af] hover:bg-[#1d4ed8] text-white px-3 py-1.5 rounded-xl transition-colors"
+          className="portal-cta-btn portal-cta-btn--blue text-xs"
         >
           + Yeni
         </button>

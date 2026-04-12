@@ -351,13 +351,13 @@ function LeaderModal({ group, members, onClose, onSuccess }) {
 
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
           <button onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-xl hover:bg-gray-50">
+            className="portal-soft-btn text-sm">
             İptal
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !selectedId}
-            className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-xl transition"
+            className="portal-cta-btn portal-cta-btn--blue text-sm"
           >
             {saving ? 'Kaydediliyor...' : 'Lideri Ata'}
           </button>
@@ -563,7 +563,7 @@ export default function Gruplar() {
         {canManage && (
           <button
             onClick={() => setShowForm(true)}
-            className="bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2"
+            className="portal-cta-btn portal-cta-btn--blue"
           >
             + Yeni Grup
           </button>

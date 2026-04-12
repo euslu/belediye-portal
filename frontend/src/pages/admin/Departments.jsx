@@ -77,7 +77,7 @@ export default function Departments() {
             Pasif dahil
           </label>
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+            className="portal-cta-btn portal-cta-btn--violet">
             + Yeni Daire
           </button>
         </div>
@@ -192,11 +192,11 @@ export default function Departments() {
 
             <div className="flex gap-2 justify-end pt-2">
               <button onClick={closeModal}
-                className="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                className="portal-soft-btn">
                 İptal
               </button>
               <button onClick={handleSave} disabled={saving}
-                className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">
+                className="portal-cta-btn portal-cta-btn--violet">
                 {saving ? 'Kaydediliyor…' : 'Kaydet'}
               </button>
             </div>

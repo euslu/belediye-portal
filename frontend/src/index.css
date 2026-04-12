@@ -34,6 +34,139 @@ body {
   margin: 0;
 }
 
+/* ── Shared action buttons ───────────────────────────────────── */
+.portal-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.72rem 1.15rem;
+  border: 0;
+  border-radius: 1rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease,
+    background 180ms ease;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+}
+
+.portal-cta-btn:hover {
+  transform: translateY(-2px);
+  filter: saturate(1.05);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
+}
+
+.portal-cta-btn:active {
+  transform: translateY(0);
+}
+
+.portal-cta-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.portal-cta-btn--blue {
+  background: linear-gradient(135deg, #1d4ed8 0%, #0f766e 100%);
+}
+
+.portal-cta-btn--violet {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #db2777 100%);
+}
+
+.portal-cta-btn--green {
+  background: linear-gradient(135deg, #16a34a 0%, #0f766e 100%);
+}
+
+.portal-cta-btn--amber {
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
+}
+
+.portal-soft-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 40px;
+  padding: 0.62rem 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.9), rgba(255,255,255,0.7)),
+    linear-gradient(135deg, rgba(99,102,241,0.12), rgba(16,185,129,0.12));
+  color: #4338ca;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.08);
+}
+
+.portal-soft-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(79, 70, 229, 0.34);
+  box-shadow: 0 16px 30px rgba(79, 70, 229, 0.14);
+  color: #312e81;
+}
+
+.portal-soft-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.portal-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0.68rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.98), rgba(255,255,255,0.9)),
+    linear-gradient(135deg, rgba(99,102,241,0.08), rgba(14,165,233,0.08));
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    background 180ms ease;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.portal-pill-btn:hover {
+  transform: translateY(-1px);
+  color: #4338ca;
+  border-color: rgba(79, 70, 229, 0.28);
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.12);
+}
+
+.portal-pill-btn--active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #4f46e5 0%, #2563eb 45%, #06b6d4 100%);
+  color: #ffffff;
+  box-shadow: 0 16px 32px rgba(59, 130, 246, 0.28);
+}
+
 /* ── Fasto nav-header: brand green background ────────────────── */
 .nav-header,
 [data-nav-headerbg="color_1"] .nav-header {

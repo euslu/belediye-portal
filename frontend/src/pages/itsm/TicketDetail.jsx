@@ -502,7 +502,7 @@ function AssignPanel({ ticket, onAssigned }) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white text-sm font-semibold py-2 rounded-lg transition"
+        className="portal-cta-btn portal-cta-btn--blue w-full"
       >
         {saving ? 'Kaydediliyor...' : 'Atamayı Kaydet'}
       </button>
@@ -1088,7 +1088,7 @@ export default function TicketDetail() {
                   <button
                     type="submit"
                     disabled={submitting || !comment.trim()}
-                    className="bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+                    className="portal-cta-btn portal-cta-btn--blue"
                   >
                     {submitting ? 'Gönderiliyor...' : 'Yorum Ekle'}
                   </button>

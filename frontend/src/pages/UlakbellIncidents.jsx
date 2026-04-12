@@ -288,7 +288,7 @@ export default function UlakbellIncidents() {
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
             <button type="submit"
-              className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition">
+              className="portal-cta-btn portal-cta-btn--violet text-sm">
               Ara
             </button>
             {search && (

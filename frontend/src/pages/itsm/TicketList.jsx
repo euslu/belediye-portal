@@ -77,7 +77,7 @@ export default function TicketList() {
         </div>
         <button
           onClick={() => navigate('/itsm/new')}
-          className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+          className="portal-cta-btn portal-cta-btn--blue"
         >
           <span className="text-lg leading-none">+</span> Yeni Talep
         </button>

@@ -234,13 +234,13 @@ function SuccessScreen({ ticketId, onNew }) {
       <div className="flex gap-3">
         <button
           onClick={() => navigate('/my-tickets')}
-          className="text-sm text-gray-500 hover:text-gray-700 px-5 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition"
+          className="portal-soft-btn"
         >
           Başvurularım
         </button>
         <button
           onClick={onNew}
-          className="bg-green-600 hover:bg-green-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition"
+          className="portal-cta-btn portal-cta-btn--green"
         >
           Yeni Talep
         </button>

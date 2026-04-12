@@ -67,7 +67,7 @@ export default function MyTickets() {
         </div>
         <button
           onClick={() => navigate('/itsm/new')}
-          className="flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition"
+          className="portal-cta-btn portal-cta-btn--violet"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -84,10 +84,7 @@ export default function MyTickets() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 border
-                ${active
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}
+              className={`portal-pill-btn text-sm ${active ? 'portal-pill-btn--active' : ''}`}
             >
               {tab.label}
               {!loading && (
