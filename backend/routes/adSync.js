@@ -3,6 +3,7 @@ const router   = express.Router();
 const prisma   = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 const { runAdSync }  = require('../lib/adSync');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -16,7 +17,7 @@ router.post('/', async (req, res) => {
     const changes = await runAdSync();
     res.json({ ok: true, count: changes.length, changes });
   } catch (err) {
-    console.error('[AD Sync] Hata:', err);
+    logger.error('[AD Sync] Hata:', err);
     res.status(500).json({ error: 'AD senkronizasyonu başarısız', detail: err.message });
   }
 });
@@ -47,7 +48,7 @@ router.get('/changes', async (req, res) => {
 
     res.json({ total, page: parseInt(page), logs });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Değişiklikler alınamadı' });
   }
 });

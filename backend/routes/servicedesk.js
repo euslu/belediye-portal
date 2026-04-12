@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const auth    = require('../middleware/authMiddleware');
 const epc     = require('../services/servicedesk');
+const logger = require('../utils/logger');
 
 router.use(auth);
 
@@ -37,7 +38,7 @@ router.get('/computers', adminOrManager, async (req, res) => {
     const result = await epc.getComputers({ page, pagelimit });
     res.json(result);
   } catch (err) {
-    console.error('[EPC] computers hatası:', err.message);
+    logger.error('[EPC] computers hatası:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -49,7 +50,7 @@ router.get('/computers/all', adminOnly, async (req, res) => {
     const computers = await epc.getAllComputers();
     res.json({ total: computers.length, computers });
   } catch (err) {
-    console.error('[EPC] all computers hatası:', err.message);
+    logger.error('[EPC] all computers hatası:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -84,7 +85,7 @@ router.post('/sync', adminOnly, async (req, res) => {
     const result = await epc.syncToInventory();
     res.json({ success: true, ...result });
   } catch (err) {
-    console.error('[EPC] sync hatası:', err.message);
+    logger.error('[EPC] sync hatası:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

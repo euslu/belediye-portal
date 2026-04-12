@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -15,7 +16,7 @@ router.get('/', async (req, res) => {
     });
     res.json(types);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Başvuru tipleri alınamadı' });
   }
 });
@@ -43,7 +44,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2002')
       return res.status(409).json({ error: 'Bu ad veya anahtar zaten kullanılıyor' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Oluşturulamadı' });
   }
 });
@@ -69,7 +70,7 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bulunamadı' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu ad zaten kullanılıyor' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Güncellenemedi' });
   }
 });
@@ -92,7 +93,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Silinemedi' });
   }
 });

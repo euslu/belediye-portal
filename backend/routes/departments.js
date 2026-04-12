@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
     });
     res.json(departments);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daireler alınamadı' });
   }
 });
@@ -41,7 +42,7 @@ router.get('/:id', async (req, res) => {
     if (!dept) return res.status(404).json({ error: 'Daire bulunamadı' });
     res.json(dept);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daire alınamadı' });
   }
 });
@@ -64,7 +65,7 @@ router.post('/', ADMIN_ONLY, async (req, res) => {
     res.status(201).json(dept);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu ad veya kısa kod zaten kullanılıyor' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daire oluşturulamadı' });
   }
 });
@@ -87,7 +88,7 @@ router.patch('/:id', ADMIN_ONLY, async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Daire bulunamadı' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu ad veya kısa kod zaten kullanılıyor' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daire güncellenemedi' });
   }
 });
@@ -100,7 +101,7 @@ router.delete('/:id', ADMIN_ONLY, async (req, res) => {
     res.json({ message: 'Daire pasife alındı' });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Daire bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daire güncellenemedi' });
   }
 });

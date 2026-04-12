@@ -9,6 +9,7 @@ const { checkMuhtarlikAccess, filterIlce, checkYazmaYetkisi } = require('../midd
 const svc     = require('../services/muhtarbis');
 const prisma  = require('../lib/prisma');
 const { logIslem } = require('../middleware/auditLog');
+const logger = require('../utils/logger');
 
 // ─── Muhtar fotoğraf upload ────────────────────────────────────────────────
 const FOTO_DIR      = path.join(__dirname, '../public/muhtar-fotolari');
@@ -190,7 +191,7 @@ router.put('/basvuru/:objectId', async (req, res) => {
 });
 
 // GET /api/muhtarbis/basvuru/:id  — tekil başvuru + aktiviteler
-router.get('/basvuru/:id', auth, async (req, res) => {
+router.get('/basvuru/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const basvuru = await prisma.basvuru.findFirst({
@@ -211,13 +212,13 @@ router.get('/basvuru/:objectId/log', async (req, res) => {
 });
 
 // GET /api/muhtarbis/basvuru/:id/aktiviteler
-router.get('/basvuru/:id/aktiviteler', auth, async (req, res) => {
+router.get('/basvuru/:id/aktiviteler', async (req, res) => {
   try { res.json(await svc.getAktiviteler(req.params.id)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/muhtarbis/basvuru/:id/aktivite  — manuel yorum
-router.post('/basvuru/:id/aktivite', auth, async (req, res) => {
+router.post('/basvuru/:id/aktivite', async (req, res) => {
   try {
     const { icerik } = req.body;
     if (!icerik?.trim()) return res.status(400).json({ error: 'İçerik gerekli' });
@@ -356,7 +357,7 @@ router.get('/yatirimlar', (req, res) => {
 });
 
 // GET /api/muhtarbis/yatirimlar/liste?ilce=&mahalle=&durum=&arama=&sayfa=1&limit=50
-router.get('/yatirimlar/liste', auth, (req, res) => {
+router.get('/yatirimlar/liste', (req, res) => {
   try {
     const data = require('../data/yatirimlar.json');
     const { ilce, mahalle, durum, arama, sayfa = 1, limit = 50 } = req.query;
@@ -403,7 +404,7 @@ router.get('/yatirimlar/liste', auth, (req, res) => {
 // ─── Muhtarlar listesi ────────────────────────────────────────────────────
 
 // GET /api/muhtarbis/muhtarlar?ilce=&sayfa=1&limit=50&q=
-router.get('/muhtarlar', auth, async (req, res) => {
+router.get('/muhtarlar', async (req, res) => {
   try {
     const ilce = filterIlce(req, req.query.ilce);
     if (ilce === false) return res.status(403).json({ error: 'Bu ilçe için yetkiniz yok' });
@@ -412,6 +413,7 @@ router.get('/muhtarlar', auth, async (req, res) => {
     else if (ilce) params.ilce = ilce;
     res.json(await svc.getMuhtarlarPG(params));
   } catch (e) {
+    logger.error('[Muhtarlar] hata:', e.stack || e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -420,7 +422,7 @@ router.get('/muhtarlar', auth, async (req, res) => {
 
 // GET /api/muhtarbis/muhtar-fotolar?ilce=BODRUM
 // PostgreSQL Muhtar tablosundan gruplu döner
-router.get('/muhtar-fotolar', auth, async (req, res) => {
+router.get('/muhtar-fotolar', async (req, res) => {
   try {
     const { ilce } = req.query;
     const muhtarlar = await prisma.muhtar.findMany({
@@ -445,7 +447,7 @@ router.get('/muhtar-fotolar', auth, async (req, res) => {
 
 // GET /api/muhtarbis/muhtar-foto/:ilce/:mahalle
 // Önce MSSQL binary, sonra statik fallback
-router.get('/muhtar-foto/:ilce/:mahalle', auth, async (req, res) => {
+router.get('/muhtar-foto/:ilce/:mahalle', async (req, res) => {
   const ilce    = decodeURIComponent(req.params.ilce);
   const mahalle = decodeURIComponent(req.params.mahalle);
 
@@ -473,7 +475,7 @@ router.get('/muhtar-foto/:ilce/:mahalle', auth, async (req, res) => {
       return res.send(buffer);
     }
   } catch (e) {
-    console.error('MSSQL foto hatası:', e.message);
+    logger.error('MSSQL foto hatası:', e.message);
   }
 
   // 2. Statik dosya fallback
@@ -495,7 +497,7 @@ router.get('/muhtar-foto/:ilce/:mahalle', auth, async (req, res) => {
 });
 
 // POST /api/muhtarbis/muhtar-foto/:ilce/:mahalle
-router.post('/muhtar-foto/:ilce/:mahalle', auth, fotoUpload.single('foto'), (req, res) => {
+router.post('/muhtar-foto/:ilce/:mahalle', fotoUpload.single('foto'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Dosya yok' });
   res.json({ success: true, url: `/muhtar-foto/${req.file.filename}` });
 });
@@ -546,37 +548,28 @@ function kisaDaire(ad) {
 // ─── Rapor endpointleri ───────────────────────────────────────────────────
 
 // GET /api/muhtarbis/rapor/yatirim-ozet
-router.get('/rapor/yatirim-ozet', auth, (req, res) => {
+router.get('/rapor/yatirim-ozet', (req, res) => {
   try { res.json(svc.getRaporYatirimOzet()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/rapor/ozet
 router.get('/rapor/ozet', async (req, res) => {
-  try { res.json(await svc.getRaporOzet()); }
+  try { res.json(await svc.getRaporOzetPG()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/rapor/ilce/:ilce
 router.get('/rapor/ilce/:ilce', async (req, res) => {
-  try { res.json(await svc.getRaporIlce(decodeURIComponent(req.params.ilce))); }
+  try { res.json(await svc.getRaporIlcePG(decodeURIComponent(req.params.ilce))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/muhtarbis/rapor/konu-dagilim
 router.get('/rapor/konu-dagilim', async (req, res) => {
   try {
-    const pool = await svc.getPool();
-    const result = await pool.request().query(`
-      SELECT UPPER(LTRIM(RTRIM(KONUSU))) AS konu,
-             COUNT(*) AS toplam,
-             SUM(CASE WHEN BIRIM_ISLE = 'Tamamlandı' THEN 1 ELSE 0 END) AS tamamlandi
-      FROM view_Mahalle_Basvuru_AtananIs
-      WHERE KONUSU IS NOT NULL AND LEN(LTRIM(RTRIM(KONUSU))) > 2
-      GROUP BY UPPER(LTRIM(RTRIM(KONUSU)))
-      ORDER BY toplam DESC
-    `);
-    res.json({ konuDagilim: result.recordset.slice(0, 15) });
+    const konuDagilim = await svc.getKonuDagilimPG();
+    res.json({ konuDagilim });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -619,7 +612,7 @@ router.get('/rapor/ilce-tamamlanma', async (req, res) => {
 
 // GET /api/muhtarbis/rapor/donem?tip=gunluk|haftalik|aylik|hafta|ay|yil
 router.get('/rapor/donem', async (req, res) => {
-  try { res.json(await svc.getRaporDonem(req.query.tip || 'ay')); }
+  try { res.json(await svc.getRaporDonemPG(req.query.tip || 'ay')); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -629,13 +622,13 @@ router.get('/rapor/aylik-karsilastirma', async (req, res) => {
     const ay1 = req.query.ay1 || new Date().toISOString().slice(0,7);
     const prev = new Date(); prev.setMonth(prev.getMonth() - 1);
     const ay2 = req.query.ay2 || prev.toISOString().slice(0,7);
-    res.json(await svc.getRaporAylikKarsilastirma(ay1, ay2));
+    res.json(await svc.getRaporAylikKarsilastirmaPG(ay1, ay2));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/muhtarbis/rapor/olustur
 router.post('/rapor/olustur', async (req, res) => {
-  try { res.json(await svc.getRaporOlustur(req.body || {})); }
+  try { res.json(await svc.getRaporOlusturPG(req.body || {})); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -646,7 +639,7 @@ router.get('/rapor/export', async (req, res) => {
     try { ExcelJS = require('exceljs'); } catch (_) {
       return res.status(500).json({ error: 'exceljs paketi yüklü değil. npm install exceljs' });
     }
-    const data = await svc.getRaporExportData(req.query);
+    const data = await svc.getRaporExportDataPG(req.query);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Başvurular');
     ws.columns = [

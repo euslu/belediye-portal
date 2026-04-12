@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { Client } = require('ldapts');
 const authMiddleware = require('../middleware/authMiddleware');
 const { getMuhtarlikRole, ROL_SEVIYE } = require('../middleware/muhtarlikAuth');
+const logger = require('../utils/logger');
 
 // ---------------------------------------------------------------------------
 // Mock kullanıcılar — MOCK_AUTH=true iken kullanılır
@@ -96,6 +97,18 @@ function signToken(payload) {
   });
 }
 
+// Kullanıcının çalışma gruplarını çek (token'a gömülecek)
+async function getCalismaGruplari(username) {
+  try {
+    const prisma = require('../lib/prisma');
+    const rows = await prisma.calismaGrubuUye.findMany({
+      where: { username },
+      include: { grubu: { select: { id: true, ad: true, department: true, directorate: true } } },
+    });
+    return rows.map(r => ({ id: r.grubu.id, ad: r.grubu.ad, rol: r.rol, department: r.grubu.department }));
+  } catch { return []; }
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/auth/login
 // ---------------------------------------------------------------------------
@@ -135,14 +148,16 @@ router.post('/login', async (req, res) => {
 
     const muhtarlikRole = await getMuhtarlikRole(username);
     const sistemRol = await getSistemRol(username, mockUser.payload.groups, mockUser.payload.role);
+    const calismaGruplari = await getCalismaGruplari(username);
     const payload = {
       ...mockUser.payload,
       sistemRol,
+      calismaGruplari,
       muhtarlikRole: muhtarlikRole || null,
       muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
     };
     const token = signToken(payload);
-    console.log(`[MOCK] Giriş: ${username} (${mockUser.payload.role} / sistemRol: ${sistemRol})`);
+    logger.info(`[MOCK] Giriş: ${username} (${mockUser.payload.role} / sistemRol: ${sistemRol})`);
     return res.json({ token, user: payload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
   }
 
@@ -158,6 +173,7 @@ router.post('/login', async (req, res) => {
       const userRole   = await prisma.userRole.findUnique({ where: { username } });
       const muhtarlikRole = await getMuhtarlikRole(username);
       const sistemRol  = userRole?.active ? (userRole.role || 'personel') : rolToSistemRol(localUser.role);
+      const calismaGruplari = await getCalismaGruplari(username);
 
       const payload = {
         username:    localUser.username,
@@ -165,6 +181,7 @@ router.post('/login', async (req, res) => {
         email:       localUser.email,
         role:        localUser.role,
         sistemRol,
+        calismaGruplari,
         directorate: localUser.directorate,
         department:  localUser.department,
         title:       localUser.title,
@@ -173,11 +190,11 @@ router.post('/login', async (req, res) => {
         muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
       };
       const token = signToken(payload);
-      console.log(`[LOCAL] Giriş: ${username} sistemRol=${sistemRol}`);
+      logger.info(`[LOCAL] Giriş: ${username} sistemRol=${sistemRol}`);
       return res.json({ token, user: payload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
     }
   } catch (localErr) {
-    console.warn('[LOCAL auth] hata:', localErr.message);
+    logger.warn('[LOCAL auth] hata:', localErr.message);
   }
 
   // --- LDAP / AD MOD ---
@@ -255,10 +272,10 @@ router.post('/login', async (req, res) => {
         AD_TIMEOUT
       );
       groups = groupEntries.map((g) => String(g.cn || '')).filter(Boolean);
-      console.log(`[AD] Grup sorgusu: ${groups.length} grup`);
+      logger.info(`[AD] Grup sorgusu: ${groups.length} grup`);
     }
 
-    console.log(`[AD] Giriş: ${username} | Rol: ${getRole(groups)} | Gruplar: ${groups.join(', ') || '(yok)'}`);
+    logger.info(`[AD] Giriş: ${username} | Rol: ${getRole(groups)} | Gruplar: ${groups.join(', ') || '(yok)'}`);
 
     // AD'de 'department' alanı = Daire Başkanlığı adı (directorate)
     const adDepartment = entry.department ? String(entry.department) : null;
@@ -293,21 +310,23 @@ router.post('/login', async (req, res) => {
         department:  payload.department  || null,
         directorate: payload.directorate || null,
       },
-    }).catch((e) => console.warn('[DB upsert] kullanıcı kaydedilemedi:', e.message));
+    }).catch((e) => logger.warn('[DB upsert] kullanıcı kaydedilemedi:', e.message));
 
     const muhtarlikRole = await getMuhtarlikRole(payload.username);
     const sistemRol = await getSistemRol(payload.username, payload.groups, payload.role);
+    const calismaGruplari = await getCalismaGruplari(payload.username);
     const finalPayload = {
       ...payload,
       sistemRol,
+      calismaGruplari,
       muhtarlikRole: muhtarlikRole || null,
       muhtarlikRoleLevel: ROL_SEVIYE[muhtarlikRole] || 0,
     };
     const token = signToken(finalPayload);
-    console.log(`[AD] Token: ${payload.username} rol=${payload.role} sistemRol=${sistemRol}`);
+    logger.info(`[AD] Token: ${payload.username} rol=${payload.role} sistemRol=${sistemRol}`);
     return res.json({ token, user: finalPayload, muhtarlikAccess: !!muhtarlikRole, muhtarlikRole: muhtarlikRole || null });
   } catch (err) {
-    console.error('Login hatası:', err.message);
+    logger.error('Login hatası:', err.message);
     const isTimeout = err.message.includes('yanıt vermedi');
     res.status(isTimeout ? 503 : 401).json({
       error: isTimeout ? 'AD sunucusuna bağlanılamadı, lütfen tekrar deneyin' : 'Kullanıcı adı veya şifre hatalı',
@@ -316,6 +335,21 @@ router.post('/login', async (req, res) => {
     // await kullanma — cevap verilemeyen soket event loop'u bloke eder
     svcClient.unbind().catch(() => {});
     userClient.unbind().catch(() => {});
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/refresh  (korumalı — geçerli token ile yeni token üretir)
+// ---------------------------------------------------------------------------
+router.post('/refresh', authMiddleware, (req, res) => {
+  try {
+    // req.user zaten verify edilmiş payload (authMiddleware tarafından)
+    const { iat, exp, ...payload } = req.user;
+    const token = signToken(payload);
+    res.json({ token });
+  } catch (err) {
+    logger.error('Token refresh hatası:', err.message);
+    res.status(500).json({ error: 'Token yenilenemedi' });
   }
 });
 
@@ -366,7 +400,7 @@ router.get('/ad-groups', authMiddleware, async (req, res) => {
 
     res.json({ username, displayName: entry.displayName, groups });
   } catch (err) {
-    console.error('AD grup sorgusu hatası:', err.message);
+    logger.error('AD grup sorgusu hatası:', err.message);
     res.status(500).json({ error: 'AD bağlantısı kurulamadı', detail: err.message });
   } finally {
     await client.unbind();

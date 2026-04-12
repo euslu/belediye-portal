@@ -1217,6 +1217,255 @@ async function getKonularPG() {
   return rows.map(r => r.konu).filter(k => k && k.length > 2);
 }
 
+// ─── Rapor PG fonksiyonları ──────────────────────────────────────────────
+
+async function getRaporOzetPG() {
+  const fs = require('fs');
+  const tarihFilter = pgYilFilter();
+
+  // Başvuru özeti
+  const [total, byDurum] = await Promise.all([
+    prisma.basvuru.count({ where: { tarih: tarihFilter } }),
+    prisma.basvuru.groupBy({ by: ['durum'], where: { tarih: tarihFilter }, _count: { id: true } }),
+  ]);
+  const dm = {};
+  for (const g of byDurum) dm[g.durum] = g._count.id;
+
+  // Top 5 daire
+  const daireRows = await prisma.basvuru.groupBy({
+    by: ['daire'], where: { tarih: tarihFilter }, _count: { id: true },
+    orderBy: { _count: { id: 'desc' } }, take: 5,
+  });
+
+  // İlçe dağılım
+  const ilceRows = await prisma.basvuru.groupBy({
+    by: ['ilce'], where: { tarih: tarihFilter }, _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+  });
+
+  // Yatırım sayısı (JSON)
+  let toplamYatirim = 0;
+  try {
+    const dataPath = path.join(__dirname, '../data/yatirimlar.json');
+    const veri = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    for (const ilceData of Object.values(veri)) {
+      for (const mahalleData of Object.values(ilceData)) {
+        if (Array.isArray(mahalleData[3])) toplamYatirim += mahalleData[3].length;
+      }
+    }
+  } catch (_) {}
+
+  return {
+    toplamBasvuru:  total,
+    tamamlandi:     dm['Tamamlandı']    || 0,
+    devamEtmekte:   dm['Devam Etmekte'] || 0,
+    tamamlanmadi:   dm['Tamamlanmadı']  || 0,
+    beklemede:      dm['Beklemede']      || 0,
+    ortSure:        null,
+    toplamYatirim,
+    ilceDagilim:    ilceRows.map(r => ({ ilce: r.ilce || 'Bilinmiyor', toplam: r._count.id })),
+    daireDagilim:   daireRows.map(r => ({ daire: r.daire || 'Diğer', toplam: r._count.id })),
+    sonGuncelleme:  new Date().toISOString(),
+  };
+}
+
+async function getRaporIlcePG(ilce) {
+  const tarihFilter = pgYilFilter();
+  const where = { tarih: tarihFilter, ilce };
+
+  const [total, byDurum] = await Promise.all([
+    prisma.basvuru.count({ where }),
+    prisma.basvuru.groupBy({ by: ['durum'], where, _count: { id: true } }),
+  ]);
+  const dm = {};
+  for (const g of byDurum) dm[g.durum] = g._count.id;
+
+  // Mahalle dağılım
+  const mahalleRows = await prisma.basvuru.groupBy({
+    by: ['mahalle', 'durum'], where, _count: { id: true },
+  });
+  const mMap = {};
+  for (const r of mahalleRows) {
+    const m = r.mahalle || 'Bilinmiyor';
+    if (!mMap[m]) mMap[m] = { mahalle: m, toplam: 0, tamamlandi: 0 };
+    mMap[m].toplam += r._count.id;
+    if (r.durum === 'Tamamlandı') mMap[m].tamamlandi += r._count.id;
+  }
+
+  // Top 5 daire
+  const daireRows = await prisma.basvuru.groupBy({
+    by: ['daire'], where, _count: { id: true },
+    orderBy: { _count: { id: 'desc' } }, take: 5,
+  });
+
+  return {
+    ilce,
+    toplamBasvuru:   total,
+    tamamlandi:      dm['Tamamlandı']    || 0,
+    devamEtmekte:    dm['Devam Etmekte'] || 0,
+    mahalleDagilim:  Object.values(mMap).sort((a, b) => b.toplam - a.toplam),
+    topDaireler:     daireRows.map(r => ({ daire: r.daire || 'Diğer', toplam: r._count.id })),
+  };
+}
+
+async function getKonuDagilimPG() {
+  const tarihFilter = pgYilFilter();
+  // Prisma groupBy doesn't support grouping by transformed fields, use raw query
+  const rows = await prisma.$queryRaw`
+    SELECT UPPER(TRIM(konu)) AS konu,
+           COUNT(*)::int AS toplam,
+           SUM(CASE WHEN durum = 'Tamamlandı' THEN 1 ELSE 0 END)::int AS tamamlandi
+    FROM "Basvuru"
+    WHERE konu IS NOT NULL AND LENGTH(TRIM(konu)) > 2
+      AND tarih >= ${tarihFilter.gte} AND tarih < ${tarihFilter.lt}
+    GROUP BY UPPER(TRIM(konu))
+    ORDER BY toplam DESC
+    LIMIT 15
+  `;
+  return rows;
+}
+
+async function getRaporDonemPG(tip) {
+  const now = new Date();
+  let tarihFilter;
+  if (tip === 'hafta') {
+    const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+    tarihFilter = { gte: weekAgo };
+  } else if (tip === 'yil') {
+    tarihFilter = { gte: new Date(`${now.getFullYear()}-01-01`), lt: new Date(`${now.getFullYear() + 1}-01-01`) };
+  } else if (tip === 'gunluk') {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    tarihFilter = { gte: dayStart, lt: dayEnd };
+  } else {
+    // ay (default)
+    tarihFilter = { gte: new Date(now.getFullYear(), now.getMonth(), 1), lt: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+  }
+
+  const byDurum = await prisma.basvuru.groupBy({
+    by: ['durum'], where: { tarih: tarihFilter }, _count: { id: true },
+  });
+  const dm = {};
+  let toplam = 0;
+  for (const g of byDurum) { dm[g.durum] = g._count.id; toplam += g._count.id; }
+
+  // Trend (group by date)
+  let trend = [];
+  if (tip !== 'gunluk') {
+    const rows = await prisma.basvuru.findMany({
+      where: { tarih: tarihFilter }, select: { tarih: true, durum: true },
+    });
+    const tMap = {};
+    for (const r of rows) {
+      let key;
+      if (tip === 'yil') {
+        key = r.tarih.getMonth() + 1; // ay numarası
+      } else {
+        key = tip === 'hafta' ? r.tarih.toISOString().slice(0, 10) : r.tarih.getDate();
+      }
+      if (!tMap[key]) tMap[key] = { toplam: 0, tamamlandi: 0 };
+      tMap[key].toplam++;
+      if (r.durum === 'Tamamlandı') tMap[key].tamamlandi++;
+    }
+    trend = Object.entries(tMap)
+      .map(([k, v]) => ({ [tip === 'yil' ? 'ay' : 'gun']: tip === 'hafta' ? k : +k, ...v }))
+      .sort((a, b) => {
+        const ka = a.ay || a.gun; const kb = b.ay || b.gun;
+        return String(ka).localeCompare(String(kb));
+      });
+  }
+
+  return {
+    toplam,
+    tamamlandi:   dm['Tamamlandı']    || 0,
+    devam:        dm['Devam Etmekte'] || 0,
+    tamamlanmadi: dm['Tamamlanmadı']  || 0,
+    trend,
+  };
+}
+
+async function getRaporAylikKarsilastirmaPG(ay1, ay2) {
+  async function ayStats(ayStr) {
+    const [yil, ay] = ayStr.split('-').map(Number);
+    const tarihFilter = { gte: new Date(yil, ay - 1, 1), lt: new Date(yil, ay, 1) };
+    const byDurum = await prisma.basvuru.groupBy({
+      by: ['durum'], where: { tarih: tarihFilter }, _count: { id: true },
+    });
+    const dm = {};
+    let toplam = 0;
+    for (const g of byDurum) { dm[g.durum] = g._count.id; toplam += g._count.id; }
+
+    // Top 5 daire
+    const daireRows = await prisma.basvuru.groupBy({
+      by: ['daire'], where: { tarih: tarihFilter }, _count: { id: true },
+      orderBy: { _count: { id: 'desc' } }, take: 5,
+    });
+
+    // Günlük trend
+    const rows = await prisma.basvuru.findMany({
+      where: { tarih: tarihFilter }, select: { tarih: true },
+    });
+    const gunMap = {};
+    for (const r of rows) {
+      const gun = r.tarih.getDate();
+      gunMap[gun] = (gunMap[gun] || 0) + 1;
+    }
+    const gunTrend = Object.entries(gunMap).map(([g, t]) => ({ gun: +g, toplam: t })).sort((a, b) => a.gun - b.gun);
+
+    return {
+      ay: ayStr, toplam,
+      tamamlandi:   dm['Tamamlandı']    || 0,
+      devam:        dm['Devam Etmekte'] || 0,
+      tamamlanmadi: dm['Tamamlanmadı']  || 0,
+      oran: toplam > 0 ? Math.round(((dm['Tamamlandı'] || 0) / toplam) * 100) : 0,
+      topDaireler: daireRows.map(r => ({ daire: r.daire || 'Diğer', toplam: r._count.id })),
+      gunTrend,
+    };
+  }
+  const [s1, s2] = await Promise.all([ayStats(ay1), ayStats(ay2)]);
+  return { ay1: s1, ay2: s2 };
+}
+
+async function getRaporOlusturPG({ ilce, mahalle, daire, durum, baslangic, bitis, sayfa = 1, limit = 100 }) {
+  const where = { tarih: pgYilFilter() };
+  if (ilce)      where.ilce    = ilce;
+  if (mahalle)   where.mahalle = mahalle;
+  if (daire)     where.daire   = daire;
+  if (durum)     where.durum   = durum;
+  if (baslangic || bitis) {
+    where.tarih = {};
+    if (baslangic) where.tarih.gte = new Date(baslangic);
+    if (bitis)     where.tarih.lte = new Date(bitis + 'T23:59:59');
+  }
+
+  const pg  = Math.max(1, +sayfa);
+  const lm  = Math.min(500, Math.max(1, +limit));
+  const off = (pg - 1) * lm;
+
+  const [toplam, rows] = await Promise.all([
+    prisma.basvuru.count({ where }),
+    prisma.basvuru.findMany({ where, orderBy: { tarih: 'desc' }, skip: off, take: lm }),
+  ]);
+
+  return {
+    rows: rows.map(r => ({
+      ilce:      r.ilce,
+      mahalle:   r.mahalle,
+      konu:      r.konu,
+      daire:     r.daire || '',
+      durum:     r.durum,
+      tarih:     r.tarih ? r.tarih.toISOString().slice(0, 10) : '',
+      cevap:     r.cevap || '',
+      cevapSure: null,
+    })),
+    toplam, sayfa: pg, limit: lm,
+  };
+}
+
+async function getRaporExportDataPG(params) {
+  return getRaporOlusturPG({ ...params, sayfa: 1, limit: 5000 });
+}
+
 module.exports = {
   getStats, getDaireDagilim, getIlceDagilim,
   getListe, getFilterOptions,
@@ -1231,6 +1480,8 @@ module.exports = {
   getFilterOptionsPG, getMahalleDetayPG, getMahalleBasvurularPG,
   createBasvuruPG, updateBasvuruPG,
   getMuhtarBilgi, updateMuhtarBilgi, getMuhtarlarPG, getKonularPG,
+  getRaporOzetPG, getRaporIlcePG, getKonuDagilimPG, getRaporDonemPG,
+  getRaporAylikKarsilastirmaPG, getRaporOlusturPG, getRaporExportDataPG,
   // Aktivite
   aktiviteEkle, getAktiviteler,
 };

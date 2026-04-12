@@ -72,7 +72,13 @@ router.get('/istatistik', async (req, res) => {
 router.get('/personel-dogum', async (req, res) => {
   try {
     const { getBskDataset } = require('../services/flexcity');
-    const rows = await getBskDataset('BSK_PERSONEL_DOGUM');
+    let rows = await getBskDataset('BSK_PERSONEL_DOGUM');
+    // Daire filtresi (daire başkanı dashboard'u için)
+    const { daire } = req.query;
+    if (daire) {
+      const d = daire.toLowerCase();
+      rows = rows.filter(r => (r.DAIRE || '').toLowerCase().includes(d));
+    }
     res.json({
       toplam: rows.length,
       liste: rows.map(r => ({

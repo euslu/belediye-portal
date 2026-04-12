@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const auth    = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(auth);
 
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
     });
     res.json(lokasyonlar);
   } catch (err) {
-    console.error('[lokasyon]', err);
+    logger.error('[lokasyon]', err);
     res.status(500).json({ error: 'Lokasyonlar alınamadı' });
   }
 });
@@ -37,7 +38,7 @@ router.get('/benim', async (req, res) => {
 
     res.json({ lokasyon, personel });
   } catch (err) {
-    console.error('[lokasyon/benim]', err);
+    logger.error('[lokasyon/benim]', err);
     res.status(500).json({ error: 'Lokasyon verisi alınamadı' });
   }
 });
@@ -87,7 +88,7 @@ router.put('/:id', async (req, res) => {
     });
     res.json(updated);
   } catch (err) {
-    console.error('[lokasyon PUT]', err);
+    logger.error('[lokasyon PUT]', err);
     res.status(500).json({ error: 'Güncellenemedi' });
   }
 });

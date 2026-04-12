@@ -4,6 +4,7 @@ const express  = require('express');
 const prisma   = require('../lib/prisma');
 const auth     = require('../middleware/authMiddleware');
 const ub       = require('../services/ulakbell');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 router.use(auth);
@@ -44,7 +45,7 @@ router.get('/incidents', async (req, res) => {
     });
     res.json(data);
   } catch (err) {
-    console.error('[ulakBELL] incidents:', err.message);
+    logger.error('[ulakBELL] incidents:', err.message);
     res.status(502).json({ error: err.message });
   }
 });
@@ -56,7 +57,7 @@ router.get('/incidents/:token', async (req, res) => {
   try {
     res.json(await ub.getIncident(req.params.token));
   } catch (err) {
-    console.error('[ulakBELL] incident detail:', err.message);
+    logger.error('[ulakBELL] incident detail:', err.message);
     res.status(502).json({ error: err.message });
   }
 });
@@ -128,10 +129,10 @@ router.post('/sync-incident/:ticketId', async (req, res) => {
       },
     });
 
-    console.log(`[ulakBELL] Ticket #${ticketId} → token: ${publicToken}`);
+    logger.info(`[ulakBELL] Ticket #${ticketId} → token: ${publicToken}`);
     res.json({ ok: true, public_token: publicToken, ulakbellNumber: incidentNum });
   } catch (err) {
-    console.error(`[ulakBELL] sync-incident #${ticketId}:`, err.message);
+    logger.error(`[ulakBELL] sync-incident #${ticketId}:`, err.message);
     res.status(502).json({ ok: false, error: err.message });
   }
 });

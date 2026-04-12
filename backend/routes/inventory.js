@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 router.use(authMiddleware);
 
+const logger = require('../utils/logger');
 const { fetchAdComputers, MOCK_COMPUTERS } = require('../lib/adComputers');
 const { syncDevicesFromAD } = require('../lib/adDeviceSync');
 
@@ -63,7 +64,7 @@ router.get('/ad-computers', async (req, res) => {
 
     res.json(computers);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'AD bilgisayarları alınamadı' });
   }
 });
@@ -95,7 +96,7 @@ router.get('/stats', async (req, res) => {
 
     res.json({ total, totalByType, addedToday, addedThisWeek });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İstatistikler alınamadı' });
   }
 });
@@ -121,7 +122,7 @@ router.get('/directorates', async (req, res) => {
     const list = rows.map((r) => r.directorate).filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'));
     res.json(list);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daireler alınamadı' });
   }
 });
@@ -234,7 +235,7 @@ router.get('/', async (req, res) => {
     });
     res.json({ devices: devicesWithEpc, total: countRows[0]?.count ?? 0, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
-    console.error('Inventory GET error:', err);
+    logger.error('Inventory GET error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -253,7 +254,7 @@ router.get('/:id', async (req, res) => {
     if (!device) return res.status(404).json({ error: 'Cihaz bulunamadı' });
     res.json(device);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihaz alınamadı' });
   }
 });
@@ -304,7 +305,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(device);
   } catch (err) {
     if (err.code === 'P2003') return res.status(400).json({ error: 'Geçersiz lokasyon veya kullanıcı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihaz oluşturulamadı' });
   }
 });
@@ -358,7 +359,7 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Cihaz bulunamadı' });
     if (err.code === 'P2003') return res.status(400).json({ error: 'Geçersiz lokasyon veya kullanıcı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihaz güncellenemedi' });
   }
 });
@@ -381,7 +382,7 @@ router.post('/sync-ad', async (req, res) => {
     ]);
     res.json(result);
   } catch (err) {
-    console.error('[sync-ad]', err);
+    logger.error('[sync-ad]', err);
     res.status(500).json({ error: err.message || 'Senkronizasyon başarısız' });
   }
 });
@@ -412,7 +413,7 @@ router.get('/sync-logs', async (req, res) => {
     });
     res.json(logs);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Loglar alınamadı' });
   }
 });
@@ -432,7 +433,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true, device });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Cihaz bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihaz pasife alınamadı' });
   }
 });

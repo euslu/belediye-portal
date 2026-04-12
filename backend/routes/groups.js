@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 const { logActivity } = require('../lib/activity');
 const { notifyTicketAssigned } = require('../lib/notifications');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -29,7 +30,7 @@ router.get('/', async (req, res) => {
     });
     res.json(groups);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Gruplar alınamadı' });
   }
 });
@@ -52,7 +53,7 @@ router.get('/:id/members', async (req, res) => {
     });
     res.json(members.map((m) => ({ ...m.user, groupRole: m.role })));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Üyeler alınamadı' });
   }
 });
@@ -80,7 +81,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(group);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu isimde bir grup zaten var' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Grup oluşturulamadı' });
   }
 });
@@ -108,7 +109,7 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Grup bulunamadı' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu isimde bir grup zaten var' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Grup güncellenemedi' });
   }
 });
@@ -137,7 +138,7 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Grup bulunamadı' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu isimde bir grup zaten var' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Grup güncellenemedi' });
   }
 });
@@ -155,7 +156,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Grup bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Grup silinemedi' });
   }
 });
@@ -194,10 +195,10 @@ router.patch('/:id/leader', async (req, res) => {
       select: { id: true, displayName: true, username: true },
     });
 
-    console.log(`[Grup] Group #${groupId} → lider: ${leader?.displayName}`);
+    logger.info(`[Grup] Group #${groupId} → lider: ${leader?.displayName}`);
     res.json({ ok: true, leader });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Lider atanamadı' });
   }
 });
@@ -227,7 +228,7 @@ router.post('/:id/members', async (req, res) => {
     });
     res.json(members.map((m) => ({ ...m.user, groupRole: m.role })));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Üye eklenemedi' });
   }
 });
@@ -245,7 +246,7 @@ router.delete('/:id/members/:userId', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Üye bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Üye çıkarılamadı' });
   }
 });
@@ -376,7 +377,7 @@ router.post('/tickets/:id/assign', async (req, res) => {
     res.json(ticket);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Ticket bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Atama yapılamadı' });
   }
 });

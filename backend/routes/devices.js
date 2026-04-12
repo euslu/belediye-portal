@@ -2,6 +2,7 @@ const express  = require('express');
 const router   = express.Router();
 const prisma   = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -25,7 +26,7 @@ router.get('/', async (req, res) => {
     });
     res.json(devices);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihazlar alınamadı' });
   }
 });
@@ -53,7 +54,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json(device);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihaz eklenemedi' });
   }
 });

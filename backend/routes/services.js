@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -39,7 +40,7 @@ router.get('/status', async (req, res) => {
 
     res.json(statusMap);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Servis durumları alınamadı' });
   }
 });
@@ -122,7 +123,7 @@ router.post('/run/:service', async (req, res) => {
     }
     res.json({ ok: true, result });
   } catch (err) {
-    console.error(`[services/run] ${service}:`, err.message);
+    logger.error(`[services/run] ${service}:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });

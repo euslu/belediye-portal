@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -23,7 +24,7 @@ router.get('/', async (req, res) => {
     });
     res.json(categories);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kategoriler alınamadı' });
   }
 });
@@ -45,7 +46,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(category);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu kategori zaten mevcut' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kategori oluşturulamadı' });
   }
 });
@@ -70,7 +71,7 @@ router.patch('/:id', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Kategori bulunamadı' });
     if (err.code === 'P2002') return res.status(409).json({ error: 'Bu isim zaten kullanılıyor' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kategori güncellenemedi' });
   }
 });
@@ -92,7 +93,7 @@ router.delete('/:id', async (req, res) => {
     await prisma.category.delete({ where: { id } });
     res.json({ message: 'Kategori silindi' });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kategori silinemedi' });
   }
 });

@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
     });
     res.json(subjects);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konular alınamadı' });
   }
 });
@@ -40,7 +41,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json(subject);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konu oluşturulamadı' });
   }
 });
@@ -64,7 +65,7 @@ router.patch('/:id', async (req, res) => {
     res.json(subject);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Konu bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konu güncellenemedi' });
   }
 });
@@ -80,7 +81,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Konu bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konu silinemedi' });
   }
 });

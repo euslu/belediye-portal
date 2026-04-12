@@ -3,11 +3,14 @@ const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 
+const logger = require('../utils/logger');
+
 router.use(authMiddleware);
 
 const BASE_WHERE = [
   { department: { not: null } },
   { department: { not: 'Dış Kullanıcı' } },
+  { password: null },  // Mock kullanıcıları gizle (AD'den gelen gerçek kullanıcıların password'ü null)
 ];
 
 // Non-admin için DB'den kendi directorate'ini çek
@@ -39,7 +42,7 @@ router.get('/me', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json(user);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kullanıcı bilgileri alınamadı' });
   }
 });
@@ -59,7 +62,7 @@ router.get('/stats', async (req, res) => {
     ]);
     res.json({ total, withDirectorate, withPhone, withEmployeeNumber });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İstatistikler alınamadı' });
   }
 });
@@ -72,15 +75,24 @@ router.get('/', async (req, res) => {
 
   const where = { AND: [...BASE_WHERE] };
 
-  const isAdmin = req.user.role === 'admin';
-  if (!isAdmin) {
+  const rol = req.user.sistemRol || req.user.role;
+  const isAdmin = rol === 'admin';
+
+  if (rol === 'daire_baskani' && req.user.directorate) {
+    // Daire başkanı → kendi dairesi
+    where.AND.push({ directorate: req.user.directorate });
+    if (department) where.AND.push({ department });
+  } else if (!isAdmin) {
+    // Müdür / personel → kendi dairesi (DB'den çek)
     const myDir = await getMyDirectorate(req.user.username);
     if (myDir) {
       where.AND.push({ directorate: myDir });
     } else {
       if (req.user.department) where.AND.push({ department: req.user.department });
     }
+    if (department) where.AND.push({ department });
   } else {
+    // Admin → tümü, opsiyonel filtreler
     if (directorate) where.AND.push({ OR: [{ directorate }, { AND: [{ directorate: null }, { department: directorate }] }] });
     if (department)  where.AND.push({ department });
   }
@@ -115,7 +127,7 @@ router.get('/', async (req, res) => {
 
     res.json({ users, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kullanıcılar alınamadı' });
   }
 });
@@ -153,7 +165,7 @@ router.get('/directorates', async (req, res) => {
 
     res.json(rows.map(r => ({ name: r.name, count: Number(r.count) })));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Daireler alınamadı' });
   }
 });
@@ -177,7 +189,7 @@ router.get('/departments', async (req, res) => {
         .map((d) => ({ name: d.department, count: d._count.department }))
     );
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Departmanlar alınamadı' });
   }
 });
@@ -218,47 +230,70 @@ const OFFICIAL_DIRECTORATES = [
 ];
 
 // ─── GET /api/users/demographics ─────────────────────────────────────────────
-// Admin: personel demografik istatistikleri (cinsiyet, çalışan tipi, daire dağılımı, ay bazlı giriş)
+// Admin: tüm personel demografik istatistikleri
+// Daire başkanı: kendi dairesine filtrelenmiş demografik istatistikler
 router.get('/demographics', async (req, res) => {
-  if (req.user.role !== 'admin')
+  const rol = req.user.sistemRol || req.user.role;
+  if (!['admin', 'daire_baskani'].includes(rol))
     return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  // Daire başkanı → kendi dairesiyle sınırla
+  const dirFilter = rol === 'daire_baskani' ? req.user.directorate : null;
 
   try {
     const today = new Date();
     const todayMD = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}`;
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    // Daire filtre SQL parçası + mock kullanıcıları gizle
+    const dirSQL = dirFilter
+      ? `AND directorate = '${dirFilter.replace(/'/g, "''")}' AND password IS NULL`
+      : 'AND password IS NULL';
+
     const [genderRows, employeeTypeRows, directorateRows, ageRows, birthdayRows, newWeekRows, totals, kadroRows] = await Promise.all([
       // Cinsiyet dağılımı
-      prisma.$queryRaw`
+      prisma.$queryRawUnsafe(`
         SELECT COALESCE(gender, 'Belirtilmemiş') AS name, COUNT(*)::int AS value
         FROM "User"
-        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
+        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı' ${dirSQL}
         GROUP BY COALESCE(gender, 'Belirtilmemiş')
         ORDER BY value DESC
-      `,
+      `),
       // Çalışan tipi dağılımı
-      prisma.$queryRaw`
+      prisma.$queryRawUnsafe(`
         SELECT COALESCE("employeeType", 'Belirtilmemiş') AS name, COUNT(*)::int AS value
         FROM "User"
-        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
+        WHERE department IS NOT NULL AND department != 'Dış Kullanıcı' ${dirSQL}
         GROUP BY COALESCE("employeeType", 'Belirtilmemiş')
         ORDER BY value DESC
-      `,
+      `),
       // Daire bazlı personel sayısı — erkek/kadın breakdown
-      prisma.$queryRaw`
-        SELECT
-          directorate,
-          COUNT(*)::int AS total,
-          COUNT(CASE WHEN gender = 'Erkek' THEN 1 END)::int AS erkek,
-          COUNT(CASE WHEN gender = 'Kadın' THEN 1 END)::int AS kadin
-        FROM "User"
-        WHERE directorate = ANY(${OFFICIAL_DIRECTORATES})
-        GROUP BY directorate
-        ORDER BY total DESC
-      `,
+      dirFilter
+        ? prisma.$queryRawUnsafe(`
+            SELECT
+              department AS directorate,
+              COUNT(*)::int AS total,
+              COUNT(CASE WHEN gender = 'Erkek' THEN 1 END)::int AS erkek,
+              COUNT(CASE WHEN gender = 'Kadın' THEN 1 END)::int AS kadin
+            FROM "User"
+            WHERE directorate = '${dirFilter.replace(/'/g, "''")}'
+              AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+            GROUP BY department
+            ORDER BY total DESC
+          `)
+        : prisma.$queryRaw`
+            SELECT
+              directorate,
+              COUNT(*)::int AS total,
+              COUNT(CASE WHEN gender = 'Erkek' THEN 1 END)::int AS erkek,
+              COUNT(CASE WHEN gender = 'Kadın' THEN 1 END)::int AS kadin
+            FROM "User"
+            WHERE directorate = ANY(${OFFICIAL_DIRECTORATES})
+            GROUP BY directorate
+            ORDER BY total DESC
+          `,
       // Yaş grupları (birthday DD.MM.YYYY formatında)
-      prisma.$queryRaw`
+      prisma.$queryRawUnsafe(`
         SELECT name, value FROM (
           SELECT
             CASE
@@ -275,52 +310,74 @@ router.get('/demographics', async (req, res) => {
             SELECT EXTRACT(YEAR FROM AGE(NOW(), TO_DATE(birthday, 'DD.MM.YYYY')))::int AS age_years
             FROM "User"
             WHERE birthday IS NOT NULL AND LENGTH(birthday) = 10
-              AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+              AND department IS NOT NULL AND department != 'Dış Kullanıcı' ${dirSQL}
           ) sub
           GROUP BY 1
         ) grouped
         ORDER BY sort_key
-      `,
+      `),
       // Bugün doğum günü olanlar
-      prisma.$queryRaw`
+      prisma.$queryRawUnsafe(`
         SELECT username, "displayName", department, directorate
         FROM "User"
         WHERE birthday IS NOT NULL
-          AND SUBSTRING(birthday, 1, 5) = ${todayMD}
-          AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+          AND SUBSTRING(birthday, 1, 5) = '${todayMD}'
+          AND department IS NOT NULL AND department != 'Dış Kullanıcı' ${dirSQL}
         ORDER BY "displayName"
-      `,
+      `),
       // Bu hafta AD'ye eklenenler
-      prisma.$queryRaw`
-        SELECT username, "displayName", department, directorate, "adCreatedAt"
-        FROM "User"
-        WHERE "adCreatedAt" >= ${weekAgo}
-          AND department IS NOT NULL AND department != 'Dış Kullanıcı'
-        ORDER BY "adCreatedAt" DESC
-        LIMIT 20
-      `,
-      // Kadro (FlexCity'den) dağılımı
-      prisma.$queryRaw`
+      dirFilter
+        ? prisma.$queryRawUnsafe(`
+            SELECT username, "displayName", department, directorate, "adCreatedAt"
+            FROM "User"
+            WHERE "adCreatedAt" >= '${weekAgo.toISOString()}'
+              AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+              AND directorate = '${dirFilter.replace(/'/g, "''")}'
+            ORDER BY "adCreatedAt" DESC
+            LIMIT 20
+          `)
+        : prisma.$queryRaw`
+            SELECT username, "displayName", department, directorate, "adCreatedAt"
+            FROM "User"
+            WHERE "adCreatedAt" >= ${weekAgo}
+              AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+            ORDER BY "adCreatedAt" DESC
+            LIMIT 20
+          `,
+      // Kadro dağılımı
+      prisma.$queryRawUnsafe(`
         SELECT COALESCE(kadro, 'Belirtilmemiş') AS name, COUNT(*)::int AS value
         FROM "User"
         WHERE department IS NOT NULL AND department != 'Dış Kullanıcı'
-          AND kadro IS NOT NULL
+          AND kadro IS NOT NULL ${dirSQL}
         GROUP BY COALESCE(kadro, 'Belirtilmemiş')
         ORDER BY value DESC
         LIMIT 15
-      `,
+      `),
       // Özet sayaçlar
-      Promise.all([
-        prisma.user.count({ where: { AND: BASE_WHERE } }),
-        prisma.user.count({ where: { AND: BASE_WHERE, birthday: { not: null } } }),
-        prisma.user.count({ where: { AND: BASE_WHERE, welcomeMailSent: true } }),
-        prisma.user.count({
-          where: {
-            AND: BASE_WHERE,
-            adCreatedAt: { gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()) },
-          },
-        }),
-      ]),
+      dirFilter
+        ? Promise.all([
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }] } }),
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }, { birthday: { not: null } }] } }),
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }, { welcomeMailSent: true }] } }),
+            prisma.user.count({
+              where: {
+                AND: [...BASE_WHERE, { directorate: dirFilter }],
+                adCreatedAt: { gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()) },
+              },
+            }),
+          ])
+        : Promise.all([
+            prisma.user.count({ where: { AND: BASE_WHERE } }),
+            prisma.user.count({ where: { AND: BASE_WHERE, birthday: { not: null } } }),
+            prisma.user.count({ where: { AND: BASE_WHERE, welcomeMailSent: true } }),
+            prisma.user.count({
+              where: {
+                AND: BASE_WHERE,
+                adCreatedAt: { gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()) },
+              },
+            }),
+          ]),
     ]);
 
     const [total, withBirthday, welcomeMailsSent, newLastYear] = totals;
@@ -340,6 +397,7 @@ router.get('/demographics', async (req, res) => {
         erkek: Number(d.erkek),
         kadin: Number(d.kadin),
       })),
+      dirFilter: dirFilter || null,
       ageGroups:     ageRows.map(r => ({ name: r.name, value: Number(r.value) })),
       birthdayToday: birthdayRows.map(r => ({
         username: r.username, displayName: r.displayName,
@@ -353,14 +411,15 @@ router.get('/demographics', async (req, res) => {
       byKadro: kadroRows.map(r => ({ name: r.name, value: Number(r.value) })),
     });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Demografik veriler alınamadı' });
   }
 });
 
 // ─── POST /api/users/send-birthday-mail/:username ────────────────────────────
 router.post('/send-birthday-mail/:username', async (req, res) => {
-  if (req.user.role !== 'admin')
+  const rol = req.user.sistemRol || req.user.role;
+  if (!['admin', 'daire_baskani'].includes(rol))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   try {
@@ -368,7 +427,7 @@ router.post('/send-birthday-mail/:username', async (req, res) => {
     const result = await sendBirthdayMails(req.params.username);
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Mail gönderilemedi' });
   }
 });
@@ -395,7 +454,7 @@ router.patch('/:id/location', async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     if (err.code === 'P2003') return res.status(404).json({ error: 'Lokasyon bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Lokasyon atanamadı' });
   }
 });
@@ -450,7 +509,7 @@ router.get('/:username', async (req, res) => {
 
     res.json({ ...user, openTickets });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kullanıcı alınamadı' });
   }
 });

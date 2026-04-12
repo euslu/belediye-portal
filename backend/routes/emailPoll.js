@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const { pollEmails } = require('../lib/emailPoller');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -17,7 +18,7 @@ router.post('/', ADMIN_ONLY, async (req, res) => {
     const result = await pollEmails();
     res.json({ message: 'E-posta taraması tamamlandı', ...result });
   } catch (err) {
-    console.error('[EmailPoll] Manuel tarama hatası:', err.message);
+    logger.error('[EmailPoll] Manuel tarama hatası:', err.message);
     res.status(500).json({ error: 'Tarama başarısız: ' + err.message });
   }
 });

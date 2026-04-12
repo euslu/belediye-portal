@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const auth   = require('../middleware/authMiddleware');
 const prisma = require('../lib/prisma');
+const logger = require('../utils/logger');
 
 function adminOnly(req, res, next) {
   const rol = req.user.sistemRol || req.user.role;
@@ -60,7 +61,7 @@ router.get('/kullanicilar', auth, adminOrDaireBaskani, async (req, res) => {
 
     res.json(liste);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -93,7 +94,7 @@ router.put('/kullanici/:username', auth, adminOrDaireBaskani, async (req, res) =
     });
     res.json(updated);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -108,7 +109,7 @@ router.get('/gruplar', auth, adminOnly, async (req, res) => {
     });
     res.json(gruplar);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -124,7 +125,7 @@ router.get('/directorates', auth, adminOnly, async (req, res) => {
     });
     res.json(rows.map(r => r.directorate).filter(Boolean));
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });

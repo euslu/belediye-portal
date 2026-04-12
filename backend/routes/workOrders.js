@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -36,7 +37,7 @@ router.get('/', async (req, res) => {
     });
     res.json(orders);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İş emirleri alınamadı' });
   }
 });
@@ -51,7 +52,7 @@ router.get('/:id', async (req, res) => {
     if (!wo) return res.status(404).json({ error: 'İş emri bulunamadı' });
     res.json(wo);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İş emri alınamadı' });
   }
 });
@@ -88,7 +89,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json(wo);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İş emri oluşturulamadı' });
   }
 });
@@ -120,7 +121,7 @@ router.patch('/:id', async (req, res) => {
     res.json(wo);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'İş emri bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İş emri güncellenemedi' });
   }
 });
@@ -133,7 +134,7 @@ router.delete('/:id', async (req, res) => {
     res.json({ message: 'İş emri silindi' });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'İş emri bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'İş emri silinemedi' });
   }
 });

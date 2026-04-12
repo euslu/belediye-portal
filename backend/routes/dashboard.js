@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -257,7 +258,7 @@ router.get('/manager-stats', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('[manager-stats]', err);
+    logger.error('[manager-stats]', err);
     res.status(500).json({ error: 'İstatistikler alınamadı' });
   }
 });
@@ -297,7 +298,7 @@ router.get('/my-stats', async (req, res) => {
 
     res.json({ openTickets, resolvedThisMonth, myTasks, slaRisk });
   } catch (err) {
-    console.error('[my-stats]', err);
+    logger.error('[my-stats]', err);
     res.status(500).json({ error: 'İstatistikler alınamadı' });
   }
 });
@@ -312,7 +313,7 @@ router.get('/my-devices', async (req, res) => {
     });
     res.json(devices);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Cihazlar alınamadı' });
   }
 });
@@ -384,7 +385,7 @@ router.get('/benim', async (req, res) => {
       gorevlerim,
     });
   } catch (err) {
-    console.error('[dashboard/benim]', err);
+    logger.error('[dashboard/benim]', err);
     res.status(500).json({ error: 'Veriler alınamadı' });
   }
 });
@@ -434,8 +435,44 @@ router.get('/daire-talepleri', async (req, res) => {
 
     res.json({ talepler, statusGruplari });
   } catch (err) {
-    console.error('[dashboard/daire-talepleri]', err);
+    logger.error('[dashboard/daire-talepleri]', err);
     res.status(500).json({ error: 'Veriler alınamadı' });
+  }
+});
+
+// ─── GET /api/dashboard/daire-personel-ozet ─────────────────────────────────
+// Daire başkanı/müdür personel özeti (User tablosundan)
+router.get('/daire-personel-ozet', async (req, res) => {
+  try {
+    const rol = req.user.sistemRol || req.user.role;
+    const dir = req.user.directorate;
+    const dept = req.user.department;
+    if (!dir && !dept) return res.json({ toplam: 0, erkek: 0, kadin: 0, mudurlukSayisi: 0 });
+
+    // Müdür: department, Daire başkanı: directorate, Admin: tümü
+    const where = rol === 'admin' ? {} : rol === 'mudur' && dept ? { department: dept } : { directorate: dir };
+
+    const mudurlukWhere = { ...where };
+    if (!mudurlukWhere.department) mudurlukWhere.department = { not: null };
+
+    const [toplam, cinsiyetler, mudurlukler] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.groupBy({ by: ['gender'], where, _count: true }),
+      prisma.user.groupBy({ by: ['department'], where: mudurlukWhere }),
+    ]);
+
+    const erkek = cinsiyetler.find(g => g.gender === 'Erkek')?._count || 0;
+    const kadin = cinsiyetler.find(g => g.gender === 'Kadın')?._count || 0;
+
+    res.json({
+      toplam,
+      erkek,
+      kadin,
+      mudurlukSayisi: mudurlukler.length,
+    });
+  } catch (err) {
+    logger.error('[dashboard/daire-personel-ozet]', err);
+    res.status(500).json({ error: 'Veri alınamadı' });
   }
 });
 

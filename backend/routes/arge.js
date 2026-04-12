@@ -3,6 +3,7 @@ const auth   = require('../middleware/authMiddleware');
 const prisma = require('../lib/prisma');
 const multer = require('multer');
 const XLSX   = require('xlsx');
+const logger = require('../utils/logger');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -19,11 +20,26 @@ function yetkiKontrol(req, res, next) {
   next();
 }
 
+// AR-GE bölümüne erişim kontrolü (okuma dahil)
+function argeErisim(req, res, next) {
+  const rol = req.user.sistemRol || req.user.role;
+  const gruplar = req.user.calismaGruplari || [];
+  const dept = req.user.department || '';
+  const dir = req.user.directorate || '';
+  const yetkili =
+    rol === 'admin' ||
+    (rol === 'daire_baskani' && /bilgi.i[İi̇]şlem/i.test(dir)) ||
+    /sistem.*ağ.*veri güvenliği/i.test(dept) ||
+    gruplar.some(g => /ar-?ge/i.test(g.ad));
+  if (!yetkili) return res.status(403).json({ error: 'AR-GE erişim yetkiniz yok' });
+  next();
+}
+
 // ─── Yardımcı: string temizle ────────────────────────────────────────────────
 const str = v => String(v ?? '').trim() || null;
 
 // ─── GET /api/arge/hat-atamalari ─────────────────────────────────────────────
-router.get('/hat-atamalari', auth, async (req, res) => {
+router.get('/hat-atamalari', auth, argeErisim, async (req, res) => {
   try {
     const { directorate, department, hatTipi, username } = req.query;
     const where = {
@@ -39,13 +55,13 @@ router.get('/hat-atamalari', auth, async (req, res) => {
     });
     res.json(atamalar);
   } catch (e) {
-    console.error('[arge/hat-atamalari]', e);
+    logger.error('[arge/hat-atamalari]', e);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─── GET /api/arge/hat-ozet ──────────────────────────────────────────────────
-router.get('/hat-ozet', auth, async (req, res) => {
+router.get('/hat-ozet', auth, argeErisim, async (req, res) => {
   try {
     const [toplamSes, toplamM2m, toplamSesData, bekleyen, daireDagilim, operatorDagilim, networkDagilim, paketDagilim] =
       await Promise.all([
@@ -85,7 +101,7 @@ router.get('/hat-ozet', auth, async (req, res) => {
       paketDagilim:    paketDagilim.map(p => ({ ad: p.paket,        sayi: p._count.paket })),
     });
   } catch (e) {
-    console.error('[arge/hat-ozet]', e);
+    logger.error('[arge/hat-ozet]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -98,7 +114,7 @@ router.post('/hat-atamasi', auth, yetkiKontrol, async (req, res) => {
     });
     res.json(atama);
   } catch (e) {
-    console.error('[arge/hat-atamasi POST]', e);
+    logger.error('[arge/hat-atamasi POST]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -112,7 +128,7 @@ router.put('/hat-atamasi/:id', auth, yetkiKontrol, async (req, res) => {
     });
     res.json(atama);
   } catch (e) {
-    console.error('[arge/hat-atamasi PUT]', e);
+    logger.error('[arge/hat-atamasi PUT]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -126,7 +142,7 @@ router.delete('/hat-atamasi/:id', auth, adminOnly, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    console.error('[arge/hat-atamasi DELETE]', e);
+    logger.error('[arge/hat-atamasi DELETE]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -182,7 +198,7 @@ router.post('/import/gsm-hatlar', auth, adminOnly, upload.single('dosya'), async
 
     res.json({ ok: true, eklenen, guncellenen, mesaj: `${eklenen} eklendi, ${guncellenen} güncellendi` });
   } catch (e) {
-    console.error('[arge/import/gsm-hatlar]', e);
+    logger.error('[arge/import/gsm-hatlar]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -217,13 +233,13 @@ router.post('/import/cihaz-envanter', auth, adminOnly, upload.single('dosya'), a
 
     res.json({ ok: true, eklenen, mesaj: `${eklenen} cihaz kaydı eklendi` });
   } catch (e) {
-    console.error('[arge/import/cihaz-envanter]', e);
+    logger.error('[arge/import/cihaz-envanter]', e);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─── GET /api/arge/cihaz-envanter ────────────────────────────────────────────
-router.get('/cihaz-envanter', auth, async (req, res) => {
+router.get('/cihaz-envanter', auth, argeErisim, async (req, res) => {
   try {
     const { daire, cihazTuru, q } = req.query;
     const where = {
@@ -244,13 +260,13 @@ router.get('/cihaz-envanter', auth, async (req, res) => {
     });
     res.json(cihazlar);
   } catch (e) {
-    console.error('[arge/cihaz-envanter]', e);
+    logger.error('[arge/cihaz-envanter]', e);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ─── GET /api/arge/cihaz-ozet ────────────────────────────────────────────────
-router.get('/cihaz-ozet', auth, async (req, res) => {
+router.get('/cihaz-ozet', auth, argeErisim, async (req, res) => {
   try {
     const [toplamCihaz, turDagilim, markaDagilim, daireDagilim] = await Promise.all([
       prisma.cihazEnvanter.count({ where: { aktif: true } }),
@@ -277,7 +293,7 @@ router.get('/cihaz-ozet', auth, async (req, res) => {
       daireDagilim: daireDagilim.map(r => ({ ad: r.daireBaskanlik, sayi: r._count.daireBaskanlik })),
     });
   } catch (e) {
-    console.error('[arge/cihaz-ozet]', e);
+    logger.error('[arge/cihaz-ozet]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -304,7 +320,7 @@ router.get('/personel-ara', auth, async (req, res) => {
     });
     res.json(personel);
   } catch (e) {
-    console.error('[arge/personel-ara]', e);
+    logger.error('[arge/personel-ara]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -320,7 +336,7 @@ router.get('/daireler', auth, async (req, res) => {
     });
     res.json(rows.map(d => ({ ad: d.directorate, sayi: d._count.directorate })));
   } catch (e) {
-    console.error('[arge/daireler]', e);
+    logger.error('[arge/daireler]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -337,7 +353,7 @@ router.get('/mudurlukleri', auth, async (req, res) => {
     });
     res.json(rows.map(m => ({ ad: m.department, sayi: m._count.department })));
   } catch (e) {
-    console.error('[arge/mudurlukleri]', e);
+    logger.error('[arge/mudurlukleri]', e);
     res.status(500).json({ error: e.message });
   }
 });

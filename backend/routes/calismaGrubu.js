@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const auth   = require('../middleware/authMiddleware');
 const prisma = require('../lib/prisma');
+const logger = require('../utils/logger');
 
 function yetkiKontrol(req, res, next) {
   const rol = req.user.sistemRol || req.user.role;
@@ -33,7 +34,7 @@ router.get('/', auth, async (req, res) => {
     });
     res.json(gruplar);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -60,7 +61,7 @@ router.post('/', auth, yetkiKontrol, async (req, res) => {
     });
     res.json(grup);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -75,7 +76,7 @@ router.put('/:id', auth, yetkiKontrol, async (req, res) => {
     });
     res.json(grup);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -89,7 +90,7 @@ router.delete('/:id', auth, yetkiKontrol, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -105,7 +106,7 @@ router.post('/:id/uye', auth, yetkiKontrol, async (req, res) => {
     });
     res.json(uye);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -118,7 +119,7 @@ router.delete('/:id/uye/:username', auth, yetkiKontrol, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -144,7 +145,7 @@ router.put('/:id/lider', auth, yetkiKontrol, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -175,7 +176,7 @@ router.get('/:id/gorevler', auth, liderYetkiKontrol, async (req, res) => {
     });
     res.json(gorevler);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -193,7 +194,7 @@ router.put('/gorev/:ticketId/ata', auth, liderYetkiKontrol, async (req, res) => 
     });
     res.json(ticket);
   } catch (e) {
-    console.error(e);
+    logger.error(e);
     res.status(500).json({ error: e.message });
   }
 });

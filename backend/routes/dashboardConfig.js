@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
@@ -40,7 +41,7 @@ router.get('/widgets', async (req, res) => {
     const filtered = widgets.filter(w => w.roles.split(',').includes(userRole));
     res.json(filtered);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Widget listesi alınamadı' });
   }
 });
@@ -70,7 +71,7 @@ router.get('/config', async (req, res) => {
       .map(w => w.key);
     res.json(defaults);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konfigürasyon alınamadı' });
   }
 });
@@ -88,7 +89,7 @@ router.post('/config', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konfigürasyon kaydedilemedi' });
   }
 });
@@ -103,7 +104,7 @@ router.get('/role-config/:role', async (req, res) => {
     if (!config) return res.json([]);
     res.json(JSON.parse(config.widgets));
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konfigürasyon alınamadı' });
   }
 });
@@ -122,7 +123,7 @@ router.post('/role-config/:role', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Konfigürasyon kaydedilemedi' });
   }
 });
