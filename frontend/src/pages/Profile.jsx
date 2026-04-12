@@ -65,113 +65,82 @@ export default function Profile() {
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
 
-      {/* ── Üst Kart: Kimlik ── */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6">
-        <div className="flex items-start gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shrink-0">
-            {initials}
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a2e23 0%, #2d5a3d 100%)',
+        borderRadius: 16, padding: '24px 28px',
+        display: 'flex', alignItems: 'center', gap: 16,
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: '50%', background: '#43DC80',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 20, fontWeight: 700, color: '#1a2e23', flexShrink: 0,
+        }}>{initials}</div>
+        <div>
+          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Hoş geldiniz</div>
+          <div style={{ color: '#fff', fontSize: 18, fontWeight: 700 }}>{user?.displayName}</div>
+          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>
+            {[user?.title, (user?.directorate || '').replace(' Dairesi Başkanlığı', '')]
+              .filter(Boolean).join(' · ')}
+            {user?.city ? ` · 📍 ${user.city}` : ''}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-lg font-bold text-gray-800">{user?.displayName}</h1>
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${roleColor}`}>{roleLabel}</span>
-            </div>
-            {user?.directorate && (
-              <p className="text-sm text-indigo-600 font-medium mt-0.5">{user.directorate}</p>
-            )}
-            <p className="text-sm text-gray-500 mt-0.5">{user?.department || '—'}</p>
-            {user?.title && <p className="text-xs text-gray-400 mt-0.5">{user.title}</p>}
-          </div>
-        </div>
-
-        {/* İletişim bilgileri */}
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <ContactRow icon="📧" label="E-posta"
-            value={user?.email
-              ? <a href={`mailto:${user.email}`} className="text-indigo-600 hover:underline">{user.email}</a>
-              : '—'}
-          />
-          <ContactRow icon="📞" label="GSM"
-            value={adUser?.phone ? maskPhone(adUser.phone) : '—'}
-          />
-          <ContactRow icon="☎️" label="Dahili"
-            value={adUser?.ipPhone || '—'}
-          />
-          <ContactRow icon="🏢" label="Ofis / Lokasyon"
-            value={adUser?.office || adUser?.city || '—'}
-          />
-          <ContactRow icon="🪪" label="Sicil No"
-            value={adUser?.employeeNumber || '—'}
-          />
-          <ContactRow icon="👤" label="AD Hesabı"
-            value={
-              <span className="flex items-center gap-1.5">
-                <span className="font-mono text-sm">{user?.username}</span>
-                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" title="Aktif" />
-                <span className="text-xs text-green-600">Aktif</span>
-              </span>
-            }
-          />
         </div>
       </div>
 
-      {/* ── İki Kolon ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-        {/* Sol: İstatistikler */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">İstatistiklerim</h2>
-          <div className="space-y-3">
-            <StatRow icon="📋" label="Açtığım Talepler"   value={loading ? '…' : createdTickets.length}  color="blue" />
-            <StatRow icon="✅" label="Üzerime Atanan"      value={loading ? '…' : assignedTickets.length} color="purple" />
-            <StatRow icon="🔓" label="Açık Talepler"       value={loading ? '…' : openCreated}            color="amber" />
-            <StatRow icon="🏁" label="Çözülen"             value={loading ? '…' : resolvedCount}          color="green" />
-            <StatRow icon="💻" label="Kayıtlı Cihazlarım"  value={loading ? '…' : (adUser?._count?.devices ?? '—')} color="indigo" />
+      {/* ── İletişim & Kimlik Kartları ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {[
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>, label: 'E-posta', value: user?.email || '—', link: user?.email ? `mailto:${user.email}` : null },
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>, label: 'GSM', value: adUser?.phone ? maskPhone(adUser.phone) : '—' },
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.96.35 1.9.67 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.32 1.85.55 2.81.67A2 2 0 0122 16.92z"/></svg>, label: 'Dahili', value: adUser?.ipPhone || '—' },
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="12"/></svg>, label: 'Sicil No', value: adUser?.employeeNumber || '—' },
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Lokasyon', value: adUser?.office || adUser?.city || '—' },
+          { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43DC80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'AD Hesabı', value: user?.username || '—' },
+        ].map((item, i) => (
+          <div key={i} style={{
+            background: '#fff', border: '1px solid #e8ede9', borderRadius: 12,
+            padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: '#f0fdf4', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', flexShrink: 0,
+            }}>{item.svg}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: '#9aa8a0', fontWeight: 500 }}>{item.label}</div>
+              {item.link ? (
+                <a href={item.link} style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>{item.value}</a>
+              ) : (
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2e23', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+              )}
+            </div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* Sağ: Gruplar */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Grup Üyeliklerim</h2>
-          {adUser?.groups?.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {adUser.groups.map(g => (
-                <span key={g.group.id}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium
-                    ${g.role === 'leader' ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300' : 'bg-gray-100 text-gray-600'}`}
-                >
-                  {g.group.name}
-                  {g.role === 'leader' && <span className="ml-1 opacity-70">★</span>}
-                </span>
-              ))}
+      {/* ── İstatistiklerim ── */}
+      <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '18px 22px' }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a2e23', margin: '0 0 14px' }}>İstatistiklerim</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          {[
+            { label: 'Açtığım Talepler',   value: loading ? '…' : createdTickets.length,  color: '#3b82f6' },
+            { label: 'Üzerime Atanan',      value: loading ? '…' : assignedTickets.length, color: '#8b5cf6' },
+            { label: 'Açık Talepler',        value: loading ? '…' : openCreated,            color: '#f59e0b' },
+            { label: 'Çözülen',             value: loading ? '…' : resolvedCount,          color: '#10b981' },
+            { label: 'Cihazlarım',           value: loading ? '…' : (adUser?._count?.devices ?? '—'), color: '#6366f1' },
+          ].map((s, i) => (
+            <div key={i} style={{
+              textAlign: 'center', padding: '12px 8px', borderRadius: 10,
+              background: s.color + '0d', border: `1px solid ${s.color}22`,
+            }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{s.label}</div>
             </div>
-          ) : (
-            <p className="text-sm text-gray-400">Grup üyeliği yok</p>
-          )}
-
-          {/* JWT'deki AD grupları */}
-          {authUser?.groups?.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-400 mb-2">AD Grupları</p>
-              <div className="flex flex-wrap gap-1.5">
-                {authUser.groups.map(g => (
-                  <span key={g} className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{g}</span>
-                ))}
-              </div>
-            </div>
-          )}
+          ))}
         </div>
       </div>
 
-      {/* ── İstatistik kartları (4'lü grid) ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MiniStat label="Oluşturulan" value={loading ? '…' : createdTickets.length}  color="blue" />
-        <MiniStat label="Atanan"      value={loading ? '…' : assignedTickets.length} color="purple" />
-        <MiniStat label="Açık"        value={loading ? '…' : openCreated}            color="yellow" />
-        <MiniStat label="Çözülen"     value={loading ? '…' : resolvedCount}          color="green" />
-      </div>
-
-      {/* ── Biletler ── */}
+{/* ── Biletler ── */}
       {createdTickets.slice(0, 5).length > 0 && (
         <TicketTable title="Son Oluşturduğum Talepler" tickets={createdTickets.slice(0, 5)} />
       )}

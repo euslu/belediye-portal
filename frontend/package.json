@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy": "npm run build && rsync -az --delete dist/ mbb@10.5.1.180:/var/www/belediye-portal/frontend/",
+    "deploy": "echo 'Deploy artık GitHub Actions ile yapılıyor. Bkz. .github/workflows/deploy.yml'",
     "lint": "eslint .",
     "preview": "vite preview"
   },

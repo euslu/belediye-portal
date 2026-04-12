@@ -333,6 +333,81 @@ export default function PersonelDashboard() {
           </div>
         </div>
 
+        {/* ── LOKASYON + ÇALIŞMA GRUPLARI ──────────────────────────────────── */}
+        {(user?.city || user?.calismaGruplari?.length > 0) && (
+          <div style={{ display: 'grid', gridTemplateColumns: user?.city && user?.calismaGruplari?.length > 0 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 20 }}>
+            {/* Lokasyon kartı */}
+            {user?.city && user.city !== '-' && (
+              <div style={{
+                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                border: '1.5px solid #86efac', borderRadius: 14,
+                padding: '16px 20px',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#16a34a',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                  📍 Çalışma Lokasyonu
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1a2e23' }}>
+                  {lokasyon?.ad || user.city}
+                </div>
+                {lokasyon?.ilce && (
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                    📌 {lokasyon.ilce} ilçesi
+                  </div>
+                )}
+                {lokasyon?.personelSayisi && (
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                    👥 Bu lokasyonda {lokasyon.personelSayisi} personel
+                  </div>
+                )}
+                {lokasyon?.adres && (
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6, lineHeight: 1.4 }}>
+                    {lokasyon.adres}
+                  </div>
+                )}
+                <button disabled style={{
+                  marginTop: 12, padding: '6px 14px', fontSize: 12,
+                  background: '#f1f5f9', color: '#9aa8a0',
+                  border: '1px solid #e2e8f0', borderRadius: 8,
+                  cursor: 'not-allowed',
+                }}>
+                  🗺️ Haritada Göster (yakında)
+                </button>
+              </div>
+            )}
+
+            {/* Çalışma Grupları kartı */}
+            {user?.calismaGruplari?.length > 0 && (
+              <div style={{
+                background: '#fff', border: '1px solid #e8ede9',
+                borderRadius: 14, padding: '16px 20px',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#9aa8a0',
+                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                  👥 Çalışma Grupları
+                </div>
+                {user.calismaGruplari.map(g => (
+                  <div key={g.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '6px 0', fontSize: 13, color: '#374151',
+                    borderBottom: '1px solid #f3f4f6',
+                  }}>
+                    <span style={{ fontWeight: 500 }}>{g.ad}</span>
+                    <span style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 20,
+                      background: g.rol === 'lider' ? '#fef9c3' : '#f0fdf4',
+                      color: g.rol === 'lider' ? '#a16207' : '#166534',
+                      fontWeight: 600,
+                    }}>
+                      {g.rol === 'lider' ? '👑 Lider' : 'Üye'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── KPI ŞERİT ─────────────────────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
           <KPI icon="🔄" label="Açık Görevlerim"   value={loading ? '…' : (ozet?.acikGorev ?? 0)}      color={C.info}        to="/my-tasks" />

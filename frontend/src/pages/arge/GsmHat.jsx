@@ -81,6 +81,8 @@ export default function GsmHat() {
   const [sekme, setSekme] = useState('gsm');
   const navigate = useNavigate();
   const [toast, setToast] = useState('');
+  const [tutanaklar, setTutanaklar] = useState([]);
+  const [tutanakYukleniyor, setTutanakYukleniyor] = useState(false);
   const [modalAcik,     setModalAcik]     = useState(false);
   const [duzenlenenHat, setDuzenlenenHat] = useState(null);
 
@@ -156,6 +158,12 @@ export default function GsmHat() {
     yukleCihazlar('', '', '');
     yukleCihazOzet();
   }, []);
+
+  useEffect(() => {
+    if (sekme !== 'tutanak') return;
+    setTutanakYukleniyor(true);
+    apiFetch('/api/tutanak/liste').then(r => r.json()).then(setTutanaklar).catch(() => {}).finally(() => setTutanakYukleniyor(false));
+  }, [sekme]);
 
   useEffect(() => {
     if (!seciliDaire) { setMudurluker([]); return; }
@@ -380,8 +388,9 @@ export default function GsmHat() {
       {/* ── Sekmeler ────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '2px solid #e2e8f0' }}>
         {[
-          { key: 'gsm',   label: `📡 GSM Hatları${hatOzet ? ` (${hatOzet.ozet.toplam.toLocaleString('tr')})` : ''}` },
-          { key: 'cihaz', label: `💻 Cihaz Envanteri${cihazOzet ? ` (${cihazOzet.toplamCihaz})` : ''}` },
+          { key: 'gsm',      label: `📡 GSM Hatları${hatOzet ? ` (${hatOzet.ozet.toplam.toLocaleString('tr')})` : ''}` },
+          { key: 'cihaz',    label: `💻 Cihaz Envanteri${cihazOzet ? ` (${cihazOzet.toplamCihaz})` : ''}` },
+          { key: 'tutanak',  label: '📄 Tutanaklar' },
         ].map(s => (
           <button key={s.key} onClick={() => setSekme(s.key)}
             style={{ padding: '10px 24px', fontSize: 13, fontWeight: sekme === s.key ? 700 : 400, border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: sekme === s.key ? '2.5px solid #6366f1' : '2.5px solid transparent', color: sekme === s.key ? '#6366f1' : '#64748b', marginBottom: -2, transition: 'all .15s' }}>
@@ -646,6 +655,69 @@ export default function GsmHat() {
               {cihazlar.length.toLocaleString('tr')} kayıt
             </div>
           )}
+        </>
+      )}
+
+      {/* ══ TUTANAKLAR ═════════════════════════════════════════════════════════ */}
+      {sekme === 'tutanak' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#64748b' }}>
+              {tutanakYukleniyor ? 'Yükleniyor…' : `${tutanaklar.length} tutanak`}
+            </div>
+            <button onClick={() => navigate('/arge/tutanak')}
+              style={{ padding: '10px 20px', fontSize: 13, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              📄 Yeni Tutanak Oluştur
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #e8ede9' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>#</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Tutanak</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Hat No</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Tarih</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Saat</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Teslim Alan</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tutanaklar.length === 0 && !tutanakYukleniyor ? (
+                  <tr><td colSpan={7} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>Henüz tutanak oluşturulmamış</td></tr>
+                ) : tutanaklar.map((t, i) => (
+                  <tr key={t.fileName} style={{ borderBottom: '1px solid #f1f5f9' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <td style={{ padding: '10px 16px', color: '#94a3b8' }}>{i + 1}</td>
+                    <td style={{ padding: '10px 16px', fontWeight: 500, color: '#1e293b' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.fileName}</span>
+                    </td>
+                    <td style={{ padding: '10px 16px', color: '#1e293b', fontFamily: 'monospace', fontSize: 12 }}>
+                      {t.hatlar?.length ? t.hatlar.join(', ') : '—'}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: '#64748b' }}>
+                      {t.tarih || new Date(t.olusturmaTarihi).toLocaleDateString('tr-TR')}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: '#64748b' }}>
+                      {t.saat || new Date(t.olusturmaTarihi).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: '#1e293b', fontWeight: 500 }}>
+                      {t.teslimAlan || '—'}
+                    </td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                      <a href={`${API}/api/tutanak/indir/${t.fileName}?token=${localStorage.getItem('token')}`}
+                        target="_blank" rel="noreferrer"
+                        style={{ padding: '5px 14px', background: '#6366f1', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+                        İndir
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 

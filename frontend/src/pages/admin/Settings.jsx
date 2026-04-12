@@ -537,6 +537,9 @@ export default function Settings() {
   const [grupLoading, setGrupLoading]             = useState(false);
   const [yeniGrupModal, setYeniGrupModal]         = useState(false);
   const [yeniGrup, setYeniGrup]                   = useState({ ad: '', aciklama: '', department: '' });
+  const [grupDaire, setGrupDaire]                 = useState('');
+  const [grupDaireler, setGrupDaireler]           = useState([]);
+  const [grupMudurlukleri, setGrupMudurlukleri]   = useState([]);
   const [grupAcik, setGrupAcik]                   = useState({});
   const [uyeEkleArama, setUyeEkleArama]           = useState({});
   const [liderAtaAcik, setLiderAtaAcik]           = useState({});
@@ -616,6 +619,23 @@ export default function Settings() {
     setGrupLoading(false);
   };
 
+  // Yeni grup modal açıldığında daireleri yükle
+  useEffect(() => {
+    if (!yeniGrupModal) return;
+    const token = localStorage.getItem('token');
+    fetch(`${API}/api/arge/daireler`, { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.json()).then(setGrupDaireler).catch(() => {});
+  }, [yeniGrupModal]);
+
+  // Daire seçilince müdürlükleri yükle
+  useEffect(() => {
+    if (!grupDaire) { setGrupMudurlukleri([]); return; }
+    const token = localStorage.getItem('token');
+    fetch(`${API}/api/arge/mudurlukleri?directorate=${encodeURIComponent(grupDaire)}`, {
+      headers: { Authorization: 'Bearer ' + token },
+    }).then(r => r.json()).then(setGrupMudurlukleri).catch(() => {});
+  }, [grupDaire]);
+
   const rbacKullaniciKaydet = async (username) => {
     const yeniRol = rbacDegisiklikler[username];
     if (!yeniRol) return;
@@ -674,6 +694,8 @@ export default function Settings() {
       setCalismaGruplari(prev => [grup, ...prev]);
       setYeniGrupModal(false);
       setYeniGrup({ ad: '', aciklama: '', department: '' });
+      setGrupDaire('');
+      setGrupMudurlukleri([]);
     }
   };
 
@@ -1345,11 +1367,22 @@ export default function Settings() {
                       placeholder="Kısa açıklama…"
                       style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:13, boxSizing:'border-box' }} />
                   </div>
+                  <div style={{ marginBottom:12 }}>
+                    <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Daire Başkanlığı</label>
+                    <select value={grupDaire} onChange={e => { setGrupDaire(e.target.value); setYeniGrup(p=>({...p,department:''})); }}
+                      style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
+                      <option value="">— Daire seçin —</option>
+                      {grupDaireler.map(d => <option key={d.ad} value={d.ad}>{d.ad}</option>)}
+                    </select>
+                  </div>
                   <div style={{ marginBottom:20 }}>
                     <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Müdürlük</label>
-                    <input value={yeniGrup.department} onChange={e => setYeniGrup(p=>({...p,department:e.target.value}))}
-                      placeholder="Müdürlük adı"
-                      style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:13, boxSizing:'border-box' }} />
+                    <select value={yeniGrup.department} onChange={e => setYeniGrup(p=>({...p,department:e.target.value}))}
+                      disabled={!grupDaire}
+                      style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:grupDaire?'#f8fafc':'#f1f5f9', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
+                      <option value="">— Müdürlük seçin (isteğe bağlı) —</option>
+                      {grupMudurlukleri.map(m => <option key={m.ad} value={m.ad}>{m.ad}</option>)}
+                    </select>
                   </div>
                   <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
                     <button onClick={() => setYeniGrupModal(false)} style={{ padding:'8px 16px', borderRadius:8, border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontSize:13 }}>İptal</button>

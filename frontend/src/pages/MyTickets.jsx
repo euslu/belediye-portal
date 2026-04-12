@@ -77,25 +77,28 @@ export default function MyTickets() {
       </div>
 
       {/* Filtre sekmeleri */}
-      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5
-              ${activeTab === tab.key
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {tab.label}
-            {!loading && (
-              <span className={`text-xs rounded-full px-1.5 py-0.5 leading-none font-semibold
-                ${activeTab === tab.key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
-                {tabCount(tab.key)}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex gap-2 mb-5">
+        {TABS.map(tab => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 border
+                ${active
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            >
+              {tab.label}
+              {!loading && (
+                <span className={`text-xs rounded-full min-w-[20px] px-1.5 py-0.5 leading-none font-semibold text-center
+                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  {tabCount(tab.key)}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tablo */}

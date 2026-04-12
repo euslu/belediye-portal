@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -171,11 +171,13 @@ function PersonnelCard({ topPerformers = [], slaBreachUsers = [] }) {
     <div className="bg-white rounded-2xl p-5 flex flex-col" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.07)' }}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-bold" style={{ color: C.text }}>Personel Performansı</h3>
-        <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+        <div className="flex gap-1.5">
           {[['top','🏆 En Çok Kapatan'],['sla','⚠️ SLA İhlali']].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className="text-xs px-3 py-1 rounded-md font-medium transition"
-              style={tab === k ? { background: 'white', color: C.blue, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' } : { color: C.slate }}>
+              className="text-xs px-3 py-1.5 rounded-full font-medium transition-all duration-200 border"
+              style={tab === k
+                ? { background: '#4f46e5', color: '#fff', borderColor: '#4f46e5', boxShadow: '0 4px 12px rgba(79,70,229,0.25)' }
+                : { background: '#fff', color: '#6b7280', borderColor: '#e5e7eb' }}>
               {l}
             </button>
           ))}
@@ -334,9 +336,592 @@ function MuhtarlikOzetCard() {
   );
 }
 
+// ─── PDKS Devam Takibi Widget ──────────────────────────────────────────────
+function PdksOzetCard() {
+  const [overview, setOverview] = useState(null);
+  const [rawDays, setRawDays]   = useState([]);
+  const [period, setPeriod]     = useState('gunluk');
+  const [loading, setLoading]   = useState(true);
+  const [trendReady, setTrendReady] = useState(false);
+
+  // 1) Overview hızlı yükle
+  useEffect(() => {
+    fetch(`${API}/api/pdks/overview`, { headers: H() })
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(d => { if (d) setOverview(d); setLoading(false); });
+  }, []);
+
+  // 2) Trend verisini arka planda yükle (90 gün)
+  useEffect(() => {
+    fetch(`${API}/api/pdks/trend?period=raw`, { headers: H() })
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(d => {
+        if (d?.data) setRawDays(d.data);
+        setTrendReady(true);
+      });
+  }, []);
+
+  // ── Ham veriyi periyoda göre aggregate et ──
+  const aggregated = useMemo(() => {
+    if (!rawDays.length) return { summary: null, chart: [] };
+
+    // Tarih helper: timezone sorunsuz YYYY-MM-DD
+    const pad = (n) => String(n).padStart(2, '0');
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+    const daysAgo = (n) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - n);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+    const weekStart = daysAgo(now.getDay() === 0 ? 6 : now.getDay() - 1); // Pazartesi
+    const monthStart = todayStr.slice(0, 8) + '01';
+
+    // tarih alanını normalize et (bazen ISO full string gelebilir)
+    const days = rawDays.map(d => ({
+      ...d,
+      tarih: typeof d.tarih === 'string' ? d.tarih.slice(0, 10) : new Date(d.tarih).toISOString().slice(0, 10),
+    }));
+
+    let chartData;
+    const ayAdlari = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+    const toplamSabit = days[0]?.toplam || overview?.toplamPersonel || 1;
+
+    if (period === 'gunluk') {
+      const filtered = days.slice(-14);
+      chartData = filtered.map(d => ({
+        ...d, label: d.tarih.slice(5).replace('-', '/'),
+      }));
+      const bugun = filtered.find(d => d.tarih === todayStr);
+      const summary = bugun || (overview ? { gelen: overview.gelen, gelmedi: overview.gelmedi, izinli: overview.izinli, toplam: overview.toplamPersonel } : null);
+      return { summary, chart: chartData, label: 'Bugün', sublabel: 'Son 14 iş günü' };
+    }
+
+    if (period === 'haftalik') {
+      const haftaGunleri = days.filter(d => d.tarih >= weekStart && d.tarih <= todayStr);
+      const gunSayisi = haftaGunleri.length || 1;
+      const sum = haftaGunleri.reduce((a, d) => ({ gelen: a.gelen + (d.gelen||0), gelmedi: a.gelmedi + (d.gelmedi||0), izinli: a.izinli + (d.izinli||0) }), { gelen: 0, gelmedi: 0, izinli: 0 });
+      const summary = { gelen: Math.round(sum.gelen / gunSayisi), gelmedi: Math.round(sum.gelmedi / gunSayisi), izinli: Math.round(sum.izinli / gunSayisi), toplam: toplamSabit };
+
+      // Chart: son 8 hafta
+      const weeks = new Map();
+      for (const d of days) {
+        const dt = new Date(d.tarih + 'T12:00:00'); // timezone safe
+        const dow = dt.getDay() || 7;
+        const mon = new Date(dt); mon.setDate(dt.getDate() - dow + 1);
+        const key = `${mon.getFullYear()}-${pad(mon.getMonth() + 1)}-${pad(mon.getDate())}`;
+        if (!weeks.has(key)) weeks.set(key, { g: 0, gm: 0, iz: 0, n: 0 });
+        const w = weeks.get(key); w.g += (d.gelen||0); w.gm += (d.gelmedi||0); w.iz += (d.izinli||0); w.n++;
+      }
+      chartData = [...weeks.entries()].sort((a,b) => a[0].localeCompare(b[0])).slice(-8).map(([k, w]) => ({
+        tarih: k, label: k.slice(5).replace('-', '/'),
+        gelen: Math.round(w.g / w.n), gelmedi: Math.round(w.gm / w.n), izinli: Math.round(w.iz / w.n),
+      }));
+      return { summary, chart: chartData, label: `Bu Hafta (ort. ${gunSayisi} gün)`, sublabel: 'Son 8 hafta' };
+    }
+
+    if (period === 'aylik') {
+      const ayGunleri = days.filter(d => d.tarih >= monthStart && d.tarih <= todayStr);
+      const gunSayisi = ayGunleri.length || 1;
+      const sum = ayGunleri.reduce((a, d) => ({ gelen: a.gelen + (d.gelen||0), gelmedi: a.gelmedi + (d.gelmedi||0), izinli: a.izinli + (d.izinli||0) }), { gelen: 0, gelmedi: 0, izinli: 0 });
+      const summary = { gelen: Math.round(sum.gelen / gunSayisi), gelmedi: Math.round(sum.gelmedi / gunSayisi), izinli: Math.round(sum.izinli / gunSayisi), toplam: toplamSabit };
+
+      // Chart: son 3 ay
+      const months = new Map();
+      for (const d of days) {
+        const key = d.tarih.slice(0, 7);
+        if (!months.has(key)) months.set(key, { g: 0, gm: 0, iz: 0, n: 0 });
+        const m = months.get(key); m.g += (d.gelen||0); m.gm += (d.gelmedi||0); m.iz += (d.izinli||0); m.n++;
+      }
+      chartData = [...months.entries()].sort((a,b) => a[0].localeCompare(b[0])).slice(-3).map(([k, m]) => ({
+        tarih: k, label: ayAdlari[parseInt(k.slice(5)) - 1],
+        gelen: Math.round(m.g / m.n), gelmedi: Math.round(m.gm / m.n), izinli: Math.round(m.iz / m.n),
+      }));
+      return { summary, chart: chartData, label: `Bu Ay (ort. ${gunSayisi} gün)`, sublabel: 'Son 3 ay' };
+    }
+
+    return { summary: null, chart: [] };
+  }, [rawDays, period, overview]);
+
+  if (loading || !overview) return (
+    <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '40px 24px', marginBottom: 20, textAlign: 'center' }}>
+      <div style={{ width: 28, height: 28, border: '3px solid #e2e8f0', borderTop: '3px solid #43DC80', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+    </div>
+  );
+
+  // Günlük: overview verisi kullan, diğerleri: aggregate
+  const s = (period === 'gunluk' || !aggregated.summary)
+    ? { gelen: overview.gelen, gelmedi: overview.gelmedi, izinli: overview.izinli, toplam: overview.toplamPersonel }
+    : aggregated.summary;
+  const toplam = s.toplam || overview.toplamPersonel || 1;
+  const gelenPct = Math.round(((s.gelen || 0) / toplam) * 100);
+  const izinliPct = Math.round(((s.izinli || 0) / toplam) * 100);
+  const gelmediPct = 100 - gelenPct - izinliPct;
+  const chart = aggregated.chart || [];
+  const maxVal = Math.max(...chart.map(c => (c.gelen || 0) + (c.gelmedi || 0) + (c.izinli || 0)), 1);
+
+  const periods = [
+    { key: 'gunluk', label: 'Günlük' },
+    { key: 'haftalik', label: 'Haftalık' },
+    { key: 'aylik', label: 'Aylık' },
+  ];
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '20px 24px', marginBottom: 20 }}>
+      {/* Başlık + periyot seçici */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <Link to="/pdks" style={{ textDecoration: 'none' }}>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2e23', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 16 }}>🕐</span> PDKS — Devam Takibi
+          </h3>
+        </Link>
+        <div style={{ display: 'flex', gap: 1, background: '#f1f5f9', borderRadius: 8, padding: 2 }}>
+          {periods.map(p => (
+            <button key={p.key} onClick={() => setPeriod(p.key)} style={{
+              padding: '5px 12px', fontSize: 11, fontWeight: 600,
+              border: 'none', borderRadius: 6, cursor: 'pointer',
+              background: period === p.key ? '#fff' : 'transparent',
+              color: period === p.key ? '#1a2e23' : '#9aa8a0',
+              boxShadow: period === p.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s',
+            }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Özet kartlar — 2x2 geniş */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
+        {/* Gelen */}
+        <div style={{ background: '#f0fdf4', borderRadius: 12, padding: '14px 18px', border: '1px solid #dcfce7' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 10, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>Gelen</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#16a34a', lineHeight: 1 }}>{(s.gelen ?? 0).toLocaleString('tr-TR')}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>%{gelenPct}</div>
+              <div style={{ fontSize: 10, color: '#4ade80' }}>{toplam.toLocaleString('tr-TR')} kişiden</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8, height: 4, background: '#dcfce7', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${gelenPct}%`, background: '#16a34a', borderRadius: 2 }} />
+          </div>
+        </div>
+        {/* Gelmeyen */}
+        <div style={{ background: '#fef2f2', borderRadius: 12, padding: '14px 18px', border: '1px solid #fecaca' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 10, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>Gelmeyen</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#dc2626', lineHeight: 1 }}>{(s.gelmedi ?? 0).toLocaleString('tr-TR')}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626' }}>%{gelmediPct}</div>
+              <div style={{ fontSize: 10, color: '#f87171' }}>{toplam.toLocaleString('tr-TR')} kişiden</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8, height: 4, background: '#fecaca', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${gelmediPct}%`, background: '#dc2626', borderRadius: 2 }} />
+          </div>
+        </div>
+        {/* İzinli */}
+        <div style={{ background: '#fffbeb', borderRadius: 12, padding: '14px 18px', border: '1px solid #fde68a' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 10, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>İzinli</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#d97706', lineHeight: 1 }}>{(s.izinli ?? 0).toLocaleString('tr-TR')}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#d97706' }}>%{izinliPct}</div>
+              <div style={{ fontSize: 10, color: '#fbbf24' }}>{toplam.toLocaleString('tr-TR')} kişiden</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8, height: 4, background: '#fde68a', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${izinliPct}%`, background: '#d97706', borderRadius: 2 }} />
+          </div>
+        </div>
+        {/* Toplam */}
+        <div style={{ background: '#f8fafc', borderRadius: 12, padding: '14px 18px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4 }}>Toplam Personel</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#334155', lineHeight: 1 }}>{toplam.toLocaleString('tr-TR')}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{aggregated.label || 'Bugün'}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                {period !== 'gunluk' ? 'Günlük ortalama' : new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+              </div>
+            </div>
+          </div>
+          {/* Segmented bar — oranları göster */}
+          <div style={{ marginTop: 8, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+            <div style={{ height: '100%', width: `${gelenPct}%`, background: '#16a34a' }} />
+            <div style={{ height: '100%', width: `${izinliPct}%`, background: '#d97706' }} />
+            <div style={{ height: '100%', width: `${gelmediPct}%`, background: '#dc2626' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 600 }}>● Gelen %{gelenPct}</span>
+            <span style={{ fontSize: 9, color: '#d97706', fontWeight: 600 }}>● İzinli %{izinliPct}</span>
+            <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 600 }}>● Gelmedi %{gelmediPct}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Trend grafiği */}
+      {!trendReady && (
+        <div style={{ textAlign: 'center', padding: '16px 0', fontSize: 12, color: '#9aa8a0' }}>Trend verisi yükleniyor…</div>
+      )}
+      {trendReady && chart.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, color: '#9aa8a0', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <span>{aggregated.sublabel || ''}</span>
+            <span>
+              <span style={{ color: '#16a34a' }}>■</span> Gelen
+              {' '}
+              <span style={{ color: '#d97706' }}>■</span> İzinli
+              {' '}
+              <span style={{ color: '#dc2626' }}>■</span> Gelmedi
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 70 }}>
+            {chart.map((t, i) => {
+              const total = (t.gelen || 0) + (t.gelmedi || 0) + (t.izinli || 0);
+              if (total === 0) return null;
+              const h = (total / maxVal) * 60;
+              const gP = t.gelen / total;
+              const iP = t.izinli / total;
+              const gmP = t.gelmedi / total;
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                  title={`${t.label}\nGelen: ${t.gelen} | Gelmedi: ${t.gelmedi} | İzinli: ${t.izinli}`}>
+                  <div style={{ fontSize: 8, color: '#6b7280', fontWeight: 600, marginBottom: 2 }}>{t.gelen}</div>
+                  <div style={{ width: '100%', height: h, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ flex: gmP, background: '#fca5a5', minHeight: gmP > 0 ? 1 : 0 }} />
+                    <div style={{ flex: iP, background: '#fcd34d', minHeight: iP > 0 ? 1 : 0 }} />
+                    <div style={{ flex: gP, background: '#4ade80', minHeight: gP > 0 ? 1 : 0 }} />
+                  </div>
+                  <span style={{ fontSize: 8, color: '#9aa8a0', marginTop: 3, whiteSpace: 'nowrap' }}>{t.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DAİRE BAŞKANI DASHBOARD ──────────────────────────────────────────────────
+function DaireBaskaniDashboard({ user }) {
+  const [daireTalepler, setDaireTalepler] = useState([]);
+  const [daireOzet, setDaireOzet]         = useState([]);
+  const [personelOzet, setPersonelOzet]   = useState(null);
+  const [dogumlar, setDogumlar]           = useState([]);
+  const [evlenmeler, setEvlenmeler]       = useState([]);
+  const [talepleFiltre, setTalepleFiltre] = useState('TUMU');
+  const [loading, setLoading]             = useState(true);
+
+  useEffect(() => {
+    const daire = user.directorate || '';
+    const daireParam = daire ? `?daire=${encodeURIComponent(daire)}` : '';
+    Promise.all([
+      fetch(`${API}/api/dashboard/daire-talepleri`, { headers: H() }).then(r => r.json()).catch(() => ({})),
+      fetch(`${API}/api/dashboard/daire-personel-ozet`, { headers: H() }).then(r => r.json()).catch(() => null),
+      fetch(`${API}/api/flexcity/personel-dogum${daireParam}`, { headers: H() }).then(r => r.json()).catch(() => ({})),
+      fetch(`${API}/api/flexcity/istatistik`, { headers: H() }).then(r => r.json()).catch(() => null),
+    ]).then(([talepler, pOzet, dogum, fcStat]) => {
+      setDaireTalepler(talepler.talepler || []);
+      setDaireOzet(talepler.statusGruplari || []);
+      setPersonelOzet(pOzet);
+      setDogumlar(dogum.liste || []);
+      // Evlenme listesini daire bazlı filtrele
+      const evList = fcStat?.evlenmeListesi || [];
+      if (daire) {
+        const d = daire.toLowerCase();
+        setEvlenmeler(evList.filter(e => (e.daire || '').toLowerCase().includes(d)));
+      } else {
+        setEvlenmeler(evList);
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const initials = (user.displayName || '').split(' ').map(n => n[0]).join('').substring(0, 2);
+
+  const DURUM_LABEL = {
+    OPEN: 'Açık', PENDING_APPROVAL: 'Onay Bekl.', ASSIGNED: 'Atandı',
+    IN_PROGRESS: 'İşlemde', RESOLVED: 'Çözüldü', CLOSED: 'Kapatıldı', REJECTED: 'Reddedildi',
+  };
+  const DURUM_RENK = {
+    OPEN: '#f59e0b', PENDING_APPROVAL: '#f97316', ASSIGNED: '#3b82f6',
+    IN_PROGRESS: '#43DC80', RESOLVED: '#10b981', CLOSED: '#6b7280', REJECTED: '#ef4444',
+  };
+  const DURUM_STIL = {
+    OPEN:             { bg: '#fef9c3', color: '#a16207' },
+    PENDING_APPROVAL: { bg: '#fff7ed', color: '#c2410c' },
+    ASSIGNED:         { bg: '#eff6ff', color: '#1d4ed8' },
+    IN_PROGRESS:      { bg: '#f0fdf4', color: '#15803d' },
+    RESOLVED:         { bg: '#dcfce7', color: '#166534' },
+    CLOSED:           { bg: '#f1f5f9', color: '#475569' },
+    REJECTED:         { bg: '#fef2f2', color: '#dc2626' },
+  };
+
+  // Ticket durumu dağılımı (bar chart data)
+  const durumSayilari = daireTalepler.reduce((acc, t) => {
+    acc[t.status] = (acc[t.status] || 0) + 1;
+    return acc;
+  }, {});
+  const barData = Object.entries(durumSayilari).map(([k, v]) => ({
+    durum: DURUM_LABEL[k] || k, sayi: v, renk: DURUM_RENK[k] || '#9aa8a0',
+  }));
+  const maxSayi = Math.max(...barData.map(x => x.sayi), 1);
+
+  const filtrelenmis = daireTalepler.filter(t => talepleFiltre === 'TUMU' || t.status === talepleFiltre);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+        <div style={{ width: 40, height: 40, border: '4px solid #e2e8f0', borderTop: '4px solid #43DC80', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: "'Poppins','Segoe UI',sans-serif", padding: '24px 32px 48px', background: '#f8faf9', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+
+        {/* 1. Hoş geldiniz + personel özeti */}
+        <div style={{
+          background: 'linear-gradient(135deg, #1a2e23 0%, #2d5a3d 100%)',
+          borderRadius: 16, padding: '24px 28px', marginBottom: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', background: '#43DC80',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20, fontWeight: 700, color: '#1a2e23', flexShrink: 0,
+            }}>{initials}</div>
+            <div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Hoş geldiniz</div>
+              <div style={{ color: '#fff', fontSize: 18, fontWeight: 700 }}>{user.displayName}</div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>
+                {user.title}{user.title ? ' · ' : ''}{(user.directorate || '').replace(' Dairesi Başkanlığı', '')}
+                {user.city ? ` · 📍 ${user.city}` : ''}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Toplam Personel', value: personelOzet?.toplam, ikon: '👥' },
+              { label: 'Erkek',           value: personelOzet?.erkek,  ikon: '👔' },
+              { label: 'Kadın',           value: personelOzet?.kadin,  ikon: '👩' },
+              { label: 'Müdürlük',        value: personelOzet?.mudurlukSayisi, ikon: '🏢' },
+            ].map(k => (
+              <div key={k.label} style={{
+                textAlign: 'center', background: 'rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: '10px 16px', minWidth: 80,
+              }}>
+                <div style={{ fontSize: 18 }}>{k.ikon}</div>
+                <div style={{ color: '#43DC80', fontSize: 20, fontWeight: 700 }}>{k.value ?? '—'}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* PDKS Devam Özeti */}
+        <PdksOzetCard />
+
+        {/* 2+3. Talep Durumu + Daireye Gelen Talepler — yan yana */}
+        <div style={{ display: 'grid', gridTemplateColumns: barData.length > 0 ? '1fr 2fr' : '1fr', gap: 16, marginBottom: 20 }}>
+
+          {/* Talep Durumu Bar Chart */}
+          {barData.length > 0 && (
+            <div style={{
+              background: '#fff', border: '1px solid #e8ede9', borderRadius: 14,
+              padding: '20px 24px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2e23' }}>📊 Talep Durumu</h3>
+                <span style={{ fontSize: 11, color: '#9aa8a0' }}>{daireTalepler.length} talep</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 90, padding: '0 8px' }}>
+                {barData.map((d, i) => (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{d.sayi}</span>
+                    <div style={{
+                      width: '100%', height: (d.sayi / maxSayi) * 70, background: d.renk,
+                      borderRadius: '4px 4px 0 0', minHeight: 6,
+                    }} title={d.durum} />
+                    <span style={{ fontSize: 9, color: '#9aa8a0', textAlign: 'center', lineHeight: 1.2 }}>{d.durum}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Daireye Gelen Talepler */}
+          <div style={{
+            background: '#fff', border: '1px solid #e8ede9', borderRadius: 14,
+            padding: '20px 24px',
+          }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2e23' }}>📋 Daireye Gelen Talepler</h3>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['TUMU', 'PENDING_APPROVAL', 'IN_PROGRESS', 'RESOLVED'].map(f => (
+                <button key={f} onClick={() => setTalepleFiltre(f)} style={{
+                  padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 20,
+                  border: '1.5px solid', cursor: 'pointer',
+                  background: talepleFiltre === f ? '#43DC80' : '#fff',
+                  color: talepleFiltre === f ? '#fff' : '#6b7280',
+                  borderColor: talepleFiltre === f ? '#43DC80' : '#e2e8f0',
+                }}>
+                  {f === 'TUMU' ? 'Tümü' : f === 'PENDING_APPROVAL' ? 'Onay Bekl.' : f === 'IN_PROGRESS' ? 'İşlemde' : 'Çözüldü'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {filtrelenmis.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#9aa8a0', fontSize: 13 }}>
+                {daireTalepler.length === 0 ? 'Daireye gelen talep yok' : 'Bu filtrede talep yok'}
+              </div>
+            ) : filtrelenmis.slice(0, 12).map(t => {
+              const stil = DURUM_STIL[t.status] || { bg: '#f8fafc', color: '#6b7280' };
+              return (
+                <Link key={t.id} to={`/itsm/${t.id}`} style={{ textDecoration: 'none' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', border: '1px solid #f0f4f0', borderRadius: 10, background: '#fafffe',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#fafffe'}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#9aa8a0', minWidth: 50 }}>#{t.id}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#1a2e23', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.title}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#9aa8a0', marginTop: 2 }}>
+                          {t.createdBy?.displayName} · {new Date(t.createdAt).toLocaleDateString('tr-TR')}
+                          {t.group ? ` · ${t.group.name}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                      background: stil.bg, color: stil.color, whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>
+                      {DURUM_LABEL[t.status] || t.status}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+            {filtrelenmis.length > 12 && (
+              <div style={{ textAlign: 'center', paddingTop: 8 }}>
+                <Link to="/itsm" style={{ fontSize: 13, color: '#43DC80', fontWeight: 600, textDecoration: 'none' }}>
+                  Tümünü Gör ({filtrelenmis.length} talep) →
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
+
+        {/* 4. Özel Günler — 2 kolon */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+          {/* Doğum Günleri */}
+          <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '18px 20px' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#1a2e23' }}>
+              🎂 Bugün Doğum Günü
+              {dogumlar.length > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 11, background: '#fef9c3', color: '#a16207', padding: '2px 8px', borderRadius: 20 }}>
+                  {dogumlar.length} kişi
+                </span>
+              )}
+            </h3>
+            {dogumlar.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#9aa8a0', textAlign: 'center', padding: '20px 0' }}>
+                Bugün doğum günü olan yok
+              </div>
+            ) : dogumlar.slice(0, 8).map((d, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
+                borderBottom: i < Math.min(dogumlar.length, 8) - 1 ? '1px solid #f0f4f0' : 'none',
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', background: '#fef9c3',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                }}>🎂</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#1a2e23' }}>
+                    {d.ad ? `${d.ad} ${d.soyad || ''}` : d.adSoyad || '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9aa8a0' }}>
+                    {(d.daire || d.mudurluk || '').replace(' Dairesi Başkanlığı', ' DB')}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Evlilik Yıl Dönümleri */}
+          <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '18px 20px' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#1a2e23' }}>
+              💍 Evlilik Yıl Dönümü
+              {evlenmeler.length > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 11, background: '#fdf4ff', color: '#7e22ce', padding: '2px 8px', borderRadius: 20 }}>
+                  {evlenmeler.length} kişi
+                </span>
+              )}
+            </h3>
+            {evlenmeler.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#9aa8a0', textAlign: 'center', padding: '20px 0' }}>
+                Bugün yıl dönümü olan yok
+              </div>
+            ) : evlenmeler.slice(0, 8).map((e, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
+                borderBottom: i < Math.min(evlenmeler.length, 8) - 1 ? '1px solid #f0f4f0' : 'none',
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', background: '#fdf4ff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
+                }}>💍</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#1a2e23' }}>{e.adSoyad || '—'}</div>
+                  <div style={{ fontSize: 11, color: '#9aa8a0' }}>
+                    {e.yil ? `${e.yil}. yıl` : ''}{e.evlenmeTarihi ? ` · ${e.evlenmeTarihi}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── ANA BILEŞEN ──────────────────────────────────────────────────────────────
 export default function ManagerDashboard() {
   const { user } = useAuth();
+  const sistemRol = user?.sistemRol || (user?.role === 'admin' ? 'admin' : user?.role === 'manager' ? 'mudur' : 'personel');
+  const isDaireBaskani = sistemRol === 'daire_baskani';
+  const isMudur = sistemRol === 'mudur';
+
   const [data, setData]       = useState(null);
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -344,6 +929,7 @@ export default function ManagerDashboard() {
   const [approvals, setApprovals] = useState([]);
 
   const load = useCallback(async () => {
+    if (isDaireBaskani || isMudur) { setLoading(false); return; }
     setLoading(true); setError('');
     try {
       const [statsRes, devRes] = await Promise.all([
@@ -358,11 +944,17 @@ export default function ManagerDashboard() {
       setDevices(Array.isArray(devs) ? devs : []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [isDaireBaskani, isMudur]);
 
   useEffect(() => { load(); }, [load]);
 
-  if (!['admin', 'manager'].includes(user?.role)) return null;
+  // Daire başkanı: tamamen farklı dashboard
+  if (isDaireBaskani) return <DaireBaskaniDashboard user={user} />;
+
+  // Müdür: daire başkanı dashboard'u (kendi müdürlüğü verisi)
+  if (isMudur) return <DaireBaskaniDashboard user={user} />;
+
+  if (!['admin', 'manager'].includes(sistemRol)) return null;
 
   const s = data?.summary;
 
@@ -526,6 +1118,9 @@ export default function ManagerDashboard() {
               </Link>
             </div>
           </div>
+
+          {/* ── PDKS Özet ──────────────────────────────────────────────────── */}
+          <PdksOzetCard />
 
           {/* ── Muhtarlık Özet ─────────────────────────────────────────────── */}
           <MuhtarlikOzetCard />

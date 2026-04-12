@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import UserDrawer from '../components/UserDrawer';
 import muglaLogo from '../assets/mugla_logo.png';
@@ -244,33 +244,131 @@ export default function Personel() {
   const [dairePage, setDairePage]     = useState(0);
   const [dogumPage, setDogumPage]     = useState(0);
 
-  const isAdmin = currentUser?.role === 'admin';
+  // Personel listesi state
+  const [personeller, setPersoneller]       = useState([]);
+  const [toplamPersonel, setToplamPersonel] = useState(0);
+  const [aramaTerm, setAramaTerm]           = useState('');
+  const [aramaInput, setAramaInput]         = useState('');
+  const [filtreMudurluk, setFiltreMudurluk] = useState('');
+  const [filtreDaire, setFiltreDaire]       = useState('');
+  const [sayfa, setSayfa]                   = useState(1);
+  const [mudurlukler, setMudurlukler]       = useState([]);
+  const [daireler, setDaireler]             = useState([]);
+  const [listeLoading, setListeLoading]     = useState(false);
 
+  const sistemRol = currentUser?.sistemRol || currentUser?.role;
+  const isAdmin = sistemRol === 'admin';
+  const isDaireBaskan = sistemRol === 'daire_baskani';
+  const canView = isAdmin || isDaireBaskan;
+  const LIMIT = 50;
+
+  // Personel listesi fetch
+  const fetchPersonel = useCallback(() => {
+    if (!canView) return;
+    setListeLoading(true);
+    const params = new URLSearchParams();
+    if (aramaTerm) params.set('search', aramaTerm);
+    if (isAdmin && filtreDaire) params.set('directorate', filtreDaire);
+    if (filtreMudurluk) params.set('department', filtreMudurluk);
+    params.set('page', sayfa);
+    params.set('limit', LIMIT);
+
+    fetch(`${API}/api/users?${params}`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => {
+        setPersoneller(d.users || []);
+        setToplamPersonel(d.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => setListeLoading(false));
+  }, [canView, aramaTerm, filtreDaire, filtreMudurluk, sayfa, isAdmin]);
+
+  useEffect(() => { fetchPersonel(); }, [fetchPersonel]);
+
+  // Debounce arama
+  useEffect(() => {
+    const t = setTimeout(() => { setAramaTerm(aramaInput); setSayfa(1); }, 400);
+    return () => clearTimeout(t);
+  }, [aramaInput]);
+
+  // Müdürlük listesi fetch
+  useEffect(() => {
+    if (!canView) return;
+    const dir = isDaireBaskan ? currentUser?.directorate : filtreDaire;
+    if (!dir && isDaireBaskan) return;
+    const params = dir ? `?directorate=${encodeURIComponent(dir)}` : '';
+    fetch(`${API}/api/users/departments${params}`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => setMudurlukler(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [canView, isDaireBaskan, filtreDaire]);
+
+  // Daire listesi (sadece admin)
   useEffect(() => {
     if (!isAdmin) return;
+    fetch(`${API}/api/users/directorates`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => setDaireler(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!canView) return;
     fetch(`${API}/api/users/demographics`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setDemo(d))
       .catch(() => {});
+    // FlexCity istatistik: daire başkanı için daire bazlı filtrele
     fetch(`${API}/api/flexcity/istatistik`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => d && !d.error && setFlexData(d))
+      .then(d => {
+        if (!d || d.error) return;
+        if (isDaireBaskan && currentUser?.directorate) {
+          // Daire bazlı filtrele
+          const dir = currentUser.directorate.toLowerCase();
+          if (d.dogumListesi) d.dogumListesi = d.dogumListesi.filter(u => (u.daire || '').toLowerCase().includes(dir));
+          if (d.evlenmeListesi) d.evlenmeListesi = d.evlenmeListesi.filter(u => (u.daire || '').toLowerCase().includes(dir));
+          // Personel istatistikleri de daire bazlı
+          if (d.personel?.dairePersonelTum) {
+            const myDaire = d.personel.dairePersonelTum.find(dd => (dd.ad || '').toLowerCase().includes(dir));
+            d.personel._daireToplam = myDaire?.sayi || null;
+          }
+        }
+        setFlexData(d);
+      })
       .catch(() => {});
-  }, [isAdmin]);
+  }, [canView, isDaireBaskan]);
 
   return (
     <div className="p-8">
-      {/* Demografik dashboard (admin only) */}
-      {isAdmin && demo && (
+      {/* Daire başkanı banner */}
+      {isDaireBaskan && currentUser?.directorate && (
+        <div style={{
+          background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+          border: '1.5px solid #86efac', borderRadius: 12,
+          padding: '12px 18px', marginBottom: 16,
+          fontSize: 14, fontWeight: 600, color: '#166534',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>🏢</span>
+          {currentUser.directorate}
+          <span style={{ fontSize: 12, fontWeight: 400, color: '#15803d', marginLeft: 'auto' }}>
+            {demo?.totals?.total ? `${demo.totals.total} personel` : ''}
+          </span>
+        </div>
+      )}
+
+      {/* Demografik dashboard */}
+      {canView && demo && (
         <div className="mb-8">
           {/* Satır 1: Cinsiyet + Kadro + Daire (row-span-2) | Satır 2: Yaş + Sendika */}
           <div className="grid gap-4 mb-4" style={{ gridTemplateColumns: '1fr 1fr 2fr', gridTemplateRows: 'auto auto' }}>
 
-            {/* Cinsiyet Dağılımı — FC öncelikli */}
+            {/* Cinsiyet Dağılımı — FC öncelikli (admin), AD (daire başkanı) */}
             <Card title="Cinsiyet Dağılımı">
               {(() => {
                 const colors = { Erkek: '#1e40af', Kadın: '#ec4899', Belirtilmemiş: '#cbd5e1' };
-                const fcP = flexData?.personel;
+                const fcP = isDaireBaskan ? null : flexData?.personel;
                 const genderData = fcP
                   ? [{ name: 'Erkek', value: fcP.erkek }, { name: 'Kadın', value: fcP.kadin }]
                   : demo.gender;
@@ -314,11 +412,11 @@ export default function Personel() {
               })()}
             </Card>
 
-            {/* Kadro Türü — FC öncelikli */}
+            {/* Kadro Türü — FC öncelikli (admin), AD (daire başkanı) */}
             <Card title="Kadro Türü">
               {(() => {
                 const kadroColors = { Memur: '#0ea5e9', 'Hizmet Alımı': '#f59e0b', İşçi: '#10b981', 'Dış Kullanıcı': '#8b5cf6', Diğer: '#94a3b8' };
-                const fcP = flexData?.personel;
+                const fcP = isDaireBaskan ? null : flexData?.personel;
                 let data;
                 if (fcP?.turler?.length) {
                   data = fcP.turler.map(r => ({ name: TURU_LABEL[r.ad] || r.ad, value: r.sayi }));
@@ -367,10 +465,10 @@ export default function Personel() {
               })()}
             </Card>
 
-            {/* Daire Dağılımı — FC öncelikli (toplam), AD fallback (erkek/kadın) */}
-            <Card title="Daire Dağılımı" className="row-span-2">
+            {/* Daire/Müdürlük Dağılımı — FC öncelikli (toplam), AD fallback (erkek/kadın) */}
+            <Card title={isDaireBaskan ? 'Müdürlük Dağılımı' : 'Daire Dağılımı'} className="row-span-2">
               {(() => {
-                const fcDaire = flexData?.personel?.dairePersonelTum;
+                const fcDaire = isDaireBaskan ? null : flexData?.personel?.dairePersonelTum;
                 if (fcDaire?.length) {
                   const PAGE_SIZE = 16;
                   const totalPages = Math.ceil(fcDaire.length / PAGE_SIZE);
@@ -473,9 +571,9 @@ export default function Personel() {
               </ResponsiveContainer>
             </Card>
 
-            {/* Sendika Dağılımı — YENİ (FC) */}
+            {/* Sendika Dağılımı — FC (sadece admin) */}
             <Card title="Sendika Dağılımı">
-              {flexData?.personel?.sendika?.length ? (
+              {!isDaireBaskan && flexData?.personel?.sendika?.length ? (
                 (() => {
                   const sendData = flexData.personel.sendika;
                   const maxVal = sendData[0]?.sayi || 1;
@@ -632,6 +730,125 @@ export default function Personel() {
               </Card>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Personel Listesi ── */}
+      {canView && (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
+          {/* Başlık + Filtreler */}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>
+              Personel Listesi
+              <span style={{ fontWeight: 400, color: '#94a3b8', marginLeft: 8, fontSize: 12 }}>
+                {toplamPersonel} kişi
+              </span>
+            </h2>
+            <div style={{ flex: 1 }} />
+            {/* Arama */}
+            <input
+              value={aramaInput}
+              onChange={e => setAramaInput(e.target.value)}
+              placeholder="Ad, kullanıcı, sicil no..."
+              style={{
+                padding: '7px 12px', fontSize: 13, border: '1px solid #e2e8f0', borderRadius: 8,
+                outline: 'none', width: 220, background: '#f8fafc',
+              }}
+            />
+            {/* Daire filtresi — sadece admin */}
+            {isAdmin && (
+              <select
+                value={filtreDaire}
+                onChange={e => { setFiltreDaire(e.target.value); setFiltreMudurluk(''); setSayfa(1); }}
+                style={{ padding: '7px 10px', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', maxWidth: 240 }}
+              >
+                <option value="">Tüm Daireler</option>
+                {daireler.map(d => (
+                  <option key={d.name} value={d.name}>{d.name?.replace(' Dairesi Başkanlığı', ' DB')} ({d.count})</option>
+                ))}
+              </select>
+            )}
+            {/* Müdürlük filtresi */}
+            <select
+              value={filtreMudurluk}
+              onChange={e => { setFiltreMudurluk(e.target.value); setSayfa(1); }}
+              style={{ padding: '7px 10px', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', maxWidth: 240 }}
+            >
+              <option value="">Tüm Müdürlükler</option>
+              {mudurlukler.map(m => (
+                <option key={m.name} value={m.name}>{m.name?.replace(' Şube Müdürlüğü', ' ŞM')} ({m.count})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tablo */}
+          {listeLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Yükleniyor...</div>
+          ) : personeller.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Personel bulunamadı</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ad Soyad</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unvan</th>
+                    {isAdmin && <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Daire</th>}
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Müdürlük</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>E-posta</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dahili</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personeller.map(u => (
+                    <tr
+                      key={u.id}
+                      onClick={() => setDrawerUser(u.username)}
+                      style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '10px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <Avatar name={u.displayName} size={28} bg="#1e40af" />
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{u.displayName}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.username}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 16px', color: '#475569', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.title || '—'}</td>
+                      {isAdmin && <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.directorate?.replace(' Dairesi Başkanlığı', ' DB') || '—'}</td>}
+                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.department?.replace(' Şube Müdürlüğü', ' ŞM') || '—'}</td>
+                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>
+                        {u.email ? <a href={`mailto:${u.email}`} style={{ color: '#2563eb', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{u.email}</a> : '—'}
+                      </td>
+                      <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{u.ipPhone || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {toplamPersonel > LIMIT && (
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setSayfa(s => Math.max(1, s - 1))}
+                disabled={sayfa <= 1}
+                style={{ padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', background: sayfa <= 1 ? '#f8fafc' : '#fff', color: sayfa <= 1 ? '#cbd5e1' : '#374151', cursor: sayfa <= 1 ? 'default' : 'pointer' }}
+              >‹ Önceki</button>
+              <span style={{ fontSize: 12, color: '#64748b' }}>
+                {(sayfa - 1) * LIMIT + 1}–{Math.min(sayfa * LIMIT, toplamPersonel)} / {toplamPersonel}
+              </span>
+              <button
+                onClick={() => setSayfa(s => s + 1)}
+                disabled={sayfa * LIMIT >= toplamPersonel}
+                style={{ padding: '5px 12px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', background: sayfa * LIMIT >= toplamPersonel ? '#f8fafc' : '#fff', color: sayfa * LIMIT >= toplamPersonel ? '#cbd5e1' : '#374151', cursor: sayfa * LIMIT >= toplamPersonel ? 'default' : 'pointer' }}
+              >Sonraki ›</button>
+            </div>
+          )}
         </div>
       )}
 

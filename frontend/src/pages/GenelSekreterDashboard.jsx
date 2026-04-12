@@ -769,8 +769,6 @@ export default function GenelSekreterDashboard() {
                 <KPICard icon="🏷️" title="Güncel Değer Toplamı"
                   value={fmtPara(tasinmaz.guncelDegerToplam)}
                   sub="Güncel beyan değeri" />
-
-                {/* İlçe dağılımı */}
                 <div style={{ background: C.card, borderRadius: 16, padding: "18px 20px", border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
                   <div style={{ fontSize: 13, color: C.gray, fontWeight: 500, marginBottom: 12 }}>📍 İlçe Dağılımı</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>

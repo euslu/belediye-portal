@@ -28,12 +28,14 @@ function buildGroups(role, username, user) {
   const isAdmin   = sistemRol ? sistemRol === 'admin' : role === 'admin';
   // daire_baskani ve üzeri yönetici menüsünü görür
   const isMgr     = seviye >= 3 || ['admin', 'manager'].includes(role);
-  // AR-GE: admin | Bilgi İşlem daire_baskani | Sistem Ağ müdürlüğü personeli
+  // AR-GE: admin | Bilgi İşlem daire_baskani | Sistem Ağ müdürlüğü personeli | çalışma grubu üyesi
   const biDir     = user?.directorate || '';
   const biDept    = user?.department  || '';
+  const gruplar   = user?.calismaGruplari || [];
   const isArge    = isAdmin
     || (sistemRol === 'daire_baskani' && /bilgi.i[̇i]şlem/i.test(biDir))
-    || /sistem.*ağ.*veri güvenliği/i.test(biDept);
+    || /sistem.*ağ.*veri güvenliği/i.test(biDept)
+    || gruplar.some(g => /ar-?ge/i.test(g.ad));
   const isGS      = GS_YETKILI.includes(username || '');
   const homeRoute = isMgr ? '/' : '/home';
 
@@ -70,6 +72,17 @@ function buildGroups(role, username, user) {
         { label: 'PDKS',               icon: 'bi-clock',  to: '/pdks'               },
         { label: 'Bilgi Tabanı',       icon: 'bi-book',   to: '/kb', disabled: true },
         { label: 'FlexCity',           icon: 'bi-database-check', to: '/flexcity' },
+      ],
+    }] : sistemRol === 'daire_baskani' ? [{
+      label: 'ARAÇLAR',
+      items: [
+        { label: 'Personel', icon: 'bi-people', to: '/personel' },
+        { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
+      ],
+    }] : sistemRol === 'mudur' ? [{
+      label: 'ARAÇLAR',
+      items: [
+        { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
       ],
     }] : []),
     ...(isArge ? [{

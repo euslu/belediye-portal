@@ -467,7 +467,7 @@ export default function TutanakOlustur({ onKapat }) {
         <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>Tutanak Oluşturuldu</div>
         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>PDF hazır — indirebilir veya yazdırabilirsiniz.</div>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          <a href={`${API}${pdfUrl}`} target="_blank" rel="noreferrer"
+          <a href={`${API}/api/tutanak/indir/${pdfUrl.split('/').pop()}?token=${localStorage.getItem('token')}`} target="_blank" rel="noreferrer"
             style={{ padding: '10px 24px', background: '#6366f1', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
             📄 PDF İndir
           </a>

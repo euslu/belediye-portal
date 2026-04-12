@@ -113,7 +113,7 @@ export default function FlexCityPage() {
     </div>
   );
 
-  const { mahalle, personel, sosyal, sehitGazi, tasinmaz, tahsis } = data;
+  const { mahalle, personel, sosyal, sehitGazi } = data;
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1200 }}>
@@ -194,19 +194,6 @@ export default function FlexCityPage() {
         <PieChart baslik="Engel Türü Dağılımı"   data={sehitGazi.engelTurleri} />
       </div>
 
-      {/* ── TAŞINMAZ / TAHSİS ───────────────────────────────────────────────── */}
-      <Bolum ikon="bi-building-check" baslik="Taşınmaz & Tahsis" renk="#14b8a6" />
-
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <StatKart baslik="Toplam Taşınmaz"  deger={tasinmaz.toplam} ikon="bi-building" renk="#14b8a6" />
-        <StatKart baslik="Toplam Tahsis"    deger={tahsis.toplam}   ikon="bi-key"      renk="#26af68" />
-        <StatKart baslik="Aktif Tahsis"     deger={tahsis.aktif}    ikon="bi-check-circle" renk="#3b82f6" />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 40 }}>
-        <BarChart baslik="Taşınmaz — İlçe Dağılımı"  data={tasinmaz.ilceler}      renk="#14b8a6" />
-        <PieChart baslik="Tahsis Nedeni Dağılımı"     data={tahsis.nedenler} />
-      </div>
 
     </div>
   );

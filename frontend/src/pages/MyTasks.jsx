@@ -148,24 +148,29 @@ export default function MyTasks() {
       </div>
 
       {/* Sekmeler */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {TABS.map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition
-              ${tab === key ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <span>{icon}</span>
-            {label}
-            {counts[key] !== null && counts[key] > 0 && (
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold
-                ${tab === key ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-500'}`}>
-                {counts[key]}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex gap-2">
+        {TABS.map(({ key, label, icon }) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border
+                ${active
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            >
+              <span>{icon}</span>
+              {label}
+              {counts[key] !== null && counts[key] > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold min-w-[20px] text-center
+                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  {counts[key]}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* İçerik */}

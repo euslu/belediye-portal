@@ -195,11 +195,13 @@ export default function ManagerDashboard() {
           <h1 className="text-xl font-bold text-gray-800">📊 {title}</h1>
           <p className="text-sm text-gray-400 mt-0.5">Başvuru ve personel performans istatistikleri</p>
         </div>
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+        <div className="flex gap-2">
           {Object.entries(PERIOD_LABELS).map(([key, label]) => (
             <button key={key} onClick={() => setPeriod(key)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition
-                ${period === key ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 border
+                ${period === key
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50'}`}>
               {label}
             </button>
           ))}
