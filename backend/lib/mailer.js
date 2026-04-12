@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { getTlsOptions } = require('../utils/tls');
 
 const ENABLED = process.env.MAIL_ENABLED === 'true';
 
@@ -13,7 +14,7 @@ if (ENABLED) {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    tls: { rejectUnauthorized: false },
+    tls: getTlsOptions('SMTP', process.env.SMTP_HOST),
   });
 }
 

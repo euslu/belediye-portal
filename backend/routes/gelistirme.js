@@ -1,7 +1,10 @@
 'use strict';
 const router = require('express').Router();
 const prisma  = require('../lib/prisma');
+const auth    = require('../middleware/authMiddleware');
 const { logIslem } = require('../middleware/auditLog');
+
+router.use(auth);
 
 // GET /api/gelistirme/istatistik
 router.get('/istatistik', async (req, res) => {

@@ -45,7 +45,7 @@ async function getTicketFilter(user) {
       return {};
 
     case 'daire_baskani':
-      if (!user.directorate) return {}; // directorate yoksa admin gibi hepsi
+      if (!user.directorate) return { id: -1 }; // GÜVENLİ: directorate boşsa hiçbir şey gösterme
       return {
         OR: [
           { targetDirectorate: user.directorate },
@@ -55,7 +55,7 @@ async function getTicketFilter(user) {
       };
 
     case 'mudur':
-      if (!user.department) return {};
+      if (!user.department) return { id: -1 }; // GÜVENLİ: department boşsa hiçbir şey gösterme
       return {
         OR: [
           { targetDepartment: user.department },
@@ -89,27 +89,44 @@ async function getTicketFilter(user) {
 }
 
 /**
- * Onay yetkisi kontrolü
- * admin: herşeyi; daire_baskani/mudur: kendi biriminin ticket'ları
+ * Ticket erişim yetkisi kontrolü
+ * Liste filtreleriyle uyumlu olacak şekilde detay/güncelleme/ek işlemlerinde kullanılır.
  */
-function canApprove(user, ticket) {
+function canAccessTicket(user, ticket) {
   const rol = getSistemRol(user);
+  const username = user.username;
+
   if (rol === 'admin') return true;
+
   if (rol === 'daire_baskani') {
     if (!user.directorate) return false;
     return (
       ticket.targetDirectorate === user.directorate ||
-      ticket.createdBy?.directorate === user.directorate
+      ticket.createdBy?.directorate === user.directorate ||
+      ticket.assignedTo?.directorate === user.directorate
     );
   }
+
   if (rol === 'mudur') {
     if (!user.department) return false;
     return (
       ticket.targetDepartment === user.department ||
-      ticket.group?.department === user.department
+      ticket.group?.department === user.department ||
+      ticket.assignedTo?.department === user.department
     );
   }
-  return false;
+
+  if (rol === 'sef') {
+    return (
+      ticket.assignedTo?.username === username ||
+      (user.office ? ticket.group?.name === user.office : false)
+    );
+  }
+
+  return (
+    ticket.createdBy?.username === username ||
+    ticket.assignedTo?.username === username
+  );
 }
 
 /**
@@ -162,7 +179,7 @@ module.exports = {
   getSistemRol,
   hasMinRole,
   getTicketFilter,
-  canApprove,
+  canAccessTicket,
   getPendingApprovalFilter,
   requireSistemRol,
   SISTEM_ROL_SEVIYE,

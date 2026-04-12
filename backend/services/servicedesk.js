@@ -19,21 +19,47 @@
  *   GET /api/1.4/patch/allsystems     → patch durumu
  */
 
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'; // self-signed cert
+const https  = require('https');
+const logger = require('../utils/logger');
+const { getTlsOptions } = require('../utils/tls');
 
 const BASE     = process.env.SDP_URL     || 'https://epc.mugla.bel.tr:8383';
 const API_KEY  = process.env.SDP_API_KEY || '';
+
+const epcAgent = new https.Agent(getTlsOptions('SERVICEDESK', BASE, ['epc.mugla.bel.tr']));
 
 function headers() {
   return { 'Authorization': API_KEY, 'Accept': 'application/json' };
 }
 
+function httpsGet(url, hdrs) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const opts = {
+      hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search,
+      method: 'GET', agent: epcAgent,
+      headers: hdrs,
+    };
+    const req = https.request(opts, (res) => {
+      let raw = '';
+      res.on('data', c => raw += c);
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(raw);
+          resolve({ status: res.statusCode, data });
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function epcGet(path, params = {}) {
   const qs  = new URLSearchParams(params).toString();
   const url = `${BASE}${path}${qs ? '?' + qs : ''}`;
-  const res = await fetch(url, { headers: headers() });
-  if (!res.ok) throw new Error(`EPC HTTP ${res.status}: ${url}`);
-  const data = await res.json();
+  const { status, data } = await httpsGet(url, headers());
+  if (status < 200 || status >= 300) throw new Error(`EPC HTTP ${status}: ${url}`);
   if (data.status === 'error') throw new Error(`EPC API hata: ${data.error_description} (${data.error_code})`);
   return data;
 }
@@ -45,9 +71,8 @@ async function testConnection(overrideCfg = null) {
     const tmpKey = overrideCfg.apiKey;
     const tmpBase = overrideCfg.url || BASE;
     const url = `${tmpBase}/api/1.4/som/computers?page=1&pagelimit=1`;
-    const res = await fetch(url, { headers: { 'Authorization': tmpKey, 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const { status, data } = await httpsGet(url, { 'Authorization': tmpKey, 'Accept': 'application/json' });
+    if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`);
     if (data.status === 'error') throw new Error(data.error_description || 'API hatası');
     const total = data.message_response?.total ?? 0;
     return { success: true, message: `Bağlantı başarılı — ${total} yönetilen bilgisayar`, total };
@@ -143,9 +168,9 @@ async function getComputerDetail(resourceId) {
 async function syncToInventory() {
   const prisma = require('../lib/prisma');
 
-  console.log('[EPC Sync] Başlıyor...');
+  logger.info('[EPC Sync] Başlıyor...');
   const computers = await getAllComputers();
-  console.log(`[EPC Sync] ${computers.length} bilgisayar alındı`);
+  logger.info(`[EPC Sync] ${computers.length} bilgisayar alındı`);
 
   let created = 0, updated = 0, skipped = 0, errors = 0;
   const log   = [];
@@ -207,12 +232,12 @@ async function syncToInventory() {
       }
     } catch(err) {
       errors++;
-      console.error(`[EPC Sync] ${c.name} hatası:`, err.message);
+      logger.error(`[EPC Sync] ${c.name} hatası:`, err.message);
     }
   }
 
   const result = { created, updated, skipped, errors, total: computers.length };
-  console.log(`[EPC Sync] Tamamlandı:`, result);
+  logger.info(`[EPC Sync] Tamamlandı:`, result);
   return result;
 }
 

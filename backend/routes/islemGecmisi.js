@@ -1,6 +1,9 @@
 'use strict';
 const router = require('express').Router();
 const prisma  = require('../lib/prisma');
+const auth    = require('../middleware/authMiddleware');
+
+router.use(auth);
 
 // GET /api/islem-gecmisi
 router.get('/', async (req, res) => {

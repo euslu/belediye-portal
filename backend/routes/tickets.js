@@ -4,16 +4,35 @@ const path    = require('path');
 const fs      = require('fs');
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
-const { getTicketFilter, getPendingApprovalFilter, canApprove, getSistemRol, hasMinRole } = require('../middleware/rbac');
+const { getTicketFilter, getPendingApprovalFilter, canAccessTicket, hasMinRole } = require('../middleware/rbac');
 const { logActivity } = require('../lib/activity');
 const { notifyTicketCreated, notifyTicketAssigned, notifyTicketResolved } = require('../lib/notifications');
 const upload  = require('../lib/upload');
 const ulakbell = require('../services/ulakbell');
+const logger = require('../utils/logger');
 
 router.use(authMiddleware);
 
 const STATUS_TR   = { OPEN: 'Açık', PENDING_APPROVAL: 'Onay Bekliyor', ASSIGNED: 'Atandı', IN_PROGRESS: 'İşlemde', RESOLVED: 'Çözüldü', CLOSED: 'Kapalı', REJECTED: 'Reddedildi' };
 const PRIORITY_TR = { LOW: 'Düşük', MEDIUM: 'Orta', HIGH: 'Yüksek', CRITICAL: 'Kritik' };
+
+async function getTicketAccessContext(id) {
+  return prisma.ticket.findUnique({
+    where: { id },
+    include: {
+      createdBy: { select: { username: true, directorate: true, department: true } },
+      assignedTo: { select: { username: true, directorate: true, department: true } },
+      group: { select: { name: true, department: true } },
+    },
+  });
+}
+
+async function requireTicketScopeAccess(id, user) {
+  const ticket = await getTicketAccessContext(id);
+  if (!ticket) return { error: 'not_found' };
+  if (!canAccessTicket(user, ticket)) return { error: 'forbidden' };
+  return { ticket };
+}
 
 // ─── GET /api/categories ──────────────────────────────────────────────────────
 router.get('/categories', async (req, res) => {
@@ -21,7 +40,7 @@ router.get('/categories', async (req, res) => {
     const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
     res.json(categories);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Kategoriler alınamadı' });
   }
 });
@@ -70,7 +89,7 @@ router.get('/', async (req, res) => {
     });
     res.json(tickets);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ticketlar alınamadı' });
   }
 });
@@ -78,7 +97,6 @@ router.get('/', async (req, res) => {
 // ─── GET /api/tickets/pending-approval ───────────────────────────────────────
 // admin/daire_baskani/mudur → kendi biriminin onay bekleyen talepleri
 router.get('/pending-approval', async (req, res) => {
-  const sistemRol = getSistemRol(req.user);
   if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
@@ -96,7 +114,7 @@ router.get('/pending-approval', async (req, res) => {
     });
     res.json(tickets);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Onay bekleyen talepler alınamadı' });
   }
 });
@@ -111,7 +129,7 @@ router.get('/pending-approval/count', async (req, res) => {
     const count = await prisma.ticket.count({ where });
     res.json({ count });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.json({ count: 0 });
   }
 });
@@ -123,25 +141,40 @@ router.get('/attachments/:attachmentId/download', async (req, res) => {
   const jwt = require('jsonwebtoken');
   const rawToken = req.query.token
     || (req.headers['authorization'] || '').split(' ')[1];
+  let tokenUser;
 
   if (!rawToken) return res.status(401).json({ error: 'Token gerekli' });
   try {
-    jwt.verify(rawToken, process.env.JWT_SECRET);
+    tokenUser = jwt.verify(rawToken, process.env.JWT_SECRET);
   } catch {
     return res.status(403).json({ error: 'Geçersiz token' });
   }
 
   const attachmentId = parseInt(req.params.attachmentId);
   try {
-    const att = await prisma.attachment.findUnique({ where: { id: attachmentId } });
+    const att = await prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        ticket: {
+          include: {
+            createdBy: { select: { username: true, directorate: true, department: true } },
+            assignedTo: { select: { username: true, directorate: true, department: true } },
+            group: { select: { name: true, department: true } },
+          },
+        },
+      },
+    });
     if (!att) return res.status(404).json({ error: 'Dosya bulunamadı' });
+    if (!att.ticket || !canAccessTicket(tokenUser, att.ticket)) {
+      return res.status(403).json({ error: 'Bu dosyaya erişim yetkiniz yok' });
+    }
 
     const filePath = path.join(__dirname, '../uploads/tickets', String(att.ticketId), att.filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Dosya diskte bulunamadı' });
 
     res.download(filePath, att.originalName);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Dosya indirilemedi' });
   }
 });
@@ -155,8 +188,8 @@ router.get('/:id', async (req, res) => {
       where: { id },
       include: {
         createdBy:  { select: { id: true, displayName: true, username: true, directorate: true, department: true, office: true, city: true } },
-        assignedTo: { select: { id: true, displayName: true, username: true } },
-        group:      { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, displayName: true, username: true, directorate: true, department: true } },
+        group:      { select: { id: true, name: true, department: true } },
         category:   true,
         subject:    { include: { category: { select: { id: true, name: true, icon: true } }, defaultGroup: { select: { id: true, name: true } } } },
         comments:   { orderBy: { createdAt: 'asc' } },
@@ -170,9 +203,13 @@ router.get('/:id', async (req, res) => {
     });
 
     if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ error: 'Bu ticket\'a erişim yetkiniz yok' });
+    }
+
     res.json(ticket);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ticket alınamadı' });
   }
 });
@@ -291,7 +328,7 @@ router.post('/', async (req, res) => {
         action:      'ASSIGNED',
         description: `Kategori seçimine göre "${autoGroupName}" grubuna otomatik atandı`,
       });
-      console.log(`[Yönlendirme] Ticket #${ticket.id} → ${autoGroupName} grubuna atandı`);
+      logger.info(`[Yönlendirme] Ticket #${ticket.id} → ${autoGroupName} grubuna atandı`);
     }
 
     // Bildirim: açana onay + grubun mail adresine
@@ -311,16 +348,16 @@ router.post('/', async (req, res) => {
             where: { id: ticket.id },
             data: { ulakbellToken: publicToken },
           });
-          console.log(`[ulakBELL] Ticket #${ticket.id} → token: ${publicToken}`);
+          logger.info(`[ulakBELL] Ticket #${ticket.id} → token: ${publicToken}`);
         }
       }).catch((err) => {
-        console.error(`[ulakBELL] Hata Ticket #${ticket.id}:`, err.message);
+        logger.error(`[ulakBELL] Hata Ticket #${ticket.id}:`, err.message);
       });
     }
 
     res.status(201).json(ticket);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ticket oluşturulamadı' });
   }
 });
@@ -331,8 +368,11 @@ router.patch('/:id', async (req, res) => {
   const { title, description, status, priority, categoryId, assignedToId } = req.body;
 
   try {
-    const existing = await prisma.ticket.findUnique({ where: { id } });
+    const existing = await getTicketAccessContext(id);
     if (!existing) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canAccessTicket(req.user, existing)) {
+      return res.status(403).json({ error: 'Bu ticket üzerinde işlem yetkiniz yok' });
+    }
 
     const actorUser = await prisma.user.upsert({
       where:  { username: req.user.username },
@@ -419,7 +459,7 @@ router.patch('/:id', async (req, res) => {
     res.json(ticket);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Ticket bulunamadı' });
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ticket güncellenemedi' });
   }
 });
@@ -431,6 +471,10 @@ router.post('/:id/approve', async (req, res) => {
 
   const id = parseInt(req.params.id);
   try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu talebi onaylama yetkiniz yok' });
+
     const ticket = await prisma.ticket.findUnique({
       where: { id },
       include: { subject: { select: { defaultGroupId: true, defaultGroup: { select: { name: true } } } } },
@@ -475,7 +519,7 @@ router.post('/:id/approve', async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Talep onaylanamadı' });
   }
 });
@@ -490,6 +534,10 @@ router.post('/:id/reject', async (req, res) => {
   if (!reason?.trim()) return res.status(400).json({ error: 'Red gerekçesi zorunludur' });
 
   try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu talebi reddetme yetkiniz yok' });
+
     const ticket = await prisma.ticket.findUnique({ where: { id } });
     if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
     if (ticket.status !== 'PENDING_APPROVAL')
@@ -527,7 +575,7 @@ router.post('/:id/reject', async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Talep reddedilemedi' });
   }
 });
@@ -542,6 +590,10 @@ router.post('/:id/transfer', async (req, res) => {
   if (!targetDeptId) return res.status(400).json({ error: 'Hedef daire zorunludur' });
 
   try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu ticket\'ı aktarma yetkiniz yok' });
+
     const ticket = await prisma.ticket.findUnique({
       where: { id },
       include: { department: true, group: true },
@@ -601,7 +653,7 @@ router.post('/:id/transfer', async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Aktarma yapılamadı' });
   }
 });
@@ -632,7 +684,7 @@ router.delete('/:id', async (req, res) => {
 
     res.json({ message: 'Ticket silindi' });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ticket silinemedi' });
   }
 });
@@ -641,13 +693,19 @@ router.delete('/:id', async (req, res) => {
 router.get('/:id/attachments', async (req, res) => {
   const ticketId = parseInt(req.params.id);
   try {
+    const ticket = await getTicketAccessContext(ticketId);
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ error: 'Bu ticket\'ın eklerine erişim yetkiniz yok' });
+    }
+
     const attachments = await prisma.attachment.findMany({
       where:   { ticketId },
       orderBy: { createdAt: 'asc' },
     });
     res.json(attachments);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ekler alınamadı' });
   }
 });
@@ -671,8 +729,11 @@ router.post('/:id/attachments', (req, res, next) => {
   }
 
   try {
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await getTicketAccessContext(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ error: 'Bu ticket\'a dosya ekleme yetkiniz yok' });
+    }
 
     const user = await prisma.user.upsert({
       where:  { username: req.user.username },
@@ -702,7 +763,7 @@ router.post('/:id/attachments', (req, res, next) => {
 
     res.status(201).json(saved);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Dosya kaydedilemedi' });
   }
 });
@@ -715,6 +776,12 @@ router.post('/:id/comments', async (req, res) => {
   if (!content) return res.status(400).json({ error: 'Yorum içeriği zorunludur' });
 
   try {
+    const ticket = await getTicketAccessContext(ticketId);
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ error: 'Bu ticket\'a yorum ekleme yetkiniz yok' });
+    }
+
     const user = await prisma.user.upsert({
       where:  { username: req.user.username },
       update: {},
@@ -739,7 +806,7 @@ router.post('/:id/comments', async (req, res) => {
 
     res.status(201).json({ ...comment, author: { id: user.id, displayName: user.displayName } });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Yorum eklenemedi' });
   }
 });

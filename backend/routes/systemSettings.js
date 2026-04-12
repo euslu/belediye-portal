@@ -4,6 +4,8 @@ const prisma     = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 const { Client } = require('ldapts');
 const nodemailer = require('nodemailer');
+const logger = require('../utils/logger');
+const { getTlsOptions } = require('../utils/tls');
 
 router.use(authMiddleware);
 
@@ -31,7 +33,7 @@ router.get('/:category', async (req, res) => {
     );
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ayarlar alınamadı' });
   }
 });
@@ -87,7 +89,7 @@ router.post('/:category', ADMIN_ONLY, async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err);
     res.status(500).json({ error: 'Ayarlar kaydedilemedi' });
   }
 });
@@ -143,7 +145,7 @@ router.post('/test/smtp', ADMIN_ONLY, async (req, res) => {
       user: smtp_user || process.env.SMTP_USER,
       pass,
     },
-    tls: { rejectUnauthorized: false },
+    tls: getTlsOptions('SMTP', smtp_host || process.env.SMTP_HOST),
     connectionTimeout: 8000,
   });
 

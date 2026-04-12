@@ -4,7 +4,10 @@ const path    = require('path');
 const fs      = require('fs');
 const multer  = require('multer');
 const prisma  = require('../lib/prisma');
+const auth    = require('../middleware/authMiddleware');
 const { logIslem } = require('../middleware/auditLog');
+
+router.use(auth);
 
 // ─── Multer — imzalı tutanak yükleme ──────────────────────────────────────────
 const TUTANAK_DIR = path.join(__dirname, '../public/tutanaklar');
@@ -221,14 +224,6 @@ router.get('/:id/tutanak-html', async (req, res) => {
 
     const tarihFmt = (d) => new Date(d).toLocaleDateString('tr-TR', {
       day: 'numeric', month: 'long', year: 'numeric', weekday: 'long',
-    });
-
-    // Katılımcıları ilçe bazlı grupla
-    const ilceMap = {};
-    (t.katilimcilar || []).forEach(k => {
-      const key = k.ilce || 'Diğer';
-      if (!ilceMap[key]) ilceMap[key] = [];
-      ilceMap[key].push(k);
     });
 
     const gundemRows = (t.gundemler || []).map(g =>

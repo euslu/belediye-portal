@@ -1,7 +1,6 @@
 const crypto  = require('crypto');
 const https   = require('https');
-
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+const { getTlsOptions } = require('../utils/tls');
 
 // ── PBS_PERSONEL config (mevcut) ─────────────────────────────────────────────
 const PBS_CONFIG = {
@@ -36,7 +35,8 @@ function httpsPost(rawUrl, body, authHeader) {
     const u    = new URL(rawUrl);
     const opts = {
       hostname: u.hostname, port: u.port || 443, path: u.pathname,
-      method: 'POST', rejectUnauthorized: false,
+      method: 'POST',
+      ...getTlsOptions('FLEXCITY', rawUrl, ['ybs.mugla.bel.tr']),
       headers: {
         'Authorization':  authHeader,
         'Content-Type':   'application/json',
@@ -195,13 +195,18 @@ async function getBskIstatistik() {
       tel:      r.TEL || '',
       dogumTarihi: r.DOGUM_TARIHI || '',
     })),
-    // Bugün evlilik yıl dönümü olanlar
-    evlenmeListesi: EV.map(r => ({
-      adSoyad:        `${r.ADI || ''} ${r.SOYADI || ''}`.trim(),
-      yakin:          r.YAKIN || '',
-      yil:            r.YIL || '',
-      evlenmeTarihi:  r.EVLENME_TARIHI || '',
-    })),
+    // Bugün evlilik yıl dönümü olanlar (TC ile personel bilgisinden daire eşleştir)
+    evlenmeListesi: EV.map(r => {
+      const pb = P.find(p => String(p.TC_KIMLIK_NO) === String(r.TC_KIMLIK_NO));
+      return {
+        adSoyad:        `${r.ADI || ''} ${r.SOYADI || ''}`.trim(),
+        yakin:          r.YAKIN || '',
+        yil:            r.YIL || '',
+        evlenmeTarihi:  r.EVLENME_TARIHI || '',
+        daire:          pb?.DAIRE || '',
+        mudurluk:       pb?.MUDURLUK || '',
+      };
+    }),
   };
 }
 

@@ -1,7 +1,9 @@
 require('dotenv').config();
 const path    = require('path');
+const fs      = require('fs');
 const express = require('express');
 const cors = require('cors');
+const logger = require('./utils/logger');
 
 const authRoutes       = require('./routes/auth');
 const ticketRoutes     = require('./routes/tickets');
@@ -41,6 +43,7 @@ const argeRoutes            = require('./routes/arge');
 require('./lib/scheduler');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Muhtar fotoğrafları static dosya servisi
 app.use('/muhtar-foto', express.static(path.join(__dirname, 'public/muhtar-fotolari')));
@@ -48,20 +51,56 @@ app.use('/muhtar-foto', express.static(path.join(__dirname, 'public/muhtar-fotol
 const authMiddleware = require('./middleware/authMiddleware');
 app.use('/tutanaklar', authMiddleware, express.static(path.join(__dirname, 'public/tutanaklar')));
 
-const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:5173')
-  .split(',').map(o => o.trim());
+const ALLOWED_ORIGINS = Array.from(new Set(
+  (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean)
+    .flatMap((origin) => {
+      try {
+        const url = new URL(origin);
+        return [
+          url.origin,
+          `http://${url.host}`,
+          `https://${url.host}`,
+        ];
+      } catch {
+        return [origin];
+      }
+    })
+));
 
 app.use(cors({
   origin: (origin, cb) => {
-    // same-origin (nginx proxy) veya listede varsa izin ver
-    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+    // same-origin (nginx proxy) veya açıkça izinli origin
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
     cb(new Error(`CORS: ${origin} izin verilmedi`));
   },
   credentials: true,
 }));
 app.use(express.json());
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => {
+  // Son 1 saatteki hata sayısını log dosyasından oku
+  let errorsLastHour = 0;
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(__dirname, 'logs', `app-${today}.log`);
+    if (fs.existsSync(logFile)) {
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const lines = fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.level === 'error' && new Date(entry.timestamp).getTime() >= oneHourAgo) {
+            errorsLastHour++;
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  res.json({ status: 'ok', uptime: process.uptime(), errors_last_hour: errorsLastHour });
+});
 app.use('/api/auth',         authRoutes);
 app.use('/api/tickets',      ticketRoutes);
 app.use('/api/categories',   categoryRoutes);
@@ -100,7 +139,9 @@ app.use('/api/tutanak',        require('./routes/tutanak'));
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 
+app.use(require('./middleware/errorHandler'));
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Sunucu çalışıyor: http://localhost:${PORT}`);
+  logger.info(`Sunucu çalışıyor: http://localhost:${PORT}`);
 });

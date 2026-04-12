@@ -3,9 +3,28 @@ const router  = express.Router();
 const PDFDocument = require('pdfkit');
 const fs   = require('fs');
 const path = require('path');
+const jwt  = require('jsonwebtoken');
+const auth = require('../middleware/authMiddleware');
+const logger = require('../utils/logger');
 
 const TUTANAK_DIR = path.join(__dirname, '../public/tutanaklar');
 if (!fs.existsSync(TUTANAK_DIR)) fs.mkdirSync(TUTANAK_DIR, { recursive: true });
+
+// ─── GET /api/tutanak/indir/:fileName ────────────────────────────────────────
+// Auth middleware'ından ÖNCE tanımlı — token'ı query param olarak kabul eder
+router.get('/indir/:fileName', (req, res) => {
+  const token = req.query.token;
+  if (!token) return res.status(401).json({ error: 'Token gerekli' });
+  try { jwt.verify(token, process.env.JWT_SECRET); } catch { return res.status(403).json({ error: 'Geçersiz token' }); }
+
+  const fileName = path.basename(req.params.fileName);
+  const filePath = path.join(TUTANAK_DIR, fileName);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Dosya bulunamadı' });
+  res.download(filePath, fileName);
+});
+
+// Geri kalan route'lar auth gerektirir
+router.use(auth);
 
 // ─── Yardımcı: tablo çiz ────────────────────────────────────────────────────
 function drawTable(doc, x, y, cols, rows, rowH = 22) {
@@ -64,10 +83,22 @@ router.post('/olustur', async (req, res) => {
       teslimAlanImza, // base64 PNG
     } = req.body;
 
-    // Dosya adı
+    // Dosya adı — ilk hat numarasını ekle
     const ts       = Date.now();
-    const fileName = `tutanak_${ts}.pdf`;
+    const ilkHat   = (simSatirlari || []).find(r => r.gsm)?.gsm?.replace(/\s+/g, '') || '';
+    const hatEk    = ilkHat ? `_${ilkHat}` : '';
+    const fileName = `tutanak${hatEk}_${ts}.pdf`;
     const filePath = path.join(TUTANAK_DIR, fileName);
+
+    // Metadata JSON kaydet
+    const metaPath = path.join(TUTANAK_DIR, fileName.replace('.pdf', '.json'));
+    const meta = {
+      tarih: tarih || '',
+      saat: saat || '',
+      teslimAlan: teslimAlan || '',
+      hatlar: (simSatirlari || []).filter(r => r.gsm).map(r => r.gsm),
+    };
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const stream = fs.createWriteStream(filePath);
@@ -174,7 +205,7 @@ router.post('/olustur', async (req, res) => {
 
     res.json({ ok: true, url: `/tutanaklar/${fileName}`, fileName });
   } catch (e) {
-    console.error('[tutanak] PDF hatası:', e.message);
+    logger.error('[tutanak] PDF hatası:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -186,7 +217,10 @@ router.get('/liste', (req, res) => {
       .filter(f => f.endsWith('.pdf'))
       .map(f => {
         const stat = fs.statSync(path.join(TUTANAK_DIR, f));
-        return { fileName: f, url: `/tutanaklar/${f}`, olusturmaTarihi: stat.mtime };
+        let meta = {};
+        const metaPath = path.join(TUTANAK_DIR, f.replace('.pdf', '.json'));
+        try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
+        return { fileName: f, url: `/tutanaklar/${f}`, olusturmaTarihi: stat.mtime, ...meta };
       })
       .sort((a, b) => new Date(b.olusturmaTarihi) - new Date(a.olusturmaTarihi));
     res.json(files);

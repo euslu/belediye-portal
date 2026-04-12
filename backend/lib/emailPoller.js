@@ -14,6 +14,7 @@
 
 const { ImapFlow } = require('imapflow');
 const prisma = require('./prisma');
+const { getTlsOptions } = require('../utils/tls');
 
 const ENABLED        = process.env.IMAP_ENABLED === 'true';
 const IMAP_HOST      = process.env.IMAP_HOST;
@@ -76,7 +77,7 @@ async function pollEmails() {
     secure: IMAP_TLS,
     auth:   { user: IMAP_USER, pass: IMAP_PASS },
     logger: false,
-    tls:    { rejectUnauthorized: false },
+    tls:    getTlsOptions('IMAP', IMAP_HOST),
   });
 
   let processed = 0;
