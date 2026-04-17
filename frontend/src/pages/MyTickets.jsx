@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getTickets } from '../api/tickets';
 import { TypeBadge } from '../components/badges';
+import Button from '../components/ui/Button';
+import DataTableShell from '../components/ui/DataTableShell';
 
 const STATUS_CONFIG = {
   OPEN:             { label: 'Açık',            dot: 'bg-blue-400'   },
@@ -58,53 +60,28 @@ export default function MyTickets() {
   const tabCount = (tab) => filterTickets(tickets, tab).length;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Başlık */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-800">Taleplerim</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Açtığınız tüm talep ve arıza bildirimleri</p>
-        </div>
-        <button
-          onClick={() => navigate('/itsm/new')}
-          className="portal-cta-btn portal-cta-btn--violet"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
+    <DataTableShell
+      icon={<i className="bi bi-inboxes text-xl" />}
+      title="Taleplerim"
+      description="Açtığınız tüm talep ve arıza bildirimlerini tek listede takip edin."
+      meta={`${tickets.length} kayıt`}
+      actions={(
+        <Button color="violet" onClick={() => navigate('/itsm/new')}>
+          <i className="bi bi-plus-lg mr-2" />
           Yeni Talep
-        </button>
-      </div>
-
-      {/* Filtre sekmeleri */}
-      <div className="flex gap-2 mb-5">
-        {TABS.map(tab => {
-          const active = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`portal-pill-btn text-sm ${active ? 'portal-pill-btn--active' : ''}`}
-            >
-              {tab.label}
-              {!loading && (
-                <span className={`text-xs rounded-full min-w-[20px] px-1.5 py-0.5 leading-none font-semibold text-center
-                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                  {tabCount(tab.key)}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tablo */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-gray-400">Yükleniyor...</div>
-        ) : visible.length === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-400">Bu kategoride talep bulunamadı</div>
-        ) : (
+        </Button>
+      )}
+      tabs={TABS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      getTabCount={(tab) => !loading ? tabCount(tab) : null}
+      loading={loading}
+      error=""
+      isEmpty={visible.length === 0}
+      emptyIcon={<i className="bi bi-inbox" />}
+      emptyTitle="Bu kategoride talep bulunamadı"
+      emptyDescription="Filtreyi değiştirerek diğer taleplerinizi görüntüleyebilirsiniz."
+    >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-400 font-semibold uppercase tracking-wide">
@@ -155,8 +132,6 @@ export default function MyTickets() {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-    </div>
+    </DataTableShell>
   );
 }

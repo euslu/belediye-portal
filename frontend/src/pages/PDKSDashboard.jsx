@@ -66,11 +66,11 @@ function SearchInput({ value, onChange, placeholder }) {
 }
 
 // ─── Tab: Devam Listesi ───────────────────────────────────────────────────────
-function TabDevam({ date, directorate }) {
+function TabDevam({ date, directorate, externalFilter, externalSearch }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState('');
-  const [filter, setFilter]   = useState('TUMU');
+  const search = externalSearch || '';
+  const filter = externalFilter || 'TUMU';
 
   useEffect(() => {
     setLoading(true);
@@ -101,29 +101,6 @@ function TabDevam({ date, directorate }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex gap-2">
-          {[
-            { key: 'TUMU', label: 'Tümü' },
-            { key: 'GELDI', label: 'Geldi' },
-            { key: 'GELMEDI', label: 'Gelmedi' },
-            { key: 'IZINLI', label: 'İzinli' },
-          ].map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`text-xs px-3.5 py-1.5 rounded-lg font-semibold transition ${
-                filter === f.key
-                  ? 'bg-[#4f46e5] text-white shadow-sm'
-                  : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {f.label} ({counts[f.key]})
-            </button>
-          ))}
-        </div>
-        <SearchInput value={search} onChange={setSearch} placeholder="Personel ara…" />
-      </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">Kayıt bulunamadı</div>
@@ -367,6 +344,9 @@ export default function PDKSDashboard() {
   const [refreshing, setRefreshing]   = useState(false);
   // Admin daire filtresi
   const [selectedDir, setSelectedDir] = useState('');
+  // Devam listesi filtre + arama (tab satırına taşındı)
+  const [devamFilter, setDevamFilter] = useState('TUMU');
+  const [devamSearch, setDevamSearch] = useState('');
 
   // Daire başkanı kendi dairesini, müdür kendi müdürlüğünü görür, admin seçebilir
   const activeDir = isMudur ? userDept : (isDaire ? userDaire : (isAdmin ? selectedDir : ''));
@@ -484,22 +464,36 @@ export default function PDKSDashboard() {
         </div>
       )}
 
-      {/* Tablar */}
-      <div className="flex gap-2.5 mb-6">
+      {/* Tablar + Gelmedi butonu + Arama */}
+      <div className="flex items-center gap-2.5 mb-6 flex-wrap">
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => { setTab(t.key); if (t.key !== 'devam') { setDevamFilter('TUMU'); setDevamSearch(''); } }}
             className={`portal-pill-btn text-sm ${tab === t.key ? 'portal-pill-btn--active' : ''}`}
           >
             <i className={`bi ${t.icon}`} />
             {t.label}
           </button>
         ))}
+        {/* Gelmedi kısayol butonu */}
+        <button
+          onClick={() => { setTab('devam'); setDevamFilter('GELMEDI'); }}
+          className={`portal-pill-btn text-sm ${tab === 'devam' && devamFilter === 'GELMEDI' ? 'portal-pill-btn--red' : ''}`}
+        >
+          <i className="bi bi-x-circle" />
+          Gelmedi{overview ? ` (${overview.gelmedi ?? 0})` : ''}
+        </button>
+        {/* Arama — sadece devam tabında */}
+        {tab === 'devam' && (
+          <div style={{ marginLeft: 'auto' }}>
+            <SearchInput value={devamSearch} onChange={setDevamSearch} placeholder="Personel ara…" />
+          </div>
+        )}
       </div>
 
       {/* Tab İçerikleri */}
-      {tab === 'devam' && <TabDevam date={date} directorate={activeDir} />}
+      {tab === 'devam' && <TabDevam date={date} directorate={activeDir} externalFilter={devamFilter} externalSearch={devamSearch} />}
       {tab === 'gec'   && <TabGecKalanlar date={date} directorate={activeDir} />}
       {tab === 'izin'  && <TabIzinler date={date} directorate={activeDir} />}
       {tab === 'ozet'  && isAdmin && (

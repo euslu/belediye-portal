@@ -57,9 +57,9 @@ router.get('/manager-stats', async (req, res) => {
   const { period = 'month' } = req.query;
   const { start, end, prevStart, prevEnd } = periodRange(period);
 
-  // Manager → kendi birimi; Admin → tüm birimler
+  // Manager → kendi birimi; Admin → tüm birimler (case-insensitive)
   const dirFilter = (req.user.role === 'manager' && req.user.directorate)
-    ? { createdBy: { directorate: req.user.directorate } }
+    ? { createdBy: { directorate: { equals: req.user.directorate, mode: 'insensitive' } } }
     : {};
 
   try {
@@ -399,18 +399,18 @@ router.get('/daire-talepleri', async (req, res) => {
   }
 
   try {
-    // Müdür → müdürlük bazlı; daire başkanı/admin → directorate bazlı
+    // Müdür → müdürlük bazlı; daire başkanı/admin → directorate bazlı (case-insensitive)
     const where = rol === 'mudur'
       ? {
           OR: [
-            { assignedTo: { department: req.user.department } },
-            { targetDepartment: req.user.department },
+            { assignedTo: { department: { equals: req.user.department, mode: 'insensitive' } } },
+            { targetDepartment: { equals: req.user.department, mode: 'insensitive' } },
           ],
         }
       : {
           OR: [
-            { assignedTo: { directorate: req.user.directorate } },
-            { targetDirectorate: req.user.directorate },
+            { assignedTo: { directorate: { equals: req.user.directorate, mode: 'insensitive' } } },
+            { targetDirectorate: { equals: req.user.directorate, mode: 'insensitive' } },
           ],
         };
 
@@ -449,8 +449,10 @@ router.get('/daire-personel-ozet', async (req, res) => {
     const dept = req.user.department;
     if (!dir && !dept) return res.json({ toplam: 0, erkek: 0, kadin: 0, mudurlukSayisi: 0 });
 
-    // Müdür: department, Daire başkanı: directorate, Admin: tümü
-    const where = rol === 'admin' ? {} : rol === 'mudur' && dept ? { department: dept } : { directorate: dir };
+    // Müdür: department, Daire başkanı: directorate, Admin: tümü (case-insensitive: AD login vs sync farkı)
+    const where = rol === 'admin' ? {}
+      : rol === 'mudur' && dept ? { department: { equals: dept, mode: 'insensitive' } }
+      : { directorate: { equals: dir, mode: 'insensitive' } };
 
     const mudurlukWhere = { ...where };
     if (!mudurlukWhere.department) mudurlukWhere.department = { not: null };

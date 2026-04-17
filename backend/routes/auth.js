@@ -278,14 +278,25 @@ router.post('/login', async (req, res) => {
     logger.info(`[AD] Giriş: ${username} | Rol: ${getRole(groups)} | Gruplar: ${groups.join(', ') || '(yok)'}`);
 
     // AD'de 'department' alanı = Daire Başkanlığı adı (directorate)
+    // Ancak bazı kullanıcılarda şube müdürlüğü adı geliyor — DB'deki doğru directorate korunsun
     const adDepartment = entry.department ? String(entry.department) : null;
+
+    const prisma = require('../lib/prisma');
+    const existingUser = await prisma.user.findUnique({
+      where: { username: String(entry.sAMAccountName || username) },
+      select: { directorate: true, department: true },
+    }).catch(() => null);
+
+    // AD sync'in yazdığı directorate'i koru (daha güvenilir)
+    const resolvedDirectorate = existingUser?.directorate || adDepartment;
+    const resolvedDepartment  = existingUser?.department  || adDepartment;
 
     const payload = {
       username:    String(entry.sAMAccountName || username),
       displayName: String(entry.displayName    || username),
       email:       entry.mail                       ? String(entry.mail)                       : null,
-      directorate: adDepartment,
-      department:  adDepartment,
+      directorate: resolvedDirectorate,
+      department:  resolvedDepartment,
       title:       entry.title                      ? String(entry.title)                      : null,
       office:      entry.physicalDeliveryOfficeName ? String(entry.physicalDeliveryOfficeName) : null,
       city:        entry.l                          ? String(entry.l)                          : null,
@@ -293,22 +304,20 @@ router.post('/login', async (req, res) => {
       groups,
     };
 
-    // Kullanıcıyı DB'ye upsert et
-    const prisma = require('../lib/prisma');
+    // Kullanıcıyı DB'ye upsert et — directorate/department yalnızca yoksa set et
     await prisma.user.upsert({
       where:  { username: payload.username },
       update: {
         displayName: payload.displayName,
         role:        payload.role,
-        department:  payload.department  || null,
-        directorate: payload.directorate || null,
+        // directorate ve department AD sync tarafından yönetiliyor, login'de üzerine yazma
       },
       create: {
         username:    payload.username,
         displayName: payload.displayName,
         role:        payload.role,
-        department:  payload.department  || null,
-        directorate: payload.directorate || null,
+        department:  adDepartment || null,
+        directorate: adDepartment || null,
       },
     }).catch((e) => logger.warn('[DB upsert] kullanıcı kaydedilemedi:', e.message));
 

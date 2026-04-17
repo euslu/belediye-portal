@@ -468,16 +468,19 @@ export default function TutanakOlustur({ onKapat }) {
         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>PDF hazır — indirebilir veya yazdırabilirsiniz.</div>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <a href={`${API}/api/tutanak/indir/${pdfUrl.split('/').pop()}?token=${localStorage.getItem('token')}`} target="_blank" rel="noreferrer"
-            style={{ padding: '10px 24px', background: '#6366f1', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
+            className="portal-cta-btn portal-cta-btn--green"
+            style={{ fontSize: 14, textDecoration: 'none' }}>
             📄 PDF İndir
           </a>
           <button onClick={() => { setPdfUrl(''); setSimSatirlari([{ gsm: '', iccid: '', paket: '' }]); setCihazSatirlari([{ cihaz: '', seriNo: '', imei: '' }]); teslimEdenRef.current?.clear(); teslimAlanRef.current?.clear(); }}
-            style={{ padding: '10px 24px', background: '#f1f5f9', color: '#374151', borderRadius: 8, fontWeight: 600, fontSize: 14, border: 'none', cursor: 'pointer' }}>
+            className="portal-cta-btn portal-cta-btn--green-outline"
+            style={{ fontSize: 14 }}>
             Yeni Tutanak
           </button>
           {onKapat && (
             <button onClick={onKapat}
-              style={{ padding: '10px 24px', background: '#fff', color: '#6b7280', borderRadius: 8, fontWeight: 600, fontSize: 14, border: '1.5px solid #e2e8f0', cursor: 'pointer' }}>
+              className="portal-pill-btn"
+              style={{ fontSize: 14 }}>
               Kapat
             </button>
           )}

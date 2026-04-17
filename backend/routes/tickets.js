@@ -466,7 +466,7 @@ router.patch('/:id', async (req, res) => {
 
 // ─── POST /api/tickets/:id/approve ────────────────────────────────────────────
 router.post('/:id/approve', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const id = parseInt(req.params.id);
@@ -526,7 +526,7 @@ router.post('/:id/approve', async (req, res) => {
 
 // ─── POST /api/tickets/:id/reject ─────────────────────────────────────────────
 router.post('/:id/reject', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const id = parseInt(req.params.id);

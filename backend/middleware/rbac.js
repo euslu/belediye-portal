@@ -110,6 +110,7 @@ function canAccessTicket(user, ticket) {
   if (rol === 'mudur') {
     if (!user.department) return false;
     return (
+      ticket.createdBy?.department === user.department ||
       ticket.targetDepartment === user.department ||
       ticket.group?.department === user.department ||
       ticket.assignedTo?.department === user.department
@@ -152,6 +153,7 @@ function getPendingApprovalFilter(user) {
     return {
       ...base,
       OR: [
+        { createdBy: { department: user.department } },
         { targetDepartment: user.department },
         { group: { department: user.department } },
       ],

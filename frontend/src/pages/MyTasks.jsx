@@ -2,12 +2,21 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTickets } from '../api/tickets';
 import { StatusBadge, PriorityBadge } from '../components/badges';
+import Button from '../components/ui/Button';
+import DataTableShell from '../components/ui/DataTableShell';
+import Surface from '../components/ui/Surface';
 
 const TABS = [
   { key: 'assigned', label: 'Bana Atananlar',   icon: '📋' },
   { key: 'created',  label: 'Açtıklarım',        icon: '📝' },
   { key: 'approvals',label: 'Bekleyen Onaylar',  icon: '⏳' },
 ];
+
+const SUMMARY_COLORS = {
+  blue: 'text-blue-700',
+  indigo: 'text-indigo-700',
+  gray: 'text-gray-700',
+};
 
 function formatDate(str) {
   if (!str) return '—';
@@ -26,17 +35,8 @@ function slaStatus(dueDate, status) {
 function TicketTable({ tickets, loading, error }) {
   const navigate = useNavigate();
 
-  if (loading) return <div className="py-16 text-center text-sm text-gray-400">Yükleniyor...</div>;
-  if (error)   return <div className="py-8 text-sm text-red-500 bg-red-50 border border-red-200 rounded-xl px-4">{error}</div>;
-  if (tickets.length === 0) return (
-    <div className="py-20 text-center">
-      <p className="text-4xl mb-3">📭</p>
-      <p className="text-sm text-gray-400">Gösterilecek kayıt yok.</p>
-    </div>
-  );
-
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
@@ -117,73 +117,63 @@ export default function MyTasks() {
     approvals: 0,
   };
 
-  return (
-    <div className="p-8 space-y-6">
-      {/* Başlık */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Görevlerim</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Size atanan ve açtığınız talepler</p>
-        </div>
-        <button
-          onClick={() => navigate('/itsm/new')}
-          className="portal-cta-btn portal-cta-btn--blue"
-        >
-          <span className="text-lg leading-none">+</span> Yeni Talep
-        </button>
-      </div>
+  const activeItems = assigned.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length;
+  const createdItems = created.filter(t => !['RESOLVED', 'CLOSED'].includes(t.status)).length;
+  const activeError = tab === 'assigned' ? errorA : tab === 'created' ? errorC : '';
+  const activeLoading = tab === 'assigned' ? loadingA : tab === 'created' ? loadingC : false;
+  const activeTickets = tab === 'assigned' ? assigned : tab === 'created' ? created : [];
 
-      {/* Özet kartlar */}
-      <div className="grid grid-cols-3 gap-4">
+  return (
+    <DataTableShell
+      icon={<i className="bi bi-check2-square text-xl" />}
+      title="Görevlerim"
+      description="Size atanan ve sizin açtığınız kayıtları aynı çalışma alanında izleyin."
+      meta={`${assigned.length + created.length} toplam kayıt`}
+      actions={(
+        <Button color="blue" onClick={() => navigate('/itsm/new')}>
+          <i className="bi bi-plus-lg mr-2" />
+          Yeni Talep
+        </Button>
+      )}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      getTabCount={(key) => counts[key]}
+      loading={activeLoading}
+      error={activeError}
+      isEmpty={tab !== 'approvals' && activeTickets.length === 0}
+      emptyIcon={<i className="bi bi-list-task" />}
+      emptyTitle="Gösterilecek kayıt yok"
+      emptyDescription="Bu filtre için henüz görev veya talep bulunmuyor."
+    >
+      <div className="p-4">
+        <div className="grid grid-cols-3 gap-4 mb-4">
         {[
-          { label: 'Bana Atanan',      value: loadingA ? '…' : assigned.filter(t => !['RESOLVED','CLOSED'].includes(t.status)).length, color: 'blue'   },
-          { label: 'Açık Taleplerim',  value: loadingC ? '…' : created.filter(t  => !['RESOLVED','CLOSED'].includes(t.status)).length,  color: 'indigo' },
+          { label: 'Bana Atanan',      value: loadingA ? '…' : activeItems, color: 'blue'   },
+          { label: 'Açık Taleplerim',  value: loadingC ? '…' : createdItems,  color: 'indigo' },
           { label: 'Bekleyen Onaylar', value: 0,                                                                                           color: 'gray'   },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <Surface key={label} className="px-5 py-4">
             <p className="text-xs text-gray-400">{label}</p>
-            <p className={`text-2xl font-bold mt-1 text-${color}-700`}>{value}</p>
-          </div>
+            <p className={`text-2xl font-bold mt-1 ${SUMMARY_COLORS[color] || 'text-gray-700'}`}>{value}</p>
+          </Surface>
         ))}
-      </div>
+        </div>
 
-      {/* Sekmeler */}
-      <div className="flex gap-2">
-        {TABS.map(({ key, label, icon }) => {
-          const active = tab === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`portal-pill-btn text-sm ${active ? 'portal-pill-btn--active' : ''}`}
-            >
-              <span>{icon}</span>
-              {label}
-              {counts[key] !== null && counts[key] > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold min-w-[20px] text-center
-                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                  {counts[key]}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* İçerik */}
-      {tab === 'assigned' && (
-        <TicketTable tickets={assigned} loading={loadingA} error={errorA} />
-      )}
-      {tab === 'created' && (
-        <TicketTable tickets={created} loading={loadingC} error={errorC} />
-      )}
-      {tab === 'approvals' && (
+        {tab === 'assigned' && (
+          <TicketTable tickets={assigned} loading={loadingA} error={errorA} />
+        )}
+        {tab === 'created' && (
+          <TicketTable tickets={created} loading={loadingC} error={errorC} />
+        )}
+        {tab === 'approvals' && (
         <div className="py-20 text-center">
           <p className="text-4xl mb-3">🔒</p>
           <p className="text-sm font-medium text-gray-600">Onay akışı henüz aktif değil</p>
           <p className="text-xs text-gray-400 mt-1">Bu özellik yakında eklenecektir.</p>
         </div>
-      )}
-    </div>
+        )}
+      </div>
+    </DataTableShell>
   );
 }

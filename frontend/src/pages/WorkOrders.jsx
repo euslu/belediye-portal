@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
+import Surface from '../components/ui/Surface';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authFetch(url, opts = {}) {
@@ -411,69 +416,125 @@ export default function WorkOrders() {
     ? COLUMNS.filter(c => c.key === filterStatus)
     : COLUMNS;
 
+  const openOrders = orders.filter((order) => !['DONE', 'CANCELLED'].includes(order.status)).length;
+  const overdueOrders = orders.filter((order) => isOverdue(order.dueDate, order.status)).length;
+  const mineCount = orders.filter((order) => order.assignedTo?.username === user?.username).length;
+
   return (
-    <div className="p-8 h-full flex flex-col">
-      {/* Başlık */}
-      <div className="flex items-center justify-between mb-5 shrink-0">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">İş Emirleri</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{orders.length} iş emri</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Sadece benimkiler */}
-          <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
-            <input type="checkbox" checked={filterMine} onChange={e => setFilterMine(e.target.checked)}
-              className="rounded text-indigo-600" />
-            Bana atananlar
-          </label>
-          {/* Durum filtresi */}
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none">
-            <option value="">Tüm durumlar</option>
-            {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <button
-            onClick={() => setModal({ ...EMPTY_FORM })}
-            className="portal-cta-btn portal-cta-btn--violet">
-            + Yeni İş Emri
-          </button>
-        </div>
-      </div>
-
-      {/* Kanban */}
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Yükleniyor…</div>
-      ) : (
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex gap-4 min-w-max h-full pb-4">
-            {visibleColumns.map(col => (
-              <div key={col.key} className="w-64 flex flex-col">
-                <KanbanColumn
-                  col={col}
-                  orders={colMap[col.key] || []}
-                  onEdit={setModal}
-                  onDelete={handleDelete}
-                  onDragStart={handleDragStart}
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onAddNew={status => setModal({ ...EMPTY_FORM, status })}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Modal */}
-      {modal !== null && (
-        <WOModal
-          initial={modal?.id ? modal : { ...EMPTY_FORM, status: modal?.status || 'TODO' }}
-          onSave={handleSave}
-          onClose={() => setModal(null)}
-          groups={groups}
-          departments={departments}
+    <div className="portal-page portal-page--wide h-full">
+      <div className="flex h-full flex-col gap-6">
+        <PageHeader
+          icon={<i className="bi bi-kanban text-xl" />}
+          title="İş Emirleri"
+          description="Görevleri kanban görünümünde izleyin, duruma göre sürükleyip bırakın ve ekip akışını tek ekranda yönetin."
+          meta={`${orders.length} iş emri • ${openOrders} açık iş • ${overdueOrders} geciken iş`}
+          actions={(
+            <>
+              <Button variant="soft" onClick={() => load()}>
+                <i className="bi bi-arrow-clockwise mr-2" />
+                Yenile
+              </Button>
+              <Button color="violet" onClick={() => setModal({ ...EMPTY_FORM })}>
+                <i className="bi bi-plus-lg mr-2" />
+                Yeni İş Emri
+              </Button>
+            </>
+          )}
         />
-      )}
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Surface className="p-5">
+            <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Toplam</p>
+            <p className="mt-3 mb-0 text-3xl font-bold text-slate-800">{orders.length}</p>
+            <p className="mt-2 mb-0 text-sm text-slate-500">Tüm iş emri hacmi</p>
+          </Surface>
+          <Surface className="p-5">
+            <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Bana Atananlar</p>
+            <p className="mt-3 mb-0 text-3xl font-bold text-slate-800">{mineCount}</p>
+            <p className="mt-2 mb-0 text-sm text-slate-500">Aktif kullanıcı odağı</p>
+          </Surface>
+          <Surface className="p-5">
+            <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Gecikenler</p>
+            <p className="mt-3 mb-0 text-3xl font-bold text-rose-600">{overdueOrders}</p>
+            <p className="mt-2 mb-0 text-sm text-slate-500">Termin tarihi geçen kayıt</p>
+          </Surface>
+        </div>
+
+        <Surface className="p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterMine}
+                  onChange={(e) => setFilterMine(e.target.checked)}
+                  className="rounded text-indigo-600"
+                />
+                Bana atananlar
+              </label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Tüm durumlar</option>
+                {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+            <p className="m-0 text-sm text-slate-500">Kartları sürükleyerek durum güncelleyebilirsiniz.</p>
+          </div>
+        </Surface>
+
+        {loading ? (
+          <LoadingState
+            title="İş emirleri hazırlanıyor"
+            description="Kanban görünümü ve görev dağılımları yükleniyor."
+          />
+        ) : orders.length === 0 ? (
+          <EmptyState
+            icon={<i className="bi bi-kanban" />}
+            title="Henüz iş emri bulunmuyor"
+            description="İlk iş emrini oluşturup ekibin iş akışını bu ekrandan yönetebilirsiniz."
+            action={(
+              <Button color="violet" onClick={() => setModal({ ...EMPTY_FORM })}>
+                <i className="bi bi-plus-lg mr-2" />
+                İş Emri Oluştur
+              </Button>
+            )}
+          />
+        ) : (
+          <Surface className="flex-1 overflow-hidden p-4">
+            <div className="h-full overflow-x-auto">
+              <div className="flex min-w-max gap-4 h-full pb-2">
+                {visibleColumns.map(col => (
+                  <div key={col.key} className="w-72 flex flex-col">
+                    <KanbanColumn
+                      col={col}
+                      orders={colMap[col.key] || []}
+                      onEdit={setModal}
+                      onDelete={handleDelete}
+                      onDragStart={handleDragStart}
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onAddNew={status => setModal({ ...EMPTY_FORM, status })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Surface>
+        )}
+
+        {modal !== null && (
+          <WOModal
+            initial={modal?.id ? modal : { ...EMPTY_FORM, status: modal?.status || 'TODO' }}
+            onSave={handleSave}
+            onClose={() => setModal(null)}
+            groups={groups}
+            departments={departments}
+          />
+        )}
+      </div>
     </div>
   );
 }

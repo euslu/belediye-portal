@@ -131,7 +131,8 @@ export default function PendingApprovals() {
     setRejectTarget(null);
   }
 
-  if (!['admin', 'manager'].includes(user?.role)) {
+  const sistemRol = user?.sistemRol || user?.role;
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(sistemRol) && !['admin', 'manager'].includes(user?.role)) {
     return <div className="p-8 text-sm text-red-500">Bu sayfaya erişim yetkiniz yok.</div>;
   }
 

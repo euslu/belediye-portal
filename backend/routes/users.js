@@ -79,16 +79,16 @@ router.get('/', async (req, res) => {
   const isAdmin = rol === 'admin';
 
   if (rol === 'daire_baskani' && req.user.directorate) {
-    // Daire başkanı → kendi dairesi
-    where.AND.push({ directorate: req.user.directorate });
+    // Daire başkanı → kendi dairesi (case-insensitive: AD login vs AD sync farkı)
+    where.AND.push({ directorate: { equals: req.user.directorate, mode: 'insensitive' } });
     if (department) where.AND.push({ department });
   } else if (!isAdmin) {
     // Müdür / personel → kendi dairesi (DB'den çek)
     const myDir = await getMyDirectorate(req.user.username);
     if (myDir) {
-      where.AND.push({ directorate: myDir });
+      where.AND.push({ directorate: { equals: myDir, mode: 'insensitive' } });
     } else {
-      if (req.user.department) where.AND.push({ department: req.user.department });
+      if (req.user.department) where.AND.push({ department: { equals: req.user.department, mode: 'insensitive' } });
     }
     if (department) where.AND.push({ department });
   } else {
@@ -157,7 +157,7 @@ router.get('/directorates', async (req, res) => {
       rows = await prisma.$queryRaw`
         SELECT COALESCE(directorate, department) AS name, COUNT(*)::int AS count
         FROM "User"
-        WHERE COALESCE(directorate, department) = ${myDir}
+        WHERE LOWER(COALESCE(directorate, department)) = LOWER(${myDir})
         GROUP BY COALESCE(directorate, department)
         ORDER BY name ASC
       `;
@@ -175,7 +175,7 @@ router.get('/departments', async (req, res) => {
   const { directorate } = req.query;
   try {
     const baseWhere = [...BASE_WHERE];
-    if (directorate) baseWhere.push({ directorate });
+    if (directorate) baseWhere.push({ directorate: { equals: directorate, mode: 'insensitive' } });
 
     const grouped = await prisma.user.groupBy({
       by:      ['department'],
@@ -245,9 +245,9 @@ router.get('/demographics', async (req, res) => {
     const todayMD = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}`;
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Daire filtre SQL parçası + mock kullanıcıları gizle
+    // Daire filtre SQL parçası + mock kullanıcıları gizle (ILIKE: case-insensitive)
     const dirSQL = dirFilter
-      ? `AND directorate = '${dirFilter.replace(/'/g, "''")}' AND password IS NULL`
+      ? `AND LOWER(directorate) = LOWER('${dirFilter.replace(/'/g, "''")}') AND password IS NULL`
       : 'AND password IS NULL';
 
     const [genderRows, employeeTypeRows, directorateRows, ageRows, birthdayRows, newWeekRows, totals, kadroRows] = await Promise.all([
@@ -276,8 +276,9 @@ router.get('/demographics', async (req, res) => {
               COUNT(CASE WHEN gender = 'Erkek' THEN 1 END)::int AS erkek,
               COUNT(CASE WHEN gender = 'Kadın' THEN 1 END)::int AS kadin
             FROM "User"
-            WHERE directorate = '${dirFilter.replace(/'/g, "''")}'
+            WHERE LOWER(directorate) = LOWER('${dirFilter.replace(/'/g, "''")}')
               AND department IS NOT NULL AND department != 'Dış Kullanıcı'
+              AND password IS NULL
             GROUP BY department
             ORDER BY total DESC
           `)
@@ -332,7 +333,8 @@ router.get('/demographics', async (req, res) => {
             FROM "User"
             WHERE "adCreatedAt" >= '${weekAgo.toISOString()}'
               AND department IS NOT NULL AND department != 'Dış Kullanıcı'
-              AND directorate = '${dirFilter.replace(/'/g, "''")}'
+              AND LOWER(directorate) = LOWER('${dirFilter.replace(/'/g, "''")}')
+              AND password IS NULL
             ORDER BY "adCreatedAt" DESC
             LIMIT 20
           `)
@@ -357,12 +359,12 @@ router.get('/demographics', async (req, res) => {
       // Özet sayaçlar
       dirFilter
         ? Promise.all([
-            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }] } }),
-            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }, { birthday: { not: null } }] } }),
-            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: dirFilter }, { welcomeMailSent: true }] } }),
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: { equals: dirFilter, mode: 'insensitive' } }] } }),
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: { equals: dirFilter, mode: 'insensitive' } }, { birthday: { not: null } }] } }),
+            prisma.user.count({ where: { AND: [...BASE_WHERE, { directorate: { equals: dirFilter, mode: 'insensitive' } }, { welcomeMailSent: true }] } }),
             prisma.user.count({
               where: {
-                AND: [...BASE_WHERE, { directorate: dirFilter }],
+                AND: [...BASE_WHERE, { directorate: { equals: dirFilter, mode: 'insensitive' } }],
                 adCreatedAt: { gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()) },
               },
             }),

@@ -5,18 +5,39 @@
  * Docs: https://api.ulakbell.com/
  */
 
-const BASE  = () => (process.env.ULAKBELL_URL || '').replace(/\/$/, '');
-const TOKEN = () => process.env.ULAKBELL_TOKEN || '';
+const prisma = require('../lib/prisma');
 
-function headers() {
+async function getConfig() {
+  const envUrl = process.env.ULAKBELL_URL || '';
+  const envToken = process.env.ULAKBELL_TOKEN || '';
+  if (envUrl && envToken) {
+    return {
+      base: envUrl.replace(/\/$/, ''),
+      token: envToken,
+    };
+  }
+
+  const rows = await prisma.setting.findMany({
+    where: { key: { in: ['ulakbell_url', 'ulakbell_token', 'ulakbell_user', 'ULAKBELL_URL', 'ULAKBELL_TOKEN', 'ULAKBELL_USER'] } },
+  });
+  const map = Object.fromEntries(rows.map(r => [r.key, r.value || '']));
+  const base = (map.ULAKBELL_URL || map.ulakbell_url || '').replace(/\/$/, '');
+  const token = map.ULAKBELL_TOKEN || map.ulakbell_token || '';
+  const user = map.ULAKBELL_USER || map.ulakbell_user || '';
+  return { base, token, user };
+}
+
+function headers(token) {
   return {
     Accept:        'application/json',
-    Authorization: `Bearer ${TOKEN()}`,
+    Authorization: `Bearer ${token}`,
   };
 }
 
-function checkConfig() {
-  if (!BASE() || !TOKEN()) throw new Error('ulakBELL yapılandırılmamış (URL veya TOKEN eksik)');
+async function checkConfig() {
+  const cfg = await getConfig();
+  if (!cfg.base || !cfg.token) throw new Error('ulakBELL yapılandırılmamış (URL veya TOKEN eksik)');
+  return cfg;
 }
 
 // ─── Başvuruları listele ──────────────────────────────────────────────────────
@@ -26,7 +47,7 @@ async function getIncidents({
   status, department_id, topic_id,
   number, mobile_phone,
 } = {}) {
-  checkConfig();
+  const cfg = await checkConfig();
 
   const params = new URLSearchParams({
     resource:           'all',
@@ -41,7 +62,7 @@ async function getIncidents({
   if (number)        params.set('number', number);
   if (mobile_phone)  params.set('mobile_phone', mobile_phone);
 
-  const res = await fetch(`${BASE()}/api/incident?${params}`, { headers: headers() });
+  const res = await fetch(`${cfg.base}/api/incident?${params}`, { headers: headers(cfg.token) });
   if (!res.ok) {
     const txt = await res.text().catch(() => res.statusText);
     throw new Error(`ulakBELL ${res.status}: ${txt.slice(0, 200)}`);
@@ -52,10 +73,10 @@ async function getIncidents({
 // ─── Tek başvuru detayı ───────────────────────────────────────────────────────
 // GET /api/incident/{public_token}
 async function getIncident(publicToken) {
-  checkConfig();
+  const cfg = await checkConfig();
   if (!publicToken) throw new Error('public_token gerekli');
 
-  const res = await fetch(`${BASE()}/api/incident/${publicToken}`, { headers: headers() });
+  const res = await fetch(`${cfg.base}/api/incident/${publicToken}`, { headers: headers(cfg.token) });
   if (!res.ok) {
     const txt = await res.text().catch(() => res.statusText);
     throw new Error(`ulakBELL ${res.status}: ${txt.slice(0, 200)}`);
@@ -66,10 +87,10 @@ async function getIncident(publicToken) {
 // ─── Bağlantı testi ───────────────────────────────────────────────────────────
 async function testConnection() {
   try {
-    checkConfig();
+    const cfg = await checkConfig();
     const res = await fetch(
-      `${BASE()}/api/incident?resource=all&count=1&show_all_incidents=1`,
-      { headers: headers() }
+      `${cfg.base}/api/incident?resource=all&count=1&show_all_incidents=1`,
+      { headers: headers(cfg.token) }
     );
     if (!res.ok) {
       const txt = await res.text().catch(() => res.statusText);
@@ -81,4 +102,4 @@ async function testConnection() {
   }
 }
 
-module.exports = { getIncidents, getIncident, testConnection };
+module.exports = { getConfig, getIncidents, getIncident, testConnection };

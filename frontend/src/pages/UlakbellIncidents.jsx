@@ -1,395 +1,331 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import FilterTabs from '../components/ui/FilterTabs';
+import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
+import Surface from '../components/ui/Surface';
 
 const API = import.meta.env.VITE_API_URL || '';
 
 function authFetch(path) {
   return fetch(`${API}${path}`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-  }).then(async r => {
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  }).then(async (r) => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || data.message || `HTTP ${r.status}`);
     return data;
   });
 }
 
-// ─── Sabitler ────────────────────────────────────────────────────────────────
-const STATUSES = [
-  { value: 'new',                  label: 'Yeni',            color: 'bg-gray-100 text-gray-700' },
-  { value: 'pending',              label: 'Beklemede',       color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'in_process',           label: 'İşlemde',         color: 'bg-blue-100 text-blue-700' },
-  { value: 'completed',            label: 'Sonuçlandı',      color: 'bg-green-100 text-green-700' },
-  { value: 'waiting_for_approval', label: 'Onay Bekliyor',   color: 'bg-orange-100 text-orange-700' },
+const STATUS_OPTIONS = [
+  { key: 'new', label: 'Yeni' },
+  { key: 'pending', label: 'Beklemede' },
+  { key: 'in_process', label: 'İşlemde' },
+  { key: 'completed', label: 'Sonuçlandı' },
+  { key: 'waiting_for_approval', label: 'Onay Bekliyor' },
 ];
 
-const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.value, s]));
+const STATUS_STYLES = {
+  new: 'bg-slate-100 text-slate-700',
+  pending: 'bg-amber-100 text-amber-700',
+  in_process: 'bg-blue-100 text-blue-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  waiting_for_approval: 'bg-orange-100 text-orange-700',
+};
 
 const INCIDENT_TYPES = {
-  incident:  'Arıza',
-  demand:    'İstek',
+  incident: 'Arıza',
+  demand: 'İstek',
   complaint: 'Şikayet',
-  thanks:    'Teşekkür',
-  notice:    'İhbar',
+  thanks: 'Teşekkür',
+  notice: 'İhbar',
 };
 
 function StatusBadge({ status }) {
-  const s = STATUS_MAP[status];
-  if (!s) return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{status}</span>;
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>;
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[status] || 'bg-slate-100 text-slate-500'}`}>
+      {STATUS_OPTIONS.find((item) => item.key === status)?.label || status || '—'}
+    </span>
+  );
+}
+
+function fmtDate(value) {
+  if (!value) return '—';
+  const num = Number(value);
+  const date = !Number.isNaN(num) && num > 1e9 && num < 1e11 ? new Date(num * 1000) : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function maskPhone(phone) {
   if (!phone) return '—';
-  const p = String(phone).replace(/\D/g, '');
-  if (p.length < 10) return p;
-  return `0${p.slice(-10, -8)}** *** **${p.slice(-2)}`;
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length < 10) return digits;
+  return `0${digits.slice(-10, -8)}** *** **${digits.slice(-2)}`;
 }
 
-function fmtDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleString('tr-TR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-function Skeleton() {
-  return (
-    <div className="animate-pulse space-y-2">
-      {[...Array(8)].map((_, i) => (
-        <div key={i} className="h-11 bg-gray-100 rounded-lg" />
-      ))}
-    </div>
-  );
-}
-
-// ─── Detay Modalı ─────────────────────────────────────────────────────────────
 function DetailModal({ token, onClose }) {
-  const [data, setData]     = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    authFetch(`/api/ulakbell/incidents/${token}`)
+    authFetch(`/api/ulakbell/basvurular/${token}`)
       .then(setData)
-      .catch(e => setError(e.message))
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [token]);
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}>
-
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <span>🔔</span> Başvuru Detayı
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-        </div>
-
-        <div className="p-5">
-          {loading && <div className="animate-pulse space-y-3">{[...Array(5)].map((_,i) => <div key={i} className="h-8 bg-gray-100 rounded" />)}</div>}
-          {error   && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</p>}
-          {data && !loading && <IncidentDetail data={data} />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function IncidentDetail({ data }) {
-  // ulakBELL response farklı şekillerde olabilir — düzleştir
   const d = data?.data ?? data;
-
-  const rows = [
-    ['Başvuru No',    d.number      || d.id || '—'],
-    ['Tarih',         fmtDate(d.created_at || d.createdAt)],
-    ['Tür',           INCIDENT_TYPES[d.incident_type] || d.incident_type || '—'],
-    ['Durum',         <StatusBadge key="st" status={d.status} />],
-    ['Kaynak',        d.source?.title || d.incident_source?.title || '—'],
-    ['Telefon',       maskPhone(d.mobile_phone)],
-    ['İlçe',          d.ilce?.title || d.ilce_title || '—'],
-    ['Mahalle',       d.mahalle?.title || d.mahalle_title || '—'],
-    ['Sokak',         d.sokak?.title || d.sokak_cadde_title || '—'],
-    ['Bina',          d.bina?.title || d.dis_kapi_no || '—'],
-    ['Daire',         d.daire?.title || d.ic_kapi_no || '—'],
-  ].filter(([, v]) => v && v !== '—');
+  const rows = d ? [
+    ['Başvuru No', d.number || d.id || '—'],
+    ['Tür', INCIDENT_TYPES[d.incident_type] || d.incident_type || '—'],
+    ['Durum', d.status || '—'],
+    ['Tarih', fmtDate(d.created_at || d.createdAt)],
+    ['Telefon', maskPhone(d.mobile_phone)],
+    ['İlçe', d.ilce?.title || d.ilce_title || '—'],
+    ['Mahalle', d.mahalle?.title || d.mahalle_title || '—'],
+  ].filter(([, value]) => value && value !== '—') : [];
 
   return (
-    <div className="space-y-4">
-      {/* Meta bilgiler */}
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">{label}</dt>
-            <dd className="text-gray-800 font-medium mt-0.5">{value}</dd>
-          </div>
-        ))}
-      </dl>
-
-      {/* Başvuru metni */}
-      {(d.text || d.description) && (
-        <div>
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Başvuru Metni</p>
-          <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">
-            {d.text || d.description}
-          </p>
+    <div className="fixed inset-0 z-50 bg-slate-950/45 flex items-center justify-center p-4" onClick={onClose}>
+      <Surface className="w-full max-w-2xl max-h-[90vh] overflow-y-auto" soft>
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i className="bi bi-bell text-emerald-600" /> Başvuru Detayı
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl leading-none">&times;</button>
         </div>
-      )}
 
-      {/* Ekler */}
-      {d.attachments?.length > 0 && (
-        <div>
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Ekler</p>
-          <ul className="space-y-1">
-            {d.attachments.map((a, i) => (
-              <li key={i} className="text-sm text-blue-600 flex items-center gap-2">
-                <span>📎</span> {a.real_name || a.name || `Dosya ${i + 1}`}
-              </li>
-            ))}
-          </ul>
+        <div className="p-5" onClick={(e) => e.stopPropagation()}>
+          {loading && <LoadingState compact title="Başvuru detayları yükleniyor..." />}
+          {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          {!loading && !error && d && (
+            <div className="space-y-5">
+              <div className="grid sm:grid-cols-2 gap-4">
+                {rows.map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 m-0">{label}</p>
+                    <div className="text-sm font-medium text-slate-800 mt-2">
+                      {label === 'Durum' ? <StatusBadge status={value} /> : value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {(d.text || d.description) && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 mb-3">Başvuru Metni</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed m-0">{d.text || d.description}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </Surface>
     </div>
   );
 }
 
-// ─── Ana Sayfa ────────────────────────────────────────────────────────────────
 export default function UlakbellIncidents() {
-  const [incidents,    setIncidents]    = useState([]);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState('');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [notConfigured, setNotConfigured] = useState(false);
-  const [lastUpdated,  setLastUpdated]  = useState(null);
-  const [detailToken,  setDetailToken]  = useState(null);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('new');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [detailToken, setDetailToken] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  // Filtreler
-  const [search,      setSearch]      = useState('');
-  const [activeStats, setActiveStats] = useState(['new', 'pending', 'in_process']);
-  const [page,        setPage]        = useState(1);
-  const [totalPages,  setTotalPages]  = useState(1);
-
-  const COUNT = 20;
-
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async (nextPage = page, nextStatus = status, nextSearch = search) => {
     setLoading(true);
     setError('');
+    setNotConfigured(false);
     try {
       const params = new URLSearchParams({
-        page:  p,
-        count: COUNT,
-        resource: 'all',
-        show_all_incidents: 1,
+        page: String(nextPage),
+        count: '20',
+        status: nextStatus,
       });
+      if (nextSearch.trim()) params.set('q', nextSearch.trim());
 
-      activeStats.forEach(s => params.append('status[]', s));
-
-      // Ara: rakam → number, diğer → mobile_phone
-      if (search.trim()) {
-        if (/^\d+$/.test(search.trim())) params.set('number', search.trim());
-        else params.set('mobile_phone', search.trim());
-      }
-
-      const data = await authFetch(`/api/ulakbell/incidents?${params}`);
-
-      // ulakBELL yanıt yapısı: { data: [...], meta: { total, per_page } } veya [...]
-      const list  = Array.isArray(data) ? data : (data?.data || data?.incidents || []);
-      const meta  = data?.meta || data?.pagination || {};
-      const total = meta.total || meta.last_page || list.length;
-      setIncidents(list);
-      setTotalPages(Math.max(1, Math.ceil(total / COUNT)));
+      const data = await authFetch(`/api/ulakbell/basvurular?${params.toString()}`);
+      const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      setItems(list);
+      setTotalPages(Math.max(1, data?.meta?.last_page || data?.last_page || 1));
       setLastUpdated(new Date());
     } catch (e) {
       if (e.message.includes('yapılandırılmamış')) setNotConfigured(true);
       else setError(e.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [page, activeStats, search]);
+  }, [page, search, status]);
 
-  useEffect(() => { load(1); setPage(1); }, [activeStats]);
+  useEffect(() => {
+    load(1, status, search);
+    setPage(1);
+  }, [status]);
 
-  function toggleStatus(value) {
-    setActiveStats(prev =>
-      prev.includes(value) ? prev.filter(s => s !== value) : [...prev, value]
-    );
-  }
-
-  function handleSearch(e) {
+  const submitSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    load(1);
-  }
+    load(1, status, search);
+  };
 
-  function goPage(p) {
-    setPage(p);
-    load(p);
-  }
-
-  // ─── Yapılandırılmamış ────────────────────────────────────────────────────
-  if (notConfigured) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
-        <div className="text-4xl">🔔</div>
-        <div>
-          <p className="text-base font-semibold text-gray-800 mb-1">ulakBELL entegrasyonu yapılandırılmamış</p>
-          <p className="text-sm text-gray-500">
-            <a href="/admin/settings" className="text-indigo-600 hover:underline">Ayarlar › ulakBELL</a> sekmesinden
-            URL ve token bilgilerini girin.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const goPage = (nextPage) => {
+    setPage(nextPage);
+    load(nextPage, status, search);
+  };
 
   return (
-    <div className="space-y-4">
-      {/* Başlık */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <span>🔔</span> ulakBELL Başvuruları
-          </h1>
-          {lastUpdated && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              Son güncelleme: {lastUpdated.toLocaleTimeString('tr-TR')}
-            </p>
-          )}
-        </div>
-        <button onClick={() => load(page)} disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50">
-          <span className={loading ? 'animate-spin' : ''}>🔄</span> Yenile
-        </button>
-      </div>
-
-      {/* Filtre Satırı */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Durum Checkboxları */}
-          <div className="flex flex-wrap gap-2">
-            {STATUSES.map(s => (
-              <button key={s.value} type="button" onClick={() => toggleStatus(s.value)}
-                className={`text-xs px-2.5 py-1 rounded-full border-2 transition font-medium
-                  ${activeStats.includes(s.value)
-                    ? `${s.color} border-current`
-                    : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}>
-                {activeStats.includes(s.value) ? '✓ ' : ''}{s.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Arama */}
-          <form onSubmit={handleSearch} className="flex items-center gap-2 ml-auto">
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Başvuru no veya telefon ara…"
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-            <button type="submit"
-              className="portal-cta-btn portal-cta-btn--violet text-sm">
-              Ara
-            </button>
-            {search && (
-              <button type="button" onClick={() => { setSearch(''); setPage(1); load(1); }}
-                className="text-xs text-gray-400 hover:text-gray-600">✕</button>
-            )}
-          </form>
-        </div>
-      </div>
-
-      {/* Hata */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-          <span className="text-lg">❌</span>
-          <div>
-            <p className="text-sm font-semibold text-red-800">ulakBELL bağlantısı kurulamadı</p>
-            <p className="text-xs text-red-600 mt-0.5">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tablo */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="p-5"><Skeleton /></div>
-        ) : incidents.length === 0 ? (
-          <div className="py-16 text-center text-gray-400 text-sm">
-            {error ? '' : 'Başvuru bulunamadı'}
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-8">#</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Başvuru No</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Metin</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Tür</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Durum</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Tarih</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">İşlem</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {incidents.map((inc, idx) => {
-                const d = inc?.data ?? inc;
-                const token = d.public_token || d.token || d.id;
-                const num   = d.number || d.id || '—';
-                const text  = d.text || d.description || '';
-                const type  = INCIDENT_TYPES[d.incident_type] || d.incident_type || '—';
-                const date  = fmtDate(d.created_at || d.createdAt);
-
-                return (
-                  <tr key={token || idx} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-4 py-3 text-gray-400 text-xs">{(page - 1) * COUNT + idx + 1}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">#{num}</td>
-                    <td className="px-4 py-3 text-gray-700 max-w-xs">
-                      <span title={text}>{text.length > 65 ? text.slice(0, 65) + '…' : text}</span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{type}</td>
-                    <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={d.status} /></td>
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{date}</td>
-                    <td className="px-4 py-3 text-right">
-                      {token && (
-                        <button onClick={() => setDetailToken(String(token))}
-                          className="text-xs px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg transition font-medium">
-                          Detay
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+    <div className="portal-page portal-page--wide space-y-5">
+      <PageHeader
+        icon={<i className="bi bi-bell-fill text-xl" />}
+        title="ulakBELL Talepleri"
+        description="Dış sistemden gelen başvuruları listeleyin, filtreleyin ve detaylarını inceleyin."
+        meta={lastUpdated ? `Son güncelleme: ${lastUpdated.toLocaleTimeString('tr-TR')}` : null}
+        actions={(
+          <Button color="green" className="text-sm" onClick={() => load(page, status, search)} disabled={loading}>
+            <i className={`bi bi-arrow-clockwise ${loading ? 'animate-spin' : ''}`} /> Yenile
+          </Button>
         )}
-      </div>
+      />
 
-      {/* Sayfalama */}
-      {!loading && incidents.length > 0 && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <p className="text-xs text-gray-400">{COUNT} kayıt / sayfa</p>
-          <div className="flex items-center gap-2">
-            <button onClick={() => goPage(page - 1)} disabled={page <= 1}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition text-xs">
-              ← Önceki
-            </button>
-            <span className="text-xs font-medium px-3">
-              Sayfa {page} / {totalPages}
-            </span>
-            <button onClick={() => goPage(page + 1)} disabled={page >= totalPages}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition text-xs">
-              Sonraki →
-            </button>
-          </div>
-        </div>
+      {notConfigured ? (
+        <EmptyState
+          icon={<i className="bi bi-bell text-slate-300" />}
+          title="ulakBELL entegrasyonu yapılandırılmamış"
+          description="Ayarlar ekranından doğru URL ve token bilgilerini girerek bu modülü aktif hale getirebilirsiniz."
+          action={<a href="/admin/settings" className="text-sm font-semibold text-emerald-600 hover:underline">Ayarlar &rsaquo; ulakBELL</a>}
+        />
+      ) : (
+        <>
+          <Surface className="p-4 md:p-5" soft>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <FilterTabs
+                tabs={STATUS_OPTIONS}
+                value={status}
+                onChange={setStatus}
+              />
+
+              <form onSubmit={submitSearch} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Başvuru no ara..."
+                  className="w-full lg:w-64 h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                />
+                <Button type="submit" color="green" className="text-sm">Ara</Button>
+                {search && (
+                  <Button type="button" variant="soft" className="text-sm" onClick={() => { setSearch(''); load(1, status, ''); setPage(1); }}>
+                    Temizle
+                  </Button>
+                )}
+              </form>
+            </div>
+          </Surface>
+
+          {error && (
+            <Surface className="p-4 border-red-200 bg-red-50">
+              <div className="flex items-start gap-3">
+                <i className="bi bi-exclamation-triangle-fill text-red-500 text-lg" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800 m-0">Bağlantı kurulamadı</p>
+                  <p className="text-xs text-red-600 mt-1 m-0">{error}</p>
+                </div>
+              </div>
+            </Surface>
+          )}
+
+          <Surface className="overflow-hidden">
+            {loading ? (
+              <div className="p-5">
+                <LoadingState compact title="ulakBELL başvuruları yükleniyor..." />
+              </div>
+            ) : items.length === 0 ? (
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  icon={<i className="bi bi-inbox text-slate-300" />}
+                  title="Başvuru bulunamadı"
+                  description="Seçili filtrelerde gösterilecek bir kayıt yok."
+                />
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">No</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Başvuru</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Metin</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Tür</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Durum</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Tarih</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item, index) => {
+                    const d = item?.data ?? item;
+                    const token = d.public_token || d.token || d.id;
+                    const text = d.text || d.description || '';
+                    return (
+                      <tr key={token || index} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">#{d.number || d.id || '—'}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{maskPhone(d.mobile_phone)}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{d.ilce?.title || d.ilce_title || 'Muğla'}</div>
+                        </td>
+                        <td className="px-4 py-3 max-w-md text-slate-600">
+                          {text.length > 90 ? `${text.slice(0, 90)}...` : text || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{INCIDENT_TYPES[d.incident_type] || d.incident_type || '—'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={d.status} /></td>
+                        <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDate(d.created_at || d.createdAt)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {token && (
+                            <Button color="green" className="text-xs" onClick={() => setDetailToken(String(token))}>
+                              Detay
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Surface>
+
+          {!loading && items.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-400 m-0">20 kayıt / sayfa</p>
+              <div className="flex items-center gap-2">
+                <Button variant="soft" className="text-xs" onClick={() => goPage(page - 1)} disabled={page <= 1}>
+                  &larr; Önceki
+                </Button>
+                <span className="text-sm font-semibold text-slate-700 px-2">{page} / {totalPages}</span>
+                <Button variant="soft" className="text-xs" onClick={() => goPage(page + 1)} disabled={page >= totalPages}>
+                  Sonraki &rarr;
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Detay Modalı */}
-      {detailToken && (
-        <DetailModal token={detailToken} onClose={() => setDetailToken(null)} />
-      )}
+      {detailToken && <DetailModal token={detailToken} onClose={() => setDetailToken(null)} />}
     </div>
   );
 }

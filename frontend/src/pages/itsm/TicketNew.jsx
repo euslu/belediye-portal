@@ -13,14 +13,14 @@ function authFetch(path) {
 
 // ─── Renk haritası (SubmitType.color → Tailwind sınıfları) ────────────────────
 const TYPE_COLORS = {
-  red:    { gradient: 'from-red-500 to-orange-500',    hover: 'hover:border-red-400',    hoverbg: 'from-red-50 to-orange-50',     action: 'text-red-600',    badge: 'bg-red-100 text-red-700',       btn: 'bg-red-600 hover:bg-red-700',    ring: 'focus:ring-red-200 focus:border-red-400',     selCat: 'border-red-500 bg-red-50 text-red-700',     catHover: 'hover:border-red-300 hover:bg-red-50',    borderHex: '#ef4444', hoverBorderHex: '#dc2626', iconBg: '#fee2e2', iconFg: '#ef4444' },
-  indigo: { gradient: 'from-indigo-500 to-blue-500',   hover: 'hover:border-indigo-400', hoverbg: 'from-indigo-50 to-blue-50',    action: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', btn: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-200 focus:border-indigo-300', selCat: 'border-indigo-500 bg-indigo-50 text-indigo-700', catHover: 'hover:border-indigo-300 hover:bg-indigo-50', borderHex: '#4f46e5', hoverBorderHex: '#4338ca', iconBg: '#eef2ff', iconFg: '#4f46e5' },
-  orange: { gradient: 'from-orange-500 to-amber-500',  hover: 'hover:border-orange-400', hoverbg: 'from-orange-50 to-amber-50',   action: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', btn: 'bg-orange-600 hover:bg-orange-700', ring: 'focus:ring-orange-200 focus:border-orange-400', selCat: 'border-orange-500 bg-orange-50 text-orange-700', catHover: 'hover:border-orange-300 hover:bg-orange-50', borderHex: '#f97316', hoverBorderHex: '#ea580c', iconBg: '#fff7ed', iconFg: '#f97316' },
-  green:  { gradient: 'from-green-500 to-emerald-500', hover: 'hover:border-green-400',  hoverbg: 'from-green-50 to-emerald-50',  action: 'text-green-600',  badge: 'bg-green-100 text-green-700',   btn: 'bg-green-600 hover:bg-green-700',  ring: 'focus:ring-green-200 focus:border-green-400',   selCat: 'border-green-500 bg-green-50 text-green-700',   catHover: 'hover:border-green-300 hover:bg-green-50',   borderHex: '#22c55e', hoverBorderHex: '#16a34a', iconBg: '#dcfce7', iconFg: '#16a34a' },
-  blue:   { gradient: 'from-blue-500 to-cyan-500',     hover: 'hover:border-blue-400',   hoverbg: 'from-blue-50 to-cyan-50',      action: 'text-blue-600',   badge: 'bg-blue-100 text-blue-700',     btn: 'bg-blue-600 hover:bg-blue-700',    ring: 'focus:ring-blue-200 focus:border-blue-400',     selCat: 'border-blue-500 bg-blue-50 text-blue-700',     catHover: 'hover:border-blue-300 hover:bg-blue-50',     borderHex: '#3b82f6', hoverBorderHex: '#2563eb', iconBg: '#dbeafe', iconFg: '#3b82f6' },
-  purple: { gradient: 'from-purple-500 to-violet-500', hover: 'hover:border-purple-400', hoverbg: 'from-purple-50 to-violet-50',  action: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', btn: 'bg-purple-600 hover:bg-purple-700', ring: 'focus:ring-purple-200 focus:border-purple-400', selCat: 'border-purple-500 bg-purple-50 text-purple-700', catHover: 'hover:border-purple-300 hover:bg-purple-50', borderHex: '#a855f7', hoverBorderHex: '#9333ea', iconBg: '#f3e8ff', iconFg: '#a855f7' },
-  gray:   { gradient: 'from-gray-500 to-slate-500',    hover: 'hover:border-gray-400',   hoverbg: 'from-gray-50 to-slate-50',     action: 'text-gray-600',   badge: 'bg-gray-100 text-gray-700',     btn: 'bg-gray-600 hover:bg-gray-700',    ring: 'focus:ring-gray-200 focus:border-gray-400',     selCat: 'border-gray-500 bg-gray-50 text-gray-700',     catHover: 'hover:border-gray-300 hover:bg-gray-50',     borderHex: '#6b7280', hoverBorderHex: '#4b5563', iconBg: '#f3f4f6', iconFg: '#6b7280' },
-  amber:  { gradient: 'from-amber-500 to-yellow-500',  hover: 'hover:border-amber-400',  hoverbg: 'from-amber-50 to-yellow-50',   action: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',   btn: 'bg-amber-600 hover:bg-amber-700',  ring: 'focus:ring-amber-200 focus:border-amber-400',   selCat: 'border-amber-500 bg-amber-50 text-amber-700',   catHover: 'hover:border-amber-300 hover:bg-amber-50',   borderHex: '#f59e0b', hoverBorderHex: '#d97706', iconBg: '#fef3c7', iconFg: '#f59e0b' },
+  red:    { gradient: 'from-red-500 to-orange-500',    hover: 'hover:border-red-400',    hoverbg: 'from-red-50 to-orange-50',     action: 'text-red-600',    badge: 'bg-red-100 text-red-700',       btn: 'bg-red-600 hover:bg-red-700',    ring: 'focus:ring-red-200 focus:border-red-400',     selCat: 'border-red-500 bg-red-50 text-red-700',     catHover: 'hover:border-red-300 hover:bg-red-50',    borderHex: '#ef4444', hoverBorderHex: '#dc2626', iconBg: '#fee2e2', iconFg: '#ef4444',  softBg: 'from-red-50 via-white to-orange-50', pillActive: 'from-red-500 to-orange-500', pillSoft: 'border-red-200/70 text-red-700 bg-red-50/80' },
+  indigo: { gradient: 'from-indigo-500 to-blue-500',   hover: 'hover:border-indigo-400', hoverbg: 'from-indigo-50 to-blue-50',    action: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', btn: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-200 focus:border-indigo-300', selCat: 'border-indigo-500 bg-indigo-50 text-indigo-700', catHover: 'hover:border-indigo-300 hover:bg-indigo-50', borderHex: '#4f46e5', hoverBorderHex: '#4338ca', iconBg: '#eef2ff', iconFg: '#4f46e5', softBg: 'from-indigo-50 via-white to-cyan-50',   pillActive: 'from-indigo-500 to-blue-500',   pillSoft: 'border-indigo-200/70 text-indigo-700 bg-indigo-50/80' },
+  orange: { gradient: 'from-orange-500 to-amber-500',  hover: 'hover:border-orange-400', hoverbg: 'from-orange-50 to-amber-50',   action: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', btn: 'bg-orange-600 hover:bg-orange-700', ring: 'focus:ring-orange-200 focus:border-orange-400', selCat: 'border-orange-500 bg-orange-50 text-orange-700', catHover: 'hover:border-orange-300 hover:bg-orange-50', borderHex: '#f97316', hoverBorderHex: '#ea580c', iconBg: '#fff7ed', iconFg: '#f97316', softBg: 'from-orange-50 via-white to-amber-50',  pillActive: 'from-orange-500 to-amber-500',  pillSoft: 'border-orange-200/70 text-orange-700 bg-orange-50/80' },
+  green:  { gradient: 'from-green-500 to-emerald-500', hover: 'hover:border-green-400',  hoverbg: 'from-green-50 to-emerald-50',  action: 'text-green-600',  badge: 'bg-green-100 text-green-700',   btn: 'bg-green-600 hover:bg-green-700',  ring: 'focus:ring-green-200 focus:border-green-400',   selCat: 'border-green-500 bg-green-50 text-green-700',   catHover: 'hover:border-green-300 hover:bg-green-50',   borderHex: '#22c55e', hoverBorderHex: '#16a34a', iconBg: '#dcfce7', iconFg: '#16a34a', softBg: 'from-green-50 via-white to-emerald-50', pillActive: 'from-green-500 to-emerald-500', pillSoft: 'border-green-200/70 text-green-700 bg-green-50/80' },
+  blue:   { gradient: 'from-blue-500 to-cyan-500',     hover: 'hover:border-blue-400',   hoverbg: 'from-blue-50 to-cyan-50',      action: 'text-blue-600',   badge: 'bg-blue-100 text-blue-700',     btn: 'bg-blue-600 hover:bg-blue-700',    ring: 'focus:ring-blue-200 focus:border-blue-400',     selCat: 'border-blue-500 bg-blue-50 text-blue-700',     catHover: 'hover:border-blue-300 hover:bg-blue-50',     borderHex: '#3b82f6', hoverBorderHex: '#2563eb', iconBg: '#dbeafe', iconFg: '#3b82f6', softBg: 'from-blue-50 via-white to-cyan-50',   pillActive: 'from-blue-500 to-cyan-500',     pillSoft: 'border-blue-200/70 text-blue-700 bg-blue-50/80' },
+  purple: { gradient: 'from-purple-500 to-violet-500', hover: 'hover:border-purple-400', hoverbg: 'from-purple-50 to-violet-50',  action: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', btn: 'bg-purple-600 hover:bg-purple-700', ring: 'focus:ring-purple-200 focus:border-purple-400', selCat: 'border-purple-500 bg-purple-50 text-purple-700', catHover: 'hover:border-purple-300 hover:bg-purple-50', borderHex: '#a855f7', hoverBorderHex: '#9333ea', iconBg: '#f3e8ff', iconFg: '#a855f7', softBg: 'from-purple-50 via-white to-fuchsia-50', pillActive: 'from-purple-500 to-violet-500', pillSoft: 'border-purple-200/70 text-purple-700 bg-purple-50/80' },
+  gray:   { gradient: 'from-slate-500 to-zinc-500',    hover: 'hover:border-slate-400',   hoverbg: 'from-slate-50 to-zinc-50',     action: 'text-slate-600',   badge: 'bg-slate-100 text-slate-700',     btn: 'bg-slate-600 hover:bg-slate-700',    ring: 'focus:ring-slate-200 focus:border-slate-400',     selCat: 'border-slate-500 bg-slate-50 text-slate-700',     catHover: 'hover:border-slate-300 hover:bg-slate-50',     borderHex: '#64748b', hoverBorderHex: '#475569', iconBg: '#f1f5f9', iconFg: '#64748b', softBg: 'from-slate-50 via-white to-zinc-50', pillActive: 'from-slate-500 to-zinc-500', pillSoft: 'border-slate-200/70 text-slate-700 bg-slate-50/80' },
+  amber:  { gradient: 'from-amber-500 to-yellow-500',  hover: 'hover:border-amber-400',  hoverbg: 'from-amber-50 to-yellow-50',   action: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',   btn: 'bg-amber-600 hover:bg-amber-700',  ring: 'focus:ring-amber-200 focus:border-amber-400',   selCat: 'border-amber-500 bg-amber-50 text-amber-700',   catHover: 'hover:border-amber-300 hover:bg-amber-50',   borderHex: '#f59e0b', hoverBorderHex: '#d97706', iconBg: '#fef3c7', iconFg: '#f59e0b', softBg: 'from-amber-50 via-white to-yellow-50', pillActive: 'from-amber-500 to-yellow-500', pillSoft: 'border-amber-200/70 text-amber-700 bg-amber-50/80' },
 };
 function tc(color) { return TYPE_COLORS[color] || TYPE_COLORS.indigo; }
 
@@ -31,10 +31,10 @@ const PRIORITIES = [
   { value: 'CRITICAL', label: 'Kritik', sla: '4 sa'  },
 ];
 const PRIORITY_COLORS = {
-  LOW:      { ring: 'ring-gray-300',   bg: 'bg-gray-50',    text: 'text-gray-600'   },
-  MEDIUM:   { ring: 'ring-blue-400',   bg: 'bg-blue-50',    text: 'text-blue-700'   },
-  HIGH:     { ring: 'ring-orange-400', bg: 'bg-orange-50',  text: 'text-orange-700' },
-  CRITICAL: { ring: 'ring-red-500',    bg: 'bg-red-50',     text: 'text-red-700'    },
+  LOW:      { border: '#94a3b8', bg: '#f8fafc', color: '#475569', ring: '#cbd5e1' },
+  MEDIUM:   { border: '#3b82f6', bg: '#eff6ff', color: '#1d4ed8', ring: '#93c5fd' },
+  HIGH:     { border: '#f97316', bg: '#fff7ed', color: '#c2410c', ring: '#fdba74' },
+  CRITICAL: { border: '#ef4444', bg: '#fef2f2', color: '#b91c1c', ring: '#fca5a5' },
 };
 
 // ─── İlerleme adımları ─────────────────────────────────────────────────────────
@@ -113,38 +113,72 @@ function Step1TypeSelect({ onSelect }) {
             <button key={st.key} onClick={() => onSelect(st)}
               onMouseEnter={() => setHoveredKey(st.key)}
               onMouseLeave={() => setHoveredKey(null)}
-              className="group relative overflow-hidden rounded-2xl bg-white p-7 text-left transition-all duration-200"
               style={{
-                border: `1.5px solid ${isHovered ? c.hoverBorderHex : c.borderHex}`,
-                transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
+                position: 'relative', overflow: 'hidden',
+                borderRadius: 16, padding: 28, textAlign: 'left',
+                border: `1.5px solid ${isHovered ? '#43DC80' : '#e5e7eb'}`,
+                background: isHovered ? '#f0fdf4' : '#fff',
+                transform: isHovered ? 'translateY(-4px)' : 'none',
                 boxShadow: isHovered ? '0 12px 32px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+                transition: 'all 0.15s', cursor: 'pointer', fontFamily: 'inherit',
               }}>
-              <div className={`absolute inset-0 bg-gradient-to-br ${c.hoverbg} opacity-0 group-hover:opacity-100 transition-opacity`} />
-              <div className="relative">
-                <div style={{
-                  width: 56, height: 56, borderRadius: 16, marginBottom: 20,
-                  background: c.iconBg,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {KEY_ICONS[st.key]
-                    ? <i className={`bi ${KEY_ICONS[st.key]}`} style={{ fontSize: 26, color: c.iconFg }} />
-                    : <span className="text-2xl">{st.icon || '📋'}</span>
-                  }
-                </div>
-                <h2 className="text-lg font-bold text-gray-900 mb-1.5">{st.name}</h2>
-                {st.description && <p className="text-sm text-gray-500 leading-relaxed">{st.description}</p>}
-                <div className={`mt-5 flex items-center gap-1.5 text-xs font-semibold ${c.action}`}>
-                  Devam Et
-                  <svg className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" style={{width:14,height:14,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16, marginBottom: 20,
+                background: c.iconBg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {KEY_ICONS[st.key]
+                  ? <i className={`bi ${KEY_ICONS[st.key]}`} style={{ fontSize: 26, color: c.iconFg }} />
+                  : <span style={{ fontSize: 24 }}>{st.icon || '📋'}</span>
+                }
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 6 }}>{st.name}</div>
+              {st.description && <div style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.5 }}>{st.description}</div>}
+              <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: c.iconFg }}>
+                Devam Et
+                <span style={{ fontSize: 14 }}>›</span>
               </div>
             </button>
           );
         })}
       </div>
     </div>
+  );
+}
+
+// ─── Kategori kartı (hover efektli) ──────────────────────────────────────────
+function CatCard({ cat, c, onSelect }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={() => onSelect(cat)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 16, padding: 16,
+        background: hover ? '#f0fdf4' : '#fff',
+        border: `1.5px solid ${hover ? '#43DC80' : '#e5e7eb'}`,
+        borderRadius: 16, textAlign: 'left', cursor: 'pointer',
+        transition: 'all 0.15s',
+        boxShadow: hover ? '0 12px 32px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+        transform: hover ? 'translateY(-4px)' : 'none',
+        fontFamily: 'inherit',
+      }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+        background: c.iconBg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 24,
+      }}>
+        {cat.icon || '📁'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#1f2937', lineHeight: 1.4 }}>{cat.name}</div>
+        {cat._count?.subjects > 0 && (
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{cat._count.subjects} konu</div>
+        )}
+      </div>
+      <span style={{ color: '#d1d5db', fontSize: 18, flexShrink: 0 }}>›</span>
+    </button>
   );
 }
 
@@ -163,7 +197,7 @@ function Step2CategorySelect({ submitType, onSelect, onBack }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition">
+        <button onClick={onBack} className="portal-soft-btn rounded-2xl" style={{ width: 44, height: 44, padding: 0 }}>
           <svg className="w-5 h-5" style={{width:20,height:20,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -182,30 +216,7 @@ function Step2CategorySelect({ submitType, onSelect, onBack }) {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {categories.map((cat) => (
-            <button key={cat.id} onClick={() => onSelect(cat)}
-              className={`group flex items-center gap-4 p-4 bg-white border-2 border-gray-100 rounded-2xl
-                text-left ${c.catHover} hover:shadow-md transition-all duration-150`}>
-              {/* İkon kutusu */}
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${c.gradient} bg-opacity-10
-                flex items-center justify-center text-2xl flex-shrink-0 shadow-sm`}>
-                {cat.icon || '📁'}
-              </div>
-              {/* Metin */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 leading-snug group-hover:text-gray-900">
-                  {cat.name}
-                </p>
-                {cat._count?.subjects > 0 && (
-                  <p className="text-xs text-gray-400 mt-0.5">{cat._count.subjects} konu</p>
-                )}
-              </div>
-              {/* Ok */}
-              <svg className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform"
-                style={{width:16,height:16,flexShrink:0}}
-                fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+            <CatCard key={cat.id} cat={cat} c={c} onSelect={onSelect} />
           ))}
         </div>
       )}
@@ -424,14 +435,12 @@ function Step3Form({ submitType, category, onBack }) {
         <div className="flex gap-3">
           <button
             onClick={() => navigate(`/itsm/${ticket.id}`)}
-            className={`${c.btn} text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition`}
-          >
+            className="portal-cta-btn portal-cta-btn--green text-sm">
             Talep Detayı →
           </button>
           <button
             onClick={() => navigate('/itsm')}
-            className="text-sm text-gray-500 hover:text-gray-700 px-5 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition"
-          >
+            className="portal-pill-btn text-sm">
             Taleplerim
           </button>
         </div>
@@ -443,7 +452,7 @@ function Step3Form({ submitType, category, onBack }) {
     <div>
       {/* Başlık */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition">
+        <button onClick={onBack} className="portal-soft-btn rounded-2xl" style={{ width: 44, height: 44, padding: 0 }}>
           <svg className="w-5 h-5" style={{width:20,height:20,flexShrink:0}} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -477,18 +486,37 @@ function Step3Form({ submitType, category, onBack }) {
                 const selected = selectedSubj?.id === subj.id;
                 return (
                   <button key={subj.id} type="button" onClick={() => setSelectedSubj(subj)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all
-                      ${selected
-                        ? `${c.selCat} shadow-sm`
-                        : 'border-gray-100 text-gray-700 hover:border-gray-200 hover:bg-gray-50'}`}>
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '12px 16px',
+                      borderRadius: 12,
+                      border: `2px solid ${selected ? c.borderHex : '#e5e7eb'}`,
+                      background: selected ? c.iconBg : '#fff',
+                      color: selected ? c.borderHex : '#374151',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      transition: 'all 200ms ease',
+                      boxShadow: selected ? `0 4px 14px ${c.borderHex}20` : '0 1px 4px rgba(0,0,0,0.04)',
+                    }}>
                     {/* Radio circle */}
-                    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors
-                      ${selected ? 'border-current' : 'border-gray-300'}`}>
-                      {selected && <span className="w-2 h-2 rounded-full bg-current block" />}
+                    <span style={{
+                      width: 16, height: 16, borderRadius: '50%',
+                      border: `2px solid ${selected ? c.borderHex : '#d1d5db'}`,
+                      flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {selected && <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.borderHex, display: 'block' }} />}
                     </span>
-                    <span className="flex-1 text-sm font-medium">{subj.name}</span>
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{subj.name}</span>
                     {subj.defaultGroup && (
-                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded flex-shrink-0">
+                      <span style={{
+                        fontSize: 12, padding: '4px 10px', borderRadius: 20, flexShrink: 0,
+                        border: `1px solid ${selected ? c.borderHex + '40' : '#e5e7eb'}`,
+                        background: selected ? '#fff' : '#f8fafc',
+                        color: selected ? c.borderHex : '#6b7280',
+                      }}>
                         {subj.defaultGroup.name}
                       </span>
                     )}
@@ -535,18 +563,27 @@ function Step3Form({ submitType, category, onBack }) {
         {/* Öncelik */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Öncelik</h3>
-          <div className="grid grid-cols-4 gap-2">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {PRIORITIES.map(p => {
               const pc     = PRIORITY_COLORS[p.value];
               const active = form.priority === p.value;
               return (
                 <button key={p.value} type="button" onClick={() => set('priority', p.value)}
-                  className={`rounded-xl border-2 px-3 py-2.5 text-center transition
-                    ${active
-                      ? `${pc.bg} ${pc.text} ${pc.ring} ring-2 border-transparent font-semibold`
-                      : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                  <div className="text-sm font-medium">{p.label}</div>
-                  <div className="text-xs opacity-70 mt-0.5">SLA: {p.sla}</div>
+                  style={{
+                    borderRadius: 14,
+                    border: `2px solid ${active ? pc.border : '#e5e7eb'}`,
+                    padding: '12px 10px',
+                    textAlign: 'center',
+                    background: active ? pc.bg : '#fff',
+                    color: active ? pc.color : '#6b7280',
+                    fontWeight: active ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 200ms ease',
+                    boxShadow: active ? `0 4px 14px ${pc.ring}40` : '0 1px 4px rgba(0,0,0,0.04)',
+                    transform: active ? 'translateY(-2px)' : 'none',
+                  }}>
+                  <div style={{ fontSize: 14, fontWeight: 'inherit' }}>{p.label}</div>
+                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>SLA: {p.sla}</div>
                 </button>
               );
             })}
@@ -558,20 +595,31 @@ function Step3Form({ submitType, category, onBack }) {
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Başvuru Kaynağı</h3>
             <p className="text-xs text-gray-400 mb-3">Başvuru telefon, yüz yüze vb. kanaldan geldiyse seçin.</p>
-            <div className="flex flex-wrap gap-2">
-              {SOURCE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => set('source', opt.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border-2 transition
-                    ${form.source === opt.value
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-semibold'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {SOURCE_OPTIONS.map(opt => {
+                const active = form.source === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set('source', opt.value)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 14,
+                      fontSize: 13,
+                      border: `1.5px solid ${active ? c.borderHex : '#e5e7eb'}`,
+                      background: active ? c.iconBg : '#fff',
+                      color: active ? c.borderHex : '#6b7280',
+                      fontWeight: active ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 200ms ease',
+                      boxShadow: active ? `0 4px 14px ${c.borderHex}25` : '0 1px 4px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -597,7 +645,7 @@ function Step3Form({ submitType, category, onBack }) {
               {/* Başvuru Tipi */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-2">Başvuru Tipi</label>
-                <div className="flex flex-wrap gap-2">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {[
                     { v: 'incident', l: '🔧 Arıza' },
                     { v: 'demand',   l: '📋 İstek' },
@@ -606,8 +654,18 @@ function Step3Form({ submitType, category, onBack }) {
                     { v: 'notice',   l: '📢 İhbar' },
                   ].map(({ v, l }) => (
                     <button key={v} type="button" onClick={() => setUbType(v)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border-2 transition
-                        ${ubType === v ? 'border-blue-500 bg-blue-100 text-blue-700 font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 14,
+                        fontSize: 13,
+                        border: `1.5px solid ${ubType === v ? '#3b82f6' : '#e5e7eb'}`,
+                        background: ubType === v ? '#eff6ff' : '#fff',
+                        color: ubType === v ? '#2563eb' : '#6b7280',
+                        fontWeight: ubType === v ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 200ms ease',
+                        boxShadow: ubType === v ? '0 4px 14px rgba(59,130,246,0.15)' : '0 1px 4px rgba(0,0,0,0.04)',
+                      }}>
                       {l}
                     </button>
                   ))}
@@ -715,11 +773,11 @@ function Step3Form({ submitType, category, onBack }) {
 
         <div className="flex gap-3">
           <button type="submit" disabled={loading}
-            className={`${c.btn} text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition disabled:opacity-60`}>
+            className="portal-cta-btn portal-cta-btn--green text-sm disabled:opacity-60">
             {loading ? 'Gönderiliyor…' : 'Başvuruyu Gönder'}
           </button>
           <button type="button" onClick={() => navigate('/itsm')}
-            className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition">
+            className="portal-pill-btn text-sm">
             İptal
           </button>
         </div>

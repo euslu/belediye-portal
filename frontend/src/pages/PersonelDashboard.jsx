@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
+import LoadingState from '../components/ui/LoadingState';
+import PageHeader from '../components/ui/PageHeader';
+import Surface from '../components/ui/Surface';
 
-const API  = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || '';
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 async function apiFetch(path) {
@@ -10,6 +15,7 @@ async function apiFetch(path) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
+
 async function apiPost(path, body) {
   const r = await fetch(API + path, {
     method: 'POST',
@@ -19,208 +25,174 @@ async function apiPost(path, body) {
   return r.json();
 }
 
-// ── Sabitler ──────────────────────────────────────────────────────────────────
-const C = {
-  primary: '#43DC80', primaryDark: '#2db866',
-  danger:  '#ef4444', warning: '#f59e0b',
-  info:    '#3b82f6', purple: '#8b5cf6',
-  gray:    '#6b7280', bg: '#f8fafc', card: '#ffffff',
+const STATUS_TR = {
+  OPEN: 'Açık',
+  PENDING_APPROVAL: 'Onay Bekliyor',
+  ASSIGNED: 'Atandı',
+  IN_PROGRESS: 'İşlemde',
+  RESOLVED: 'Çözüldü',
+  CLOSED: 'Kapalı',
+  REJECTED: 'Reddedildi',
 };
 
-const STATUS_TR = {
-  OPEN: 'Açık', PENDING_APPROVAL: 'Onay Bekliyor', ASSIGNED: 'Atandı',
-  IN_PROGRESS: 'İşlemde', RESOLVED: 'Çözüldü', CLOSED: 'Kapalı', REJECTED: 'Reddedildi',
+const STATUS_CLASS = {
+  OPEN: 'bg-blue-100 text-blue-700 border-blue-200',
+  PENDING_APPROVAL: 'bg-amber-100 text-amber-700 border-amber-200',
+  ASSIGNED: 'bg-violet-100 text-violet-700 border-violet-200',
+  IN_PROGRESS: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  RESOLVED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  CLOSED: 'bg-slate-100 text-slate-600 border-slate-200',
+  REJECTED: 'bg-red-100 text-red-700 border-red-200',
 };
-const STATUS_COLOR = {
-  OPEN: '#3b82f6', PENDING_APPROVAL: '#f59e0b', ASSIGNED: '#8b5cf6',
-  IN_PROGRESS: '#06b6d4', RESOLVED: '#43DC80', CLOSED: '#9ca3af', REJECTED: '#ef4444',
-};
+
 const SISTEM_ROL_TR = {
-  admin: 'Sistem Yöneticisi', daire_baskani: 'Daire Başkanı',
-  mudur: 'Müdür', sef: 'Şef', personel: 'Personel',
+  admin: 'Sistem Yöneticisi',
+  daire_baskani: 'Daire Başkanı',
+  mudur: 'Müdür',
+  sef: 'Şef',
+  personel: 'Personel',
 };
+
 const ROL_TR = { admin: 'Yönetici', manager: 'Müdür', user: 'Personel' };
 
-// ── Küçük bileşenler ──────────────────────────────────────────────────────────
-function Badge({ status }) {
-  const color = STATUS_COLOR[status] || C.gray;
+function StatusBadge({ status }) {
   return (
-    <span style={{
-      fontSize: 11, fontWeight: 600, color,
-      background: color + '18', borderRadius: 6, padding: '2px 8px',
-      border: `1px solid ${color}33`, whiteSpace: 'nowrap',
-    }}>{STATUS_TR[status] || status}</span>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold ${STATUS_CLASS[status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+      {STATUS_TR[status] || status}
+    </span>
   );
 }
 
-function KPI({ icon, label, value, color, to, sub }) {
-  const inner = (
-    <div style={{
-      background: C.card, borderRadius: 14, padding: '18px 20px',
-      border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      display: 'flex', alignItems: 'center', gap: 14,
-      textDecoration: 'none',
-    }}>
-      <span style={{ fontSize: 30 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 26, fontWeight: 700, color: color || '#111827', lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 12, color: C.gray, marginTop: 3 }}>{label}</div>
-        {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{sub}</div>}
+function StatCard({ icon, label, value, colorClass, to, sub }) {
+  const content = (
+    <Surface className="p-5 h-full">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className={`text-3xl font-bold leading-none ${colorClass || 'text-slate-900'}`}>{value}</div>
+          <div className="text-sm font-semibold text-slate-700 mt-2">{label}</div>
+          {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+        </div>
       </div>
-    </div>
+    </Surface>
   );
-  return to
-    ? <Link to={to} style={{ textDecoration: 'none', display: 'block' }}>{inner}</Link>
-    : inner;
+
+  return to ? <Link to={to} className="block no-underline">{content}</Link> : content;
 }
 
-function SectionTitle({ children, action }) {
+function SectionHeader({ children, action, tone = 'default' }) {
+  const toneClass = tone === 'amber' ? 'text-amber-700' : tone === 'indigo' ? 'text-indigo-700' : 'text-slate-800';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: '#374151', margin: 0 }}>{children}</h3>
+    <div className="flex items-center justify-between gap-3 mb-4">
+      <h3 className={`text-base font-bold m-0 ${toneClass}`}>{children}</h3>
       {action}
     </div>
   );
 }
 
-function TicketRow({ t, showFrom }) {
+function TicketRow({ ticket, showFrom }) {
   return (
-    <Link to={`/itsm/${t.id}`} style={{ textDecoration: 'none' }}>
-      <div style={{
-        background: '#fafafa', borderRadius: 10, padding: '10px 14px',
-        border: '1px solid #e5e7eb', marginBottom: 6,
-        borderLeft: `3px solid ${STATUS_COLOR[t.status] || C.gray}`,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              #{t.id} {t.title}
+    <Link to={`/itsm/${ticket.id}`} className="block no-underline">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 hover:bg-white hover:shadow-sm transition">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-slate-800 truncate">
+              #{ticket.id} {ticket.title}
             </div>
-            <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>
+            <div className="text-xs text-slate-500 mt-1">
               {showFrom
-                ? `${t.createdBy?.displayName || '—'} · ${t.createdBy?.directorate || '—'}`
-                : `${t.createdBy?.displayName || '—'}`
-              }
-              {' · '}{new Date(t.createdAt).toLocaleDateString('tr-TR')}
-              {t.group ? ` · ${t.group.name}` : ''}
+                ? `${ticket.createdBy?.displayName || '—'} · ${ticket.createdBy?.directorate || '—'}`
+                : `${ticket.createdBy?.displayName || '—'}`}
+              {' · '}
+              {new Date(ticket.createdAt).toLocaleDateString('tr-TR')}
+              {ticket.group ? ` · ${ticket.group.name}` : ''}
             </div>
           </div>
-          <Badge status={t.status} />
+          <StatusBadge status={ticket.status} />
         </div>
       </div>
     </Link>
   );
 }
 
-function Card({ children, style }) {
-  return (
-    <div style={{
-      background: C.card, borderRadius: 14, padding: '18px 20px',
-      border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-      ...style,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function Empty({ text }) {
-  return (
-    <div style={{ color: C.gray, fontSize: 13, textAlign: 'center', padding: '20px 0', background: '#f9fafb', borderRadius: 10 }}>
-      {text}
-    </div>
-  );
-}
-
-// ── Canlı saat ────────────────────────────────────────────────────────────────
 function LiveClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
   }, []);
+
   const weekDays = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
   return (
-    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', fontVariantNumeric: 'tabular-nums' }}>
+    <div className="text-right">
+      <div className="text-2xl font-bold text-white leading-none">
         {now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
       </div>
-      <div style={{ fontSize: 12, color: C.gray, marginTop: 1 }}>
+      <div className="text-xs text-slate-300 mt-1">
         {weekDays[now.getDay()]}, {now.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
       </div>
     </div>
   );
 }
 
-// ── Durum dağılım şeridi ──────────────────────────────────────────────────────
 function StatusBar({ groups }) {
-  if (!groups || groups.length === 0) return null;
-  const total = groups.reduce((s, g) => s + g._count, 0);
+  if (!groups?.length) return null;
+  const total = groups.reduce((sum, group) => sum + group._count, 0);
+
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-      {groups.map(g => (
-        <div key={g.status} style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          background: (STATUS_COLOR[g.status] || C.gray) + '15',
-          border: `1px solid ${(STATUS_COLOR[g.status] || C.gray)}33`,
-          borderRadius: 8, padding: '4px 10px',
-        }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR[g.status] || C.gray, display: 'inline-block' }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{g._count}</span>
-          <span style={{ fontSize: 11, color: C.gray }}>{STATUS_TR[g.status] || g.status}</span>
-        </div>
+    <div className="flex flex-wrap gap-2 mb-4">
+      {groups.map((group) => (
+        <span
+          key={group.status}
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${STATUS_CLASS[group.status] || 'bg-slate-100 text-slate-600 border-slate-200'}`}
+        >
+          {group._count} {STATUS_TR[group.status] || group.status}
+        </span>
       ))}
-      <div style={{ fontSize: 11, color: C.gray, alignSelf: 'center', marginLeft: 4 }}>
-        Toplam: <strong>{total}</strong>
-      </div>
+      <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold">
+        Toplam: {total}
+      </span>
     </div>
   );
 }
 
-// ── Ana bileşen ───────────────────────────────────────────────────────────────
 export default function PersonelDashboard() {
   const { user } = useAuth();
 
   const sistemRol = user?.sistemRol || (
-    user?.role === 'admin' ? 'admin' :
-    user?.role === 'manager' ? 'mudur' : 'personel'
+    user?.role === 'admin' ? 'admin' : user?.role === 'manager' ? 'mudur' : 'personel'
   );
   const isYonetici = ['admin', 'daire_baskani', 'mudur'].includes(sistemRol);
 
-  // Kişisel veriler
-  const [ozet,       setOzet]       = useState(null);
+  const [ozet, setOzet] = useState(null);
   const [taleplerim, setTaleplerim] = useState([]);
   const [gorevlerim, setGorevlerim] = useState([]);
-  // Birim talepler (yönetici)
   const [daireTalepler, setDaireTalepler] = useState([]);
-  const [daireOzet,     setDaireOzet]     = useState([]);
-  // Onay bekleyenler
+  const [daireOzet, setDaireOzet] = useState([]);
   const [pendingApproval, setPendingApproval] = useState([]);
-  // Lokasyon
-  const [lokasyon,       setLokasyon]       = useState(null);
-  const [lokasyonPersonel, setLokasyonPersonel] = useState([]);
-
-  const [loading,      setLoading]      = useState(true);
+  const [lokasyon, setLokasyon] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [daireLoading, setDaireLoading] = useState(isYonetici);
 
   useEffect(() => {
     const fetches = [
       apiFetch('/api/dashboard/benim')
-        .then(d => {
-          setOzet(d.ozet || {});
-          setTaleplerim(d.taleplerim || []);
-          setGorevlerim(d.gorevlerim || []);
+        .then((data) => {
+          setOzet(data.ozet || {});
+          setTaleplerim(data.taleplerim || []);
+          setGorevlerim(data.gorevlerim || []);
         })
         .catch(() => {}),
       apiFetch('/api/lokasyon/benim')
-        .then(d => {
-          if (d) {
-            setLokasyon(d.lokasyon || null);
-            setLokasyonPersonel(d.personel || []);
-          }
+        .then((data) => {
+          if (data) setLokasyon(data.lokasyon || null);
         })
         .catch(() => {}),
     ];
+
     if (isYonetici) {
       fetches.push(
         apiFetch('/api/tickets/pending-approval')
@@ -228,15 +200,16 @@ export default function PersonelDashboard() {
           .catch(() => {})
       );
     }
+
     Promise.all(fetches).finally(() => setLoading(false));
   }, [isYonetici]);
 
   useEffect(() => {
     if (!isYonetici) return;
     apiFetch('/api/dashboard/daire-talepleri')
-      .then(d => {
-        setDaireTalepler(d.talepler || []);
-        setDaireOzet(d.statusGruplari || []);
+      .then((data) => {
+        setDaireTalepler(data.talepler || []);
+        setDaireOzet(data.statusGruplari || []);
       })
       .catch(() => {})
       .finally(() => setDaireLoading(false));
@@ -248,308 +221,179 @@ export default function PersonelDashboard() {
   };
 
   const initials = user?.displayName
-    ? user.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    ? user.displayName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
     : (user?.username?.[0] || '?').toUpperCase();
 
-  const totalDaire = daireTalepler.length;
-
   return (
-    <div style={{ fontFamily: "'Poppins','Segoe UI',sans-serif", background: C.bg, minHeight: '100vh', padding: '24px 20px 48px' }}>
-      <div style={{ maxWidth: 1140, margin: '0 auto' }}>
-
-        {/* ── KULLANICI KARTI ────────────────────────────────────────────────── */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-          borderRadius: 18, padding: '24px 28px', marginBottom: 24,
-          display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
-        }}>
-          {/* Avatar */}
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: C.primary,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 800, fontSize: 22, flexShrink: 0,
-          }}>
-            {initials}
-          </div>
-
-          {/* Bilgiler */}
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>
-                Hoş geldiniz, {user?.displayName?.split(' ')[0]} 👋
-              </span>
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: '#1e293b',
-                background: C.primary, borderRadius: 6, padding: '2px 10px',
-              }}>
-                {SISTEM_ROL_TR[sistemRol] || ROL_TR[user?.role] || 'Personel'}
-              </span>
+    <div className="portal-page portal-page--wide space-y-5">
+      <Surface className="p-6 lg:p-7 bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_55%,#0f766e_100%)] border-0 shadow-[0_20px_48px_rgba(15,23,42,0.18)]">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-16 h-16 rounded-[20px] bg-white/15 border border-white/10 backdrop-blur-sm text-white flex items-center justify-center text-2xl font-extrabold shrink-0">
+              {initials}
             </div>
-            {user?.title && (
-              <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>{user.title}</div>
-            )}
-            <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
-              {user?.directorate && (
-                <div style={{ fontSize: 12, color: '#cbd5e1' }}>
-                  🏢 <strong style={{ color: '#fff' }}>{user.directorate}</strong>
-                </div>
-              )}
-              {user?.department && user.department !== user.directorate && (
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                  📂 {user.department}
-                </div>
-              )}
-              {user?.city && user.city !== '-' && (
-                <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  📍 {user.city}
-                  {lokasyon?.personelSayisi && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, color: '#1e293b',
-                      background: C.primary + 'cc', borderRadius: 4, padding: '1px 6px', marginLeft: 4,
-                    }}>
-                      {lokasyon.personelSayisi} kişi
+            <div className="min-w-0">
+              <PageHeader
+                icon={null}
+                title={`Hoş geldiniz, ${user?.displayName?.split(' ')[0] || user?.username}`}
+                description={user?.title || 'Kurumsal görev ve talep özetiniz'}
+                meta={
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-300/90 text-slate-900 text-xs font-bold">
+                      {SISTEM_ROL_TR[sistemRol] || ROL_TR[user?.role] || 'Personel'}
                     </span>
-                  )}
-                </div>
-              )}
+                    {user?.directorate && <span className="text-xs text-slate-200">🏢 {user.directorate}</span>}
+                    {user?.department && user.department !== user.directorate && <span className="text-xs text-slate-300">📂 {user.department}</span>}
+                    {user?.city && user.city !== '-' && <span className="text-xs text-slate-300">📍 {lokasyon?.ad || user.city}</span>}
+                  </div>
+                }
+                className="text-white"
+              />
             </div>
           </div>
 
-          {/* Saat + Butonlar */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12, flexShrink: 0 }}>
+          <div className="flex flex-col items-start xl:items-end gap-4">
             <LiveClock />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Link to="/itsm/new" style={{
-                padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                background: C.primary, color: '#fff', textDecoration: 'none',
-              }}>+ Bilgi İşlem Talebi</Link>
-              <Link to="/tickets/new/destek" style={{
-                padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                background: 'rgba(255,255,255,0.1)', color: '#e2e8f0', textDecoration: 'none',
-                border: '1px solid rgba(255,255,255,0.15)',
-              }}>+ Destek Talebi</Link>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/itsm/new" className="no-underline">
+                <Button color="green" className="text-sm">+ Bilgi İşlem Talebi</Button>
+              </Link>
+              <Link to="/tickets/new/destek" className="no-underline">
+                <Button variant="soft" className="text-sm bg-white/12 border-white/15 text-white hover:text-white">+ Destek Talebi</Button>
+              </Link>
             </div>
           </div>
         </div>
+      </Surface>
 
-        {/* ── LOKASYON + ÇALIŞMA GRUPLARI ──────────────────────────────────── */}
-        {(user?.city || user?.calismaGruplari?.length > 0) && (
-          <div style={{ display: 'grid', gridTemplateColumns: user?.city && user?.calismaGruplari?.length > 0 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 20 }}>
-            {/* Lokasyon kartı */}
-            {user?.city && user.city !== '-' && (
-              <div style={{
-                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-                border: '1.5px solid #86efac', borderRadius: 14,
-                padding: '16px 20px',
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#16a34a',
-                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-                  📍 Çalışma Lokasyonu
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#1a2e23' }}>
-                  {lokasyon?.ad || user.city}
-                </div>
-                {lokasyon?.ilce && (
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                    📌 {lokasyon.ilce} ilçesi
-                  </div>
-                )}
-                {lokasyon?.personelSayisi && (
-                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                    👥 Bu lokasyonda {lokasyon.personelSayisi} personel
-                  </div>
-                )}
-                {lokasyon?.adres && (
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6, lineHeight: 1.4 }}>
-                    {lokasyon.adres}
-                  </div>
-                )}
-                <button disabled style={{
-                  marginTop: 12, padding: '6px 14px', fontSize: 12,
-                  background: '#f1f5f9', color: '#9aa8a0',
-                  border: '1px solid #e2e8f0', borderRadius: 8,
-                  cursor: 'not-allowed',
-                }}>
-                  🗺️ Haritada Göster (yakında)
-                </button>
+      {(user?.city || user?.calismaGruplari?.length > 0) && (
+        <div className={`grid gap-4 ${user?.city && user?.calismaGruplari?.length > 0 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
+          {user?.city && user.city !== '-' && (
+            <Surface soft className="p-5">
+              <p className="text-[11px] font-bold tracking-[0.18em] uppercase text-emerald-600 m-0">Çalışma Lokasyonu</p>
+              <div className="text-lg font-bold text-slate-800 mt-3">{lokasyon?.ad || user.city}</div>
+              {lokasyon?.ilce && <p className="text-sm text-slate-500 mt-2 m-0">📌 {lokasyon.ilce} ilçesi</p>}
+              {lokasyon?.personelSayisi && <p className="text-sm text-slate-500 mt-1.5 m-0">👥 Bu lokasyonda {lokasyon.personelSayisi} personel</p>}
+              {lokasyon?.adres && <p className="text-xs text-slate-400 mt-3 mb-0 leading-relaxed">{lokasyon.adres}</p>}
+              <div className="mt-4">
+                <Button variant="soft" className="text-sm" disabled>🗺️ Haritada Göster (yakında)</Button>
               </div>
-            )}
+            </Surface>
+          )}
 
-            {/* Çalışma Grupları kartı */}
-            {user?.calismaGruplari?.length > 0 && (
-              <div style={{
-                background: '#fff', border: '1px solid #e8ede9',
-                borderRadius: 14, padding: '16px 20px',
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#9aa8a0',
-                  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-                  👥 Çalışma Grupları
-                </div>
-                {user.calismaGruplari.map(g => (
-                  <div key={g.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '6px 0', fontSize: 13, color: '#374151',
-                    borderBottom: '1px solid #f3f4f6',
-                  }}>
-                    <span style={{ fontWeight: 500 }}>{g.ad}</span>
-                    <span style={{
-                      fontSize: 10, padding: '2px 8px', borderRadius: 20,
-                      background: g.rol === 'lider' ? '#fef9c3' : '#f0fdf4',
-                      color: g.rol === 'lider' ? '#a16207' : '#166534',
-                      fontWeight: 600,
-                    }}>
-                      {g.rol === 'lider' ? '👑 Lider' : 'Üye'}
+          {user?.calismaGruplari?.length > 0 && (
+            <Surface className="p-5">
+              <p className="text-[11px] font-bold tracking-[0.18em] uppercase text-slate-400 m-0">Çalışma Grupları</p>
+              <div className="mt-4 space-y-2">
+                {user.calismaGruplari.map((group) => (
+                  <div key={group.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
+                    <span className="text-sm font-semibold text-slate-700">{group.ad}</span>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${group.rol === 'lider' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {group.rol === 'lider' ? '👑 Lider' : 'Üye'}
                     </span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ── KPI ŞERİT ─────────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-          <KPI icon="🔄" label="Açık Görevlerim"   value={loading ? '…' : (ozet?.acikGorev ?? 0)}      color={C.info}        to="/my-tasks" />
-          <KPI icon="⏳" label="Onay Bekliyor"      value={loading ? '…' : (ozet?.bekleyenOnay ?? 0)}   color={C.warning}     to="/my-tickets" />
-          <KPI icon="✅" label="Tamamlanan"          value={loading ? '…' : (ozet?.tamamlanan ?? 0)}    color={C.primaryDark} to="/my-tickets" />
-          <KPI icon="⚠️" label="SLA İhlali"          value={loading ? '…' : (ozet?.slaIhlali ?? 0)}     color={C.danger}      to="/my-tasks"
-            sub={ozet?.slaIhlali > 0 ? 'Acil aksiyon gerekiyor!' : undefined}
-          />
+            </Surface>
+          )}
         </div>
+      )}
 
-        {/* ── KİŞİSEL TALEPLER + GÖREVLER ──────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon="🔄" label="Açık Görevlerim" value={loading ? '…' : (ozet?.acikGorev ?? 0)} colorClass="text-blue-600" to="/my-tasks" />
+        <StatCard icon="⏳" label="Onay Bekliyor" value={loading ? '…' : (ozet?.bekleyenOnay ?? 0)} colorClass="text-amber-600" to="/my-tickets" />
+        <StatCard icon="✅" label="Tamamlanan" value={loading ? '…' : (ozet?.tamamlanan ?? 0)} colorClass="text-emerald-600" to="/my-tickets" />
+        <StatCard icon="⚠️" label="SLA İhlali" value={loading ? '…' : (ozet?.slaIhlali ?? 0)} colorClass="text-red-600" to="/my-tasks" sub={ozet?.slaIhlali > 0 ? 'Acil aksiyon gerekiyor!' : undefined} />
+      </div>
 
-          {/* Taleplerim */}
-          <Card>
-            <SectionTitle action={
-              <Link to="/my-tickets" style={{ fontSize: 12, color: C.primaryDark }}>Tümü →</Link>
-            }>
-              📋 Son Taleplerim
-            </SectionTitle>
-            {loading ? (
-              <Empty text="Yükleniyor…" />
-            ) : taleplerim.length === 0 ? (
-              <Empty text="Henüz başvuru yok." />
-            ) : (
-              taleplerim.slice(0, 6).map(t => <TicketRow key={t.id} t={t} showFrom={false} />)
-            )}
-          </Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Surface className="p-5">
+          <SectionHeader action={<Link to="/my-tickets" className="text-sm font-semibold text-emerald-600 no-underline">Tümü →</Link>}>
+            📋 Son Taleplerim
+          </SectionHeader>
+          {loading ? (
+            <LoadingState compact title="Talepler yükleniyor..." />
+          ) : taleplerim.length === 0 ? (
+            <EmptyState compact icon="📭" title="Henüz başvuru yok" description="İlk talebinizi oluşturarak bu alanı doldurabilirsiniz." />
+          ) : (
+            <div className="space-y-2">
+              {taleplerim.slice(0, 6).map((ticket) => <TicketRow key={ticket.id} ticket={ticket} showFrom={false} />)}
+            </div>
+          )}
+        </Surface>
 
-          {/* Görevlerim */}
-          <Card>
-            <SectionTitle action={
-              <Link to="/my-tasks" style={{ fontSize: 12, color: C.primaryDark }}>Tümü →</Link>
-            }>
-              🎯 Aktif Görevlerim
-            </SectionTitle>
-            {loading ? (
-              <Empty text="Yükleniyor…" />
-            ) : gorevlerim.length === 0 ? (
-              <Empty text="Atanmış aktif görev yok." />
-            ) : (
-              gorevlerim.slice(0, 6).map(t => <TicketRow key={t.id} t={t} showFrom={false} />)
-            )}
-          </Card>
+        <Surface className="p-5">
+          <SectionHeader action={<Link to="/my-tasks" className="text-sm font-semibold text-emerald-600 no-underline">Tümü →</Link>}>
+            🎯 Aktif Görevlerim
+          </SectionHeader>
+          {loading ? (
+            <LoadingState compact title="Görevler yükleniyor..." />
+          ) : gorevlerim.length === 0 ? (
+            <EmptyState compact icon="🧭" title="Aktif görev yok" description="Atanmış aktif görevler burada listelenecek." />
+          ) : (
+            <div className="space-y-2">
+              {gorevlerim.slice(0, 6).map((ticket) => <TicketRow key={ticket.id} ticket={ticket} showFrom={false} />)}
+            </div>
+          )}
+        </Surface>
+      </div>
 
-        </div>
+      {isYonetici && (
+        <Surface className="p-5 border-amber-200 bg-amber-50/40">
+          <SectionHeader
+            tone="amber"
+            action={<Link to="/pending-approvals" className="text-sm font-semibold text-amber-700 no-underline">Tümü →</Link>}
+          >
+            ⏳ Onay Bekleyen Talepler
+          </SectionHeader>
 
-        {/* ── YÖNETİCİ: ONAY BEKLEYENLER ───────────────────────────────────── */}
-        {isYonetici && (
-          <Card style={{ border: '1px solid #fde68a', marginBottom: 20 }}>
-            <SectionTitle action={
-              <Link to="/pending-approvals" style={{ fontSize: 12, color: '#d97706' }}>Tümü →</Link>
-            }>
-              <span>
-                ⏳ Onay Bekleyen Talepler
-                {pendingApproval.length > 0 && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#fff',
-                    background: C.warning, borderRadius: '50%',
-                    width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {pendingApproval.length}
-                  </span>
-                )}
-              </span>
-            </SectionTitle>
-            {loading ? (
-              <Empty text="Yükleniyor…" />
-            ) : pendingApproval.length === 0 ? (
-              <div style={{ color: '#92400e', fontSize: 13, textAlign: 'center', padding: '16px 0', background: '#fffbeb', borderRadius: 10 }}>
-                Onay bekleyen talep yok. ✓
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {pendingApproval.slice(0, 6).map(t => (
-                  <div key={t.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    background: '#fffbeb', borderRadius: 12, padding: '10px 14px',
-                    border: '1px solid #fde68a',
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        #{t.id} {t.title}
-                      </div>
-                      <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>
-                        {t.createdBy?.displayName} · {t.createdBy?.directorate || '—'} · {new Date(t.createdAt).toLocaleDateString('tr-TR')}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => handleApprove(t.id, 'approve')} style={{
-                        padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: C.primary, color: '#fff', border: 'none', cursor: 'pointer',
-                      }}>✓ Onayla</button>
-                      <button onClick={() => handleApprove(t.id, 'reject')} style={{
-                        padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                        background: '#fee2e2', color: C.danger, border: 'none', cursor: 'pointer',
-                      }}>✕ Reddet</button>
+          {loading ? (
+            <LoadingState compact title="Onay bekleyen talepler yükleniyor..." />
+          ) : pendingApproval.length === 0 ? (
+            <EmptyState compact icon="✅" title="Onay bekleyen talep yok" description="Şu an aksiyon gerektiren bekleyen bir kayıt görünmüyor." />
+          ) : (
+            <div className="space-y-2">
+              {pendingApproval.slice(0, 6).map((ticket) => (
+                <div key={ticket.id} className="rounded-2xl border border-amber-200 bg-white px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800 truncate">#{ticket.id} {ticket.title}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {ticket.createdBy?.displayName} · {ticket.createdBy?.directorate || '—'} · {new Date(ticket.createdAt).toLocaleDateString('tr-TR')}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* ── YÖNETİCİ: BİRİM TALEPLERİ ───────────────────────────────────── */}
-        {isYonetici && (
-          <Card style={{ border: '1px solid #e0e7ff' }}>
-            <SectionTitle>
-              <span>
-                🏢 {sistemRol === 'mudur' ? 'Müdürlüğüme Gelen Talepler' : 'Daireye Gelen Talepler'}
-                {totalDaire > 0 && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#4f46e5',
-                    background: '#eef2ff', borderRadius: 6, padding: '1px 7px',
-                  }}>
-                    {totalDaire}
-                  </span>
-                )}
-              </span>
-            </SectionTitle>
-            <StatusBar groups={daireOzet} />
-            <div style={{ marginTop: 12 }}>
-              {daireLoading ? (
-                <Empty text="Yükleniyor…" />
-              ) : daireTalepler.length === 0 ? (
-                <Empty text="Biriminize gelen talep yok." />
-              ) : (
-                daireTalepler.slice(0, 10).map(t => <TicketRow key={t.id} t={t} showFrom={true} />)
-              )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button color="green" className="text-xs" onClick={() => handleApprove(ticket.id, 'approve')}>✓ Onayla</Button>
+                    <Button variant="soft" className="text-xs border-red-200 text-red-700 hover:text-red-800" onClick={() => handleApprove(ticket.id, 'reject')}>✕ Reddet</Button>
+                  </div>
+                </div>
+              ))}
             </div>
-            {daireTalepler.length > 10 && (
-              <div style={{ textAlign: 'center', marginTop: 8 }}>
-                <Link to="/itsm" style={{ fontSize: 12, color: '#4f46e5' }}>
-                  Tümünü gör ({daireTalepler.length}) →
-                </Link>
-              </div>
-            )}
-          </Card>
-        )}
+          )}
+        </Surface>
+      )}
 
-      </div>
+      {isYonetici && (
+        <Surface className="p-5">
+          <SectionHeader tone="indigo">
+            🏢 {sistemRol === 'mudur' ? 'Müdürlüğüme Gelen Talepler' : 'Daireye Gelen Talepler'}
+          </SectionHeader>
+          <StatusBar groups={daireOzet} />
+          {daireLoading ? (
+            <LoadingState compact title="Birim talepleri yükleniyor..." />
+          ) : daireTalepler.length === 0 ? (
+            <EmptyState compact icon="🏢" title="Biriminize gelen talep yok" description="Yeni kayıtlar geldiğinde burada listelenecek." />
+          ) : (
+            <div className="space-y-2">
+              {daireTalepler.slice(0, 10).map((ticket) => <TicketRow key={ticket.id} ticket={ticket} showFrom={true} />)}
+            </div>
+          )}
+          {daireTalepler.length > 10 && (
+            <div className="text-center mt-4">
+              <Link to="/itsm" className="text-sm font-semibold text-indigo-600 no-underline">Tümünü gör ({daireTalepler.length}) →</Link>
+            </div>
+          )}
+        </Surface>
+      )}
     </div>
   );
 }

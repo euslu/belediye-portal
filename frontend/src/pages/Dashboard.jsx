@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
 import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import muglaLogo from '../assets/mugla_logo.png';
+import muglaMark from '../assets/mugla_logo.png';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
@@ -77,11 +77,13 @@ function buildGroups(role, username, user) {
       label: 'ARAÇLAR',
       items: [
         { label: 'Personel', icon: 'bi-people', to: '/personel' },
+        { label: 'ulakBELL Talepleri', icon: 'bi-bell', to: '/ulakbell-incidents' },
         { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
       ],
     }] : sistemRol === 'mudur' ? [{
       label: 'ARAÇLAR',
       items: [
+        { label: 'ulakBELL Talepleri', icon: 'bi-bell', to: '/ulakbell-incidents' },
         { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
       ],
     }] : []),
@@ -126,50 +128,36 @@ function UserDropdown({ user, logout }) {
   const roleLabel = user?.role === 'admin' ? 'Yönetici' : user?.role === 'manager' ? 'Müdür' : 'Kullanıcı';
 
   return (
-    <div ref={ref} className="nav-item dropdown header-profile" style={{ position: 'relative', listStyle: 'none' }}>
+    <div ref={ref} className="nav-item dropdown header-profile portal-user-dropdown">
       <button
         onClick={() => setOpen(v => !v)}
-        className="nav-link i-false c-pointer"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer' }}
+        className="nav-link i-false c-pointer portal-user-dropdown__trigger"
       >
-        <div style={{
-          width: 34, height: 34, borderRadius: '50%', background: 'var(--primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0,
-        }}>
+        <div className="portal-user-dropdown__avatar">
           {initials}
         </div>
-        <div className="header-info" style={{ textAlign: 'left' }}>
-          <span style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374557', lineHeight: 1.2 }}>
+        <div className="header-info portal-user-dropdown__info">
+          <span className="portal-user-dropdown__name">
             {user?.displayName?.split(' ')[0] || user?.username}
           </span>
-          <small style={{ color: '#888', fontSize: 11 }}>{roleLabel}</small>
+          <small className="portal-user-dropdown__role">{roleLabel}</small>
         </div>
       </button>
 
       {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: '100%', marginTop: 8,
-          background: '#fff', border: '1px solid #e6e6e6', borderRadius: 12,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.1)', zIndex: 9999, minWidth: 180,
-          padding: '6px 0', overflow: 'hidden',
-        }}>
+        <div className="portal-user-dropdown__menu">
           <button
             onClick={() => { setOpen(false); navigate('/profile'); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#374557' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = 'var(--primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#374557'; }}
+            className="portal-user-dropdown__action"
           >
-            <i className="bi bi-person" style={{ fontSize: 15 }} /> Hesabım
+            <i className="bi bi-person" /> Hesabım
           </button>
-          <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />
+          <div className="portal-user-dropdown__divider" />
           <button
             onClick={() => { setOpen(false); logout(); navigate('/login', { replace: true }); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#f82649' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#fff0f3'}
-            onMouseLeave={e => e.currentTarget.style.background = ''}
+            className="portal-user-dropdown__action portal-user-dropdown__action--danger"
           >
-            <i className="bi bi-box-arrow-right" style={{ fontSize: 15 }} /> Çıkış Yap
+            <i className="bi bi-box-arrow-right" /> Çıkış Yap
           </button>
         </div>
       )}
@@ -225,22 +213,23 @@ export default function Dashboard() {
       {/* ── nav-header (Logo) ─────────────────────────────────────── */}
       <div className="nav-header">
         <span
-          className="brand-logo"
-          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}
+          className="brand-logo portal-brand-logo"
           onClick={() => navigate('/')}
         >
-          {/* Logo icon */}
-          <div style={{
-            width: 36, height: 36, borderRadius: 8, background: '#ffffff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 3, flexShrink: 0,
-          }}>
-            <img src={muglaLogo} alt="MBB"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-          </div>
-          <div className="brand-title" style={{ lineHeight: 1.2 }}>
-            <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Muğla BB</div>
-            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11 }}>Uygulama Portalı</div>
+          <div className="portal-brand-logo__card">
+            <div className="portal-brand-logo__mark">
+              <img
+                src={muglaMark}
+                alt="Muğla Büyükşehir Belediyesi"
+                className="portal-brand-logo__mark-image"
+              />
+            </div>
+            <div className="portal-brand-logo__copy">
+              <div className="portal-brand-logo__title">MUĞLA</div>
+              <div className="portal-brand-logo__subtitle">
+                Büyükşehir Belediyesi
+              </div>
+            </div>
           </div>
         </span>
 
@@ -264,17 +253,16 @@ export default function Dashboard() {
 
               {/* Sol: Arama */}
               <div className="header-left">
-                <div className="input-group search-area d-lg-inline-flex">
+                <div className="input-group search-area d-lg-inline-flex portal-shell-search">
                   <input
                     type="text"
                     className="form-control"
                     placeholder="Ara..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    style={{ borderRadius: '30px 0 0 30px', background: '#f4f5fb', border: '1px solid #e6e6e6' }}
                   />
-                  <div className="input-group-append">
-                    <button className="input-group-text" style={{ borderRadius: '0 30px 30px 0', background: '#f4f5fb', border: '1px solid #e6e6e6', borderLeft: 'none', color: '#aaa' }}>
+                  <div className="input-group-append portal-shell-search__append">
+                    <button className="input-group-text portal-shell-search__button">
                       <i className="bi bi-search" />
                     </button>
                   </div>
@@ -284,31 +272,20 @@ export default function Dashboard() {
               {/* Sağ: Bildirimler + Kullanıcı */}
               <ul className="navbar-nav header-right main-notification">
                 {/* Bell badge */}
-                <li className="nav-item" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <li className="nav-item portal-shell-bell">
                   <button
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      width: 38, height: 38, borderRadius: '50%', color: '#888',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#f0faf5'; e.currentTarget.style.color = 'var(--primary)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = '#888'; }}
+                    className="portal-shell-bell__button"
                   >
-                    <i className="bi bi-bell" style={{ fontSize: 18 }} />
+                    <i className="bi bi-bell portal-shell-bell__icon" />
                     {approvalBadge > 0 && (
-                      <span style={{
-                        position: 'absolute', top: 4, right: 4,
-                        width: 16, height: 16, background: 'var(--primary)',
-                        borderRadius: '50%', color: '#fff', fontSize: 9,
-                        fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
+                      <span className="portal-shell-bell__badge">
                         {approvalBadge > 9 ? '9+' : approvalBadge}
                       </span>
                     )}
                   </button>
                 </li>
 
-                <li style={{ width: 1, height: 24, background: '#e6e6e6', margin: '0 4px', alignSelf: 'center' }} />
+                <li className="portal-shell-divider" />
 
                 {/* User dropdown */}
                 <UserDropdown user={user} logout={logout} />
@@ -350,21 +327,12 @@ export default function Dashboard() {
           </ul>
 
           {/* Çıkış Yap */}
-          <div style={{ padding: '8px 12px 4px' }}>
+          <div className="portal-shell-logout-wrap">
             <button
               onClick={() => { logout(); navigate('/login', { replace: true }); }}
-              style={{
-                width: '100%', padding: '9px 16px',
-                background: 'transparent', border: '1px solid #fca5a5',
-                borderRadius: 8, color: '#dc2626',
-                cursor: 'pointer', fontSize: 13,
-                display: 'flex', alignItems: 'center', gap: 8,
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              className="portal-shell-logout"
             >
-              <i className="bi bi-box-arrow-right" style={{ fontSize: 15 }} />
+              <i className="bi bi-box-arrow-right" />
               <span className="nav-text">Çıkış Yap</span>
             </button>
           </div>
@@ -454,16 +422,10 @@ function SidebarItem({ item, approvalBadge, adBadge }) {
   if (item.disabled) {
     return (
       <li>
-        <span style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
-          color: '#ccc', cursor: 'not-allowed', fontSize: 14,
-        }}>
-          <i className={`bi ${item.icon}`} style={{ fontSize: 16, width: 20, textAlign: 'center' }} />
+        <span className="portal-sidebar-disabled">
+          <i className={`bi ${item.icon} portal-sidebar-disabled__icon`} />
           <span className="nav-text">{item.label}</span>
-          <span style={{
-            marginLeft: 'auto', fontSize: 10, background: '#f0f0f0',
-            color: '#bbb', padding: '2px 6px', borderRadius: 10,
-          }}>Yakında</span>
+          <span className="portal-sidebar-disabled__badge">Yakında</span>
         </span>
       </li>
     );
@@ -477,28 +439,20 @@ function SidebarItem({ item, approvalBadge, adBadge }) {
       <NavLink
         to={item.to}
         end={item.exactEnd}
-        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+        className="portal-sidebar-link"
       >
-        <i className={`bi ${item.icon}`} style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }} />
+        <i className={`bi ${item.icon} portal-sidebar-link__icon`} />
         <span className="nav-text">{item.label}</span>
 
         {showApproval && (
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{
-              width: 20, height: 20, background: '#f82649',
-              borderRadius: '50%', color: '#fff', fontSize: 10, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+          <span className="portal-sidebar-link__badge-wrap">
+            <span className="portal-sidebar-link__badge portal-sidebar-link__badge--round">
               {approvalBadge > 9 ? '9+' : approvalBadge}
             </span>
           </span>
         )}
         {showAd && (
-          <span style={{
-            marginLeft: 'auto', minWidth: 20, height: 20, background: '#f82649',
-            borderRadius: 10, color: '#fff', fontSize: 10, fontWeight: 700,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
-          }}>
+          <span className="portal-sidebar-link__badge portal-sidebar-link__badge--pill">
             {adBadge > 99 ? '99+' : adBadge}
           </span>
         )}

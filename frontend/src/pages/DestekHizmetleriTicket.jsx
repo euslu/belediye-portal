@@ -234,13 +234,13 @@ function SuccessScreen({ ticketId, onNew }) {
       <div className="flex gap-3">
         <button
           onClick={() => navigate('/my-tickets')}
-          className="portal-soft-btn"
+          className="portal-pill-btn text-sm"
         >
           Başvurularım
         </button>
         <button
           onClick={onNew}
-          className="portal-cta-btn portal-cta-btn--green"
+          className="portal-cta-btn portal-cta-btn--green text-sm"
         >
           Yeni Talep
         </button>
@@ -463,25 +463,35 @@ export default function DestekHizmetleriTicket() {
             {/* Öncelik kartı */}
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Öncelik</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
-                  { val: 'MEDIUM', label: '📋 Normal',  desc: 'İş saatleri içinde' },
-                  { val: 'HIGH',   label: '🚨 Acil',    desc: 'İvedi müdahale gerekiyor' },
-                ].map(p => (
-                  <button
-                    key={p.val}
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, priority: p.val }))}
-                    className={`rounded-xl border-2 px-4 py-3 text-left transition ${
-                      form.priority === p.val
-                        ? 'border-green-400 bg-green-50 text-green-700 ring-2 ring-green-200'
-                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="text-sm font-semibold">{p.label}</div>
-                    <div className="text-xs opacity-70 mt-0.5">{p.desc}</div>
-                  </button>
-                ))}
+                  { val: 'MEDIUM', label: '📋 Normal',  desc: 'İş saatleri içinde',        border: '#3b82f6', bg: '#eff6ff', color: '#1d4ed8' },
+                  { val: 'HIGH',   label: '🚨 Acil',    desc: 'İvedi müdahale gerekiyor',  border: '#ef4444', bg: '#fef2f2', color: '#b91c1c' },
+                ].map(p => {
+                  const active = form.priority === p.val;
+                  return (
+                    <button
+                      key={p.val}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, priority: p.val }))}
+                      style={{
+                        borderRadius: 14,
+                        border: `2px solid ${active ? p.border : '#e5e7eb'}`,
+                        padding: '12px 16px',
+                        textAlign: 'left',
+                        background: active ? p.bg : '#fff',
+                        color: active ? p.color : '#6b7280',
+                        fontWeight: active ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 200ms ease',
+                        boxShadow: active ? `0 4px 14px ${p.border}25` : '0 1px 4px rgba(0,0,0,0.04)',
+                      }}
+                    >
+                      <div style={{ fontSize: 14, fontWeight: 'inherit' }}>{p.label}</div>
+                      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>{p.desc}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -523,14 +533,14 @@ export default function DestekHizmetleriTicket() {
               <button
                 type="submit"
                 disabled={loading || !form.title.trim()}
-                className="bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-semibold text-sm px-6 py-2.5 rounded-xl transition"
+                className="portal-cta-btn portal-cta-btn--green text-sm disabled:opacity-60"
               >
                 {loading ? 'Gönderiliyor…' : 'Talebi Gönder'}
               </button>
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition"
+                className="portal-pill-btn text-sm"
               >
                 İptal
               </button>

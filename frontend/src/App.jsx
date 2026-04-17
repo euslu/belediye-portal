@@ -21,7 +21,7 @@ import NewManagerDashboard  from './pages/ManagerDashboard';
 import MyTickets            from './pages/MyTickets';
 import Departments          from './pages/admin/Departments';
 import WorkOrders           from './pages/WorkOrders';
-import UlakbellIncidents    from './pages/UlakbellIncidents';
+import UlakBellTalepleri    from './pages/UlakBellTalepleri';
 import PDKSDashboard             from './pages/PDKSDashboard';
 import DestekHizmetleriTicket   from './pages/DestekHizmetleriTicket';
 import GenelSekreterDashboard   from './pages/GenelSekreterDashboard';
@@ -104,7 +104,7 @@ export default function App() {
             <Route path="admin/departments" element={<Departments />} />
             <Route path="home"              element={<PersonelDashboard />} />
             <Route path="work-orders"           element={<WorkOrders />} />
-            <Route path="ulakbell-incidents"    element={<UlakbellIncidents />} />
+            <Route path="ulakbell-incidents"    element={<UlakBellTalepleri />} />
             <Route path="pdks"                  element={<PDKSDashboard />} />
             <Route path="tickets/new/destek"    element={<DestekHizmetleriTicket />} />
             <Route path="pending-approvals"  element={<PendingApprovals />} />

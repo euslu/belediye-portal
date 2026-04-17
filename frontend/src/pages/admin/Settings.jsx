@@ -3,6 +3,9 @@ import AdminCategoriesPage from './SubjectManager';
 import AdChangesPage from './AdChanges';
 import { GS_WIDGET_TANIMLARI } from '../GenelSekreterDashboard';
 import { useAuth } from '../../context/AuthContext';
+import Button from '../../components/ui/Button';
+import PageHeader from '../../components/ui/PageHeader';
+import Surface from '../../components/ui/Surface';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -86,19 +89,14 @@ const BTN = {
 
 function SaveButton({ onClick, loading }) {
   return (
-    <button onClick={onClick} disabled={loading}
-      style={{ ...BTN.primary, opacity: loading ? 0.6 : 1 }}>
+    <Button onClick={onClick} disabled={loading} color="blue">
       {loading ? 'Kaydediliyor…' : (
         <>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-          </svg>
+          <i className="bi bi-floppy mr-2" />
           Kaydet
         </>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -473,6 +471,7 @@ const TAB_GROUPS = [
       { key: 'DASHBOARD',    label: 'Dashboard' },
       { key: 'GS_DASHBOARD', label: 'GS Paneli' },
       { key: 'ITSM',         label: 'ITSM / SLA' },
+      { key: 'FLOWCHART',    label: 'Ticket Akışı' },
       { key: 'SUBJECTS',     label: 'Başvuru Konuları' },
       { key: 'AD_CHANGES',   label: 'AD Değişiklikleri' },
     ],
@@ -1096,6 +1095,182 @@ export default function Settings() {
     </div>
   );
 
+  const renderFlowchart = () => {
+    const NODE = { w: 160, h: 44, r: 10 };
+    const COLORS = {
+      start:    { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
+      status:   { bg: '#f0fdf4', border: '#22c55e', text: '#166534' },
+      decision: { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
+      end:      { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+      role:     { bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
+    };
+    const box = (x, y, label, type = 'status') => {
+      const c = COLORS[type];
+      return (
+        <g key={`${x}-${y}-${label}`}>
+          {type === 'decision' ? (
+            <g transform={`translate(${x + NODE.w / 2}, ${y + NODE.h / 2})`}>
+              <polygon points={`0,-${NODE.h / 2 + 4} ${NODE.w / 2 + 10},0 0,${NODE.h / 2 + 4} -${NODE.w / 2 + 10},0`}
+                fill={c.bg} stroke={c.border} strokeWidth="1.5" />
+              <text textAnchor="middle" dy="4" fill={c.text} fontSize="11" fontWeight="600">{label}</text>
+            </g>
+          ) : (
+            <>
+              <rect x={x} y={y} width={NODE.w} height={NODE.h} rx={type === 'start' || type === 'end' ? 22 : NODE.r}
+                fill={c.bg} stroke={c.border} strokeWidth="1.5" />
+              <text x={x + NODE.w / 2} y={y + NODE.h / 2 + 4} textAnchor="middle" fill={c.text} fontSize="11" fontWeight="600">{label}</text>
+            </>
+          )}
+        </g>
+      );
+    };
+    const arrow = (x1, y1, x2, y2, label, color = '#94a3b8') => (
+      <g key={`arr-${x1}-${y1}-${x2}-${y2}`}>
+        <defs><marker id={`ah-${color.replace('#','')}`} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill={color} />
+        </marker></defs>
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth="1.5" markerEnd={`url(#ah-${color.replace('#','')})`} />
+        {label && <text x={(x1 + x2) / 2 + 6} y={(y1 + y2) / 2 - 5} fill={color} fontSize="9" fontWeight="500">{label}</text>}
+      </g>
+    );
+    const CX = 320, DX = 580;
+
+    return (
+      <div>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>Ticket Akış Şeması</h3>
+        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Talep ve arıza bildirimlerinin yaşam döngüsü ve rol bazlı yetki haritası</p>
+
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {/* Flowchart */}
+          <div style={{ flex: '1 1 600px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, overflowX: 'auto' }}>
+            <svg width="780" height="680" viewBox="0 0 780 680" style={{ display: 'block', margin: '0 auto' }}>
+              {/* Row 1: Kullanıcı Talebi */}
+              {box(CX - NODE.w / 2, 10, 'Kullanıcı Talebi', 'start')}
+              {arrow(CX, 54, CX, 78)}
+
+              {/* Row 2: Decision - REQUEST mi? */}
+              {box(CX - NODE.w / 2 - 10, 78, 'REQUEST mi?', 'decision')}
+
+              {/* Yes -> PENDING_APPROVAL */}
+              {arrow(CX - NODE.w / 2 - 10, 78 + NODE.h / 2 + 4, 120, 160, 'Evet', '#eab308')}
+              {box(40, 160, 'ONAY BEKLİYOR', 'status')}
+
+              {/* No -> OPEN */}
+              {arrow(CX + NODE.w / 2 + 10, 78 + NODE.h / 2 + 4, DX, 160, 'Hayır (Arıza)', '#3b82f6')}
+              {box(DX - NODE.w / 2 + 40, 160, 'AÇIK', 'status')}
+
+              {/* PENDING -> Decision Onaylandı mı? */}
+              {arrow(120, 204, 120, 240)}
+              {box(120 - NODE.w / 2 - 10, 240, 'Onaylandı mı?', 'decision')}
+
+              {/* Rejected */}
+              {arrow(120 - NODE.w / 2 - 10, 240 + NODE.h / 2 + 4, 10, 320, 'Reddedildi', '#ef4444')}
+              {box(10 - NODE.w / 2 + 30, 320, 'REDDEDİLDİ', 'end')}
+
+              {/* Approved -> OPEN */}
+              {arrow(120 + NODE.w / 2 + 10, 240 + NODE.h / 2 + 4, DX - NODE.w / 2 + 40 + NODE.w / 2, 204, 'Onaylandı', '#22c55e')}
+
+              {/* OPEN -> ASSIGNED */}
+              {arrow(DX + 40, 204, DX + 40, 320)}
+              {box(DX - NODE.w / 2 + 40, 320, 'ATANDI', 'status')}
+
+              {/* ASSIGNED -> IN_PROGRESS */}
+              {arrow(DX + 40, 364, DX + 40, 400)}
+              {box(DX - NODE.w / 2 + 40, 400, 'İŞLEMDE', 'status')}
+
+              {/* IN_PROGRESS -> RESOLVED */}
+              {arrow(DX + 40, 444, DX + 40, 480)}
+              {box(DX - NODE.w / 2 + 40, 480, 'ÇÖZÜLDÜ', 'status')}
+
+              {/* RESOLVED -> CLOSED */}
+              {arrow(DX + 40, 524, DX + 40, 560)}
+              {box(DX - NODE.w / 2 + 40, 560, 'KAPATILDI', 'end')}
+
+              {/* Role labels on right */}
+              {box(660, 160, 'personel', 'role')}
+              {box(660, 240, 'müdür+', 'role')}
+              {box(660, 320, 'müdür / admin', 'role')}
+              {box(660, 400, 'atanan kişi', 'role')}
+              {box(660, 480, 'atanan kişi', 'role')}
+              {box(660, 560, 'otomatik / admin', 'role')}
+
+              {/* Legend */}
+              <g transform="translate(20, 580)">
+                <text fill="#64748b" fontSize="10" fontWeight="700">AÇIKLAMA:</text>
+                <rect x="0" y="14" width="14" height="14" rx="3" fill={COLORS.start.bg} stroke={COLORS.start.border} strokeWidth="1" />
+                <text x="20" y="25" fill="#64748b" fontSize="10">Başlangıç</text>
+                <rect x="90" y="14" width="14" height="14" rx="3" fill={COLORS.status.bg} stroke={COLORS.status.border} strokeWidth="1" />
+                <text x="110" y="25" fill="#64748b" fontSize="10">Durum</text>
+                <rect x="165" y="14" width="14" height="14" rx="3" fill={COLORS.decision.bg} stroke={COLORS.decision.border} strokeWidth="1" />
+                <text x="185" y="25" fill="#64748b" fontSize="10">Karar</text>
+                <rect x="230" y="14" width="14" height="14" rx="3" fill={COLORS.end.bg} stroke={COLORS.end.border} strokeWidth="1" />
+                <text x="250" y="25" fill="#64748b" fontSize="10">Son Durum</text>
+                <rect x="320" y="14" width="14" height="14" rx="3" fill={COLORS.role.bg} stroke={COLORS.role.border} strokeWidth="1" />
+                <text x="340" y="25" fill="#64748b" fontSize="10">Yetkili Rol</text>
+              </g>
+            </svg>
+          </div>
+
+          {/* RBAC Tablosu */}
+          <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 20 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Rol Hiyerarşisi</h4>
+              {[
+                { rol: 'admin',          seviye: 5, renk: '#ef4444', aciklama: 'Tüm ticket\'lara tam erişim' },
+                { rol: 'daire_baskani',  seviye: 4, renk: '#f59e0b', aciklama: 'Kendi dairesindeki ticket\'lar' },
+                { rol: 'mudur',          seviye: 3, renk: '#3b82f6', aciklama: 'Kendi müdürlüğündeki ticket\'lar' },
+                { rol: 'sef',            seviye: 2, renk: '#8b5cf6', aciklama: 'Grubuna atanan ticket\'lar' },
+                { rol: 'personel',       seviye: 1, renk: '#6b7280', aciklama: 'Kendi oluşturduğu/atananlar' },
+              ].map(r => (
+                <div key={r.rol} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: `${r.renk}18`, color: r.renk, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>{r.seviye}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{r.rol}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{r.aciklama}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 20 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Durum Geçişleri</h4>
+              {[
+                { from: 'OPEN',             to: 'ASSIGNED',         kim: 'müdür / admin' },
+                { from: 'OPEN',             to: 'PENDING_APPROVAL', kim: 'otomatik (REQUEST)' },
+                { from: 'PENDING_APPROVAL', to: 'OPEN',             kim: 'müdür+ (onay)' },
+                { from: 'PENDING_APPROVAL', to: 'REJECTED',         kim: 'müdür+ (red)' },
+                { from: 'ASSIGNED',         to: 'IN_PROGRESS',      kim: 'atanan kişi' },
+                { from: 'IN_PROGRESS',      to: 'RESOLVED',         kim: 'atanan kişi' },
+                { from: 'RESOLVED',         to: 'CLOSED',           kim: 'otomatik / admin' },
+              ].map((t, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0', borderBottom: '1px solid #f8fafc', fontSize: 12 }}>
+                  <span style={{ padding: '2px 8px', background: '#f0fdf4', borderRadius: 6, color: '#166534', fontWeight: 600, fontSize: 11 }}>{t.from}</span>
+                  <span style={{ color: '#94a3b8' }}>→</span>
+                  <span style={{ padding: '2px 8px', background: '#dbeafe', borderRadius: 6, color: '#1e40af', fontWeight: 600, fontSize: 11 }}>{t.to}</span>
+                  <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 11 }}>{t.kim}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 20 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Ticket Tipleri</h4>
+              {[
+                { tip: 'INCIDENT', label: 'Arıza', renk: '#ef4444', aciklama: 'Doğrudan OPEN → atama yapılır' },
+                { tip: 'REQUEST',  label: 'Talep', renk: '#3b82f6', aciklama: 'Yönetici onayına gider' },
+                { tip: 'CHANGE',   label: 'Değişiklik', renk: '#f59e0b', aciklama: 'Değişiklik talebi' },
+              ].map(t => (
+                <div key={t.tip} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ padding: '3px 10px', background: `${t.renk}18`, color: t.renk, borderRadius: 8, fontSize: 11, fontWeight: 700 }}>{t.label}</span>
+                  <span style={{ fontSize: 12, color: '#64748b' }}>{t.aciklama}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderUlakbell = () => <UlakbellTab />;
 
   const renderManageengine = () => <ManageEngineTab />;
@@ -1536,19 +1711,27 @@ export default function Settings() {
     );
   };
 
-  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, GS_DASHBOARD: renderGsDashboard, ITSM: renderItsm, ULAKBELL: renderUlakbell, MANAGEENGINE: renderManageengine, SERVICES: renderServices, RBAC: renderRbac };
+  const RENDERERS = { GENERAL: renderGeneral, AD: renderAd, SMTP: renderSmtp, PDKS: renderPdks, FLEXCITY: renderFlexcity, DASHBOARD: renderDashboard, GS_DASHBOARD: renderGsDashboard, ITSM: renderItsm, FLOWCHART: renderFlowchart, ULAKBELL: renderUlakbell, MANAGEENGINE: renderManageengine, SERVICES: renderServices, RBAC: renderRbac };
 
   // Bazı sekmeler kendi padding'ini yönetir
   const FULL_PAGE_TABS = ['SUBJECTS', 'AD_CHANGES'];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Sol dikey sekmeler */}
-      <aside style={{ width: 200, flexShrink: 0, background: '#fff', borderRight: '1px solid #e2e8f0', paddingTop: 12, paddingBottom: 24 }}>
-        <nav>
+    <div className="portal-page portal-page--wide">
+      <div className="space-y-6">
+        <PageHeader
+          icon={<i className="bi bi-sliders text-xl" />}
+          title="Sistem Ayarlari"
+          description="Entegrasyonlar, güvenlik ayarları, dashboard görünürlüğü ve rol bazlı yönetim seçeneklerini tek merkezden yönetin."
+          meta={isDaireBaskani ? 'Daire başkanı görünümü: yalnızca yetki alanları açık' : 'Yönetim paneli görünümü'}
+        />
+
+        <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+          <Surface className="p-3">
+            <nav>
           {GORUNUR_TAB_GROUPS.map(group => (
-            <div key={group.title} style={{ marginTop: 16 }}>
-              <p style={{ padding: '0 16px', marginBottom: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94a3b8', textTransform: 'uppercase' }}>
+            <div key={group.title} className="mt-4 first:mt-0">
+              <p className="px-4 mb-2 text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase">
                 {group.title}
               </p>
               {group.tabs.map(t => {
@@ -1557,16 +1740,11 @@ export default function Settings() {
                   <button
                     key={t.key}
                     onClick={() => setActiveTab(t.key)}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '9px 16px 9px 19px',
-                      fontSize: 13, fontWeight: active ? 600 : 400,
-                      border: 'none', outline: 'none',
-                      borderLeft: active ? '3px solid #43DC80' : '3px solid transparent',
-                      background: active ? '#f0fdf4' : 'transparent',
-                      color: active ? '#15803d' : '#64748b',
-                      cursor: 'pointer', transition: 'all .15s',
-                    }}
+                    className={`block w-full rounded-xl border text-left transition px-4 py-2.5 text-sm ${
+                      active
+                        ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-blue-50 font-semibold text-emerald-700 shadow-sm'
+                        : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700'
+                    }`}
                   >
                     {t.label}
                   </button>
@@ -1574,15 +1752,16 @@ export default function Settings() {
               })}
             </div>
           ))}
-        </nav>
-      </aside>
+            </nav>
+          </Surface>
 
-      {/* İçerik */}
-      <main style={{ flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'SUBJECTS'   ? <AdminCategoriesPage /> :
-         activeTab === 'AD_CHANGES' ? <AdChangesPage /> :
-         <div style={{ padding: 32 }}>{RENDERERS[activeTab]?.()}</div>}
-      </main>
+          <Surface className="min-w-0 p-8">
+            {activeTab === 'SUBJECTS' ? <AdminCategoriesPage /> :
+             activeTab === 'AD_CHANGES' ? <AdChangesPage /> :
+             RENDERERS[activeTab]?.()}
+          </Surface>
+        </div>
+      </div>
     </div>
   );
 }

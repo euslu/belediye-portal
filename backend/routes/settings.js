@@ -49,12 +49,17 @@ router.patch('/', async (req, res) => {
     const entries = Object.entries(req.body);
     if (!entries.length) return res.status(400).json({ error: 'Boş istek' });
 
+    const existingRows = await prisma.setting.findMany({
+      where: { key: { in: entries.map(([key]) => key) } },
+    });
+    const existingMap = new Map(existingRows.map(row => [row.key, row.value]));
+
     await prisma.$transaction(
       entries.map(([key, value]) =>
         prisma.setting.upsert({
           where:  { key },
-          update: { value: String(value) },
-          create: { key, value: String(value) },
+          update: { value: value === '***' ? (existingMap.get(key) ?? '') : String(value) },
+          create: { key, value: value === '***' ? (existingMap.get(key) ?? '') : String(value) },
         })
       )
     );

@@ -174,10 +174,8 @@ function PersonnelCard({ topPerformers = [], slaBreachUsers = [] }) {
         <div className="flex gap-1.5">
           {[['top','🏆 En Çok Kapatan'],['sla','⚠️ SLA İhlali']].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className="text-xs px-3 py-1.5 rounded-full font-medium transition-all duration-200 border"
-              style={tab === k
-                ? { background: '#4f46e5', color: '#fff', borderColor: '#4f46e5', boxShadow: '0 4px 12px rgba(79,70,229,0.25)' }
-                : { background: '#fff', color: '#6b7280', borderColor: '#e5e7eb' }}>
+              className={`portal-pill-btn ${tab === k ? 'portal-pill-btn--active' : ''}`}
+              style={{ fontSize: 12, minHeight: 36, padding: '6px 14px' }}>
               {l}
             </button>
           ))}
@@ -478,16 +476,11 @@ function PdksOzetCard() {
             <span style={{ fontSize: 16 }}>🕐</span> PDKS — Devam Takibi
           </h3>
         </Link>
-        <div style={{ display: 'flex', gap: 1, background: '#f1f5f9', borderRadius: 8, padding: 2 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           {periods.map(p => (
-            <button key={p.key} onClick={() => setPeriod(p.key)} style={{
-              padding: '5px 12px', fontSize: 11, fontWeight: 600,
-              border: 'none', borderRadius: 6, cursor: 'pointer',
-              background: period === p.key ? '#fff' : 'transparent',
-              color: period === p.key ? '#1a2e23' : '#9aa8a0',
-              boxShadow: period === p.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-              transition: 'all 0.15s',
-            }}>
+            <button key={p.key} onClick={() => setPeriod(p.key)}
+              className={`portal-pill-btn ${period === p.key ? 'portal-pill-btn--green' : ''}`}
+              style={{ fontSize: 11, minHeight: 32, padding: '4px 12px' }}>
               {p.label}
             </button>
           ))}
@@ -775,15 +768,16 @@ function DaireBaskaniDashboard({ user }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1a2e23' }}>📋 Daireye Gelen Talepler</h3>
             <div style={{ display: 'flex', gap: 6 }}>
-              {['TUMU', 'PENDING_APPROVAL', 'IN_PROGRESS', 'RESOLVED'].map(f => (
-                <button key={f} onClick={() => setTalepleFiltre(f)} style={{
-                  padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 20,
-                  border: '1.5px solid', cursor: 'pointer',
-                  background: talepleFiltre === f ? '#43DC80' : '#fff',
-                  color: talepleFiltre === f ? '#fff' : '#6b7280',
-                  borderColor: talepleFiltre === f ? '#43DC80' : '#e2e8f0',
-                }}>
-                  {f === 'TUMU' ? 'Tümü' : f === 'PENDING_APPROVAL' ? 'Onay Bekl.' : f === 'IN_PROGRESS' ? 'İşlemde' : 'Çözüldü'}
+              {[
+                { key:'TUMU', label:'Tümü', active:'portal-pill-btn--green' },
+                { key:'PENDING_APPROVAL', label:'Onay Bekl.', active:'portal-pill-btn--amber' },
+                { key:'IN_PROGRESS', label:'İşlemde', active:'portal-pill-btn--active' },
+                { key:'RESOLVED', label:'Çözüldü', active:'portal-pill-btn--green' },
+              ].map(f => (
+                <button key={f.key} onClick={() => setTalepleFiltre(f.key)}
+                  className={`portal-pill-btn ${talepleFiltre === f.key ? f.active : ''}`}
+                  style={{ fontSize: 11, minHeight: 32, padding: '4px 12px' }}>
+                  {f.label}
                 </button>
               ))}
             </div>
