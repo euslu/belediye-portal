@@ -2,110 +2,19 @@ import { useState, useRef, useEffect, Fragment } from 'react';
 import { NavLink, Outlet, useNavigate, useMatch, useResolvedPath, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import muglaMark from '../assets/mugla_logo.png';
+import UlakbellBildirimIcon from '../components/UlakbellBildirimIcon';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() { return { Authorization: `Bearer ${localStorage.getItem('token')}` }; }
-
-// ─── Menü Yapısı ──────────────────────────────────────────────────────────────
-const GS_YETKILI = ['portal.admin', 'tayfun.yilmaz'];
 
 // sistemRol hiyerarşisi
 const SISTEM_ROL_SEVIYE = { admin: 5, daire_baskani: 4, mudur: 3, sef: 2, personel: 1 };
 function getSistemRolSeviye(user) {
   const sr = user?.sistemRol;
   if (sr && SISTEM_ROL_SEVIYE[sr]) return SISTEM_ROL_SEVIYE[sr];
-  // Fallback → mevcut role
   if (user?.role === 'admin')   return 5;
   if (user?.role === 'manager') return 3;
   return 1;
-}
-
-function buildGroups(role, username, user) {
-  const sistemRol = user?.sistemRol;
-  const seviye    = getSistemRolSeviye(user || { role });
-
-  // sistemRol varsa onu esas al (RBAC), yoksa JWT role'a dön
-  const isAdmin   = sistemRol ? sistemRol === 'admin' : role === 'admin';
-  // daire_baskani ve üzeri yönetici menüsünü görür
-  const isMgr     = seviye >= 3 || ['admin', 'manager'].includes(role);
-  // AR-GE: admin | Bilgi İşlem daire_baskani | Sistem Ağ müdürlüğü personeli | çalışma grubu üyesi
-  const biDir     = user?.directorate || '';
-  const biDept    = user?.department  || '';
-  const gruplar   = user?.calismaGruplari || [];
-  const isArge    = isAdmin
-    || (sistemRol === 'daire_baskani' && /bilgi.i[̇i]şlem/i.test(biDir))
-    || /sistem.*ağ.*veri güvenliği/i.test(biDept)
-    || gruplar.some(g => /ar-?ge/i.test(g.ad));
-  const isGS      = GS_YETKILI.includes(username || '');
-  const homeRoute = isMgr ? '/' : '/home';
-
-  return [
-    {
-      items: [
-        { label: 'Anasayfa',      icon: 'bi-house-door',    to: homeRoute,         exactEnd: true },
-        ...(isGS ? [{ label: 'Genel Sekreter', icon: 'bi-speedometer2', to: '/genel-sekreter' }] : []),
-      ],
-    },
-    {
-      label: 'TALEPLERİM',
-      items: [
-        { label: 'Bilgi İşlem Talebi',  icon: 'bi-laptop',            to: '/itsm/new',           exactEnd: true },
-        { label: 'Destek Hizmetleri',   icon: 'bi-wrench-adjustable', to: '/tickets/new/destek', exactEnd: true },
-        { label: 'Tüm Başvurularım',    icon: 'bi-list-ul',           to: '/my-tickets'          },
-      ],
-    },
-    ...(isMgr ? [{
-      label: 'GÖREVLERİM',
-      items: [
-        { label: 'Tüm Talepler',     icon: 'bi-ticket-detailed',  to: '/itsm'                                       },
-        { label: 'Onay Bekleyenler', icon: 'bi-clipboard-check',  to: '/pending-approvals', approvalBadge: true     },
-        { label: 'Aktif Görevlerim', icon: 'bi-check2-square',    to: '/my-tasks'                                   },
-        { label: 'Birim Raporu',     icon: 'bi-bar-chart-line',   to: '/manager-dashboard'                          },
-      ],
-    }] : []),
-    ...(isAdmin ? [{
-      label: 'ARAÇLAR',
-      items: [
-        { label: 'Personel',           icon: 'bi-people', to: '/personel'           },
-        { label: 'Envanter',           icon: 'bi-server', to: '/admin/envanter'     },
-        { label: 'ulakBELL Talepleri', icon: 'bi-bell',   to: '/ulakbell-incidents' },
-        { label: 'PDKS',               icon: 'bi-clock',  to: '/pdks'               },
-        { label: 'Bilgi Tabanı',       icon: 'bi-book',   to: '/kb', disabled: true },
-        { label: 'FlexCity',           icon: 'bi-database-check', to: '/flexcity' },
-      ],
-    }] : sistemRol === 'daire_baskani' ? [{
-      label: 'ARAÇLAR',
-      items: [
-        { label: 'Personel', icon: 'bi-people', to: '/personel' },
-        { label: 'ulakBELL Talepleri', icon: 'bi-bell', to: '/ulakbell-incidents' },
-        { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
-      ],
-    }] : sistemRol === 'mudur' ? [{
-      label: 'ARAÇLAR',
-      items: [
-        { label: 'ulakBELL Talepleri', icon: 'bi-bell', to: '/ulakbell-incidents' },
-        { label: 'PDKS',     icon: 'bi-clock',  to: '/pdks'     },
-      ],
-    }] : []),
-    ...(isArge ? [{
-      label: 'AR-GE',
-      items: [
-        { label: 'GSM / Data Hatları', icon: 'bi-phone',        to: '/arge/gsm-hat' },
-        { label: 'Teslim Tutanağı',   icon: 'bi-file-earmark-text', to: '/arge/tutanak' },
-      ],
-    }] : []),
-    ...(isAdmin || sistemRol === 'daire_baskani' ? [{
-      label: 'SİSTEM',
-      items: [
-        { label: 'Ayarlar', icon: 'bi-gear', to: '/admin/settings' },
-      ],
-    }] : []),
-    {
-      items: [
-        { label: 'Profilim', icon: 'bi-person-circle', to: '/profile' },
-      ],
-    },
-  ];
 }
 
 // ─── UserDropdown (header) ───────────────────────────────────────────────────
@@ -125,7 +34,11 @@ function UserDropdown({ user, logout }) {
   const initials = user?.displayName
     ? user.displayName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : (user?.username?.[0] || '?').toUpperCase();
-  const roleLabel = user?.role === 'admin' ? 'Yönetici' : user?.role === 'manager' ? 'Müdür' : 'Kullanıcı';
+  const roleLabel = (user?.sistemRol === 'admin' || user?.role === 'admin') ? 'Yönetici'
+    : (user?.sistemRol === 'daire_baskani') ? 'Daire Başkanı'
+    : (user?.sistemRol === 'mudur' || user?.role === 'manager') ? 'Müdür'
+    : (user?.sistemRol === 'sef') ? 'Şef'
+    : 'Kullanıcı';
 
   return (
     <div ref={ref} className="nav-item dropdown header-profile portal-user-dropdown">
@@ -175,8 +88,23 @@ export default function Dashboard() {
   const [adBadge, setAdBadge]             = useState(0);
   const [approvalBadge, setApprovalBadge] = useState(0);
 
+  const [groups, setGroups]         = useState([]);
+  const [menuLoading, setMenuLoading] = useState(true);
+
+  const isMgrUser = getSistemRolSeviye(user) >= 3 || ['admin', 'manager'].includes(user?.role);
+
   // Fade in after mount
   useEffect(() => { setMounted(true); }, []);
+
+  // Menü öğelerini API'den çek
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${API}/api/menu-permission/my-menu`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(setGroups)
+      .catch(() => setGroups([]))
+      .finally(() => setMenuLoading(false));
+  }, [user]);
 
   // AD değişiklik badge'i (admin)
   useEffect(() => {
@@ -204,8 +132,6 @@ export default function Dashboard() {
     const id = setInterval(load, 30_000);
     return () => clearInterval(id);
   }, [user]);
-
-  const groups = buildGroups(user?.role || 'user', user?.username, user);
 
   return (
     <div id="main-wrapper" className={[mounted ? 'show' : '', sideMenu ? 'menu-toggle' : ''].join(' ').trim()}>
@@ -271,6 +197,9 @@ export default function Dashboard() {
 
               {/* Sağ: Bildirimler + Kullanıcı */}
               <ul className="navbar-nav header-right main-notification">
+                {/* ulakBELL bildirim ikonu */}
+                {isMgrUser && <UlakbellBildirimIcon />}
+
                 {/* Bell badge */}
                 <li className="nav-item portal-shell-bell">
                   <button
@@ -324,6 +253,7 @@ export default function Dashboard() {
               );
             });
             })()}
+
           </ul>
 
           {/* Çıkış Yap */}

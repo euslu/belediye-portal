@@ -87,24 +87,6 @@ function Step1TypeSelect({ onSelect }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: '#f0fdf4',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <i className="bi bi-laptop" style={{ fontSize: 22, color: '#43DC80' }} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>
-            Bilgi İşlem Talebi
-          </h1>
-          <p style={{ fontSize: 13, color: '#6b7280', margin: '2px 0 0' }}>
-            Bilgi İşlem Dairesi Başkanlığı
-          </p>
-        </div>
-      </div>
       <div className={`grid gap-5 ${types.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {types.map((st) => {
           const c = tc(st.color);
@@ -798,7 +780,27 @@ export default function TicketNew() {
   function backToStep2()  { setCategory(null); setStep(2); }
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div style={{ padding: '32px 20px', maxWidth: 1200, margin: '0 auto' }}>
+      {/* Sayfa başlığı */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: '#f0fdf4',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <i className="bi bi-laptop" style={{ fontSize: 22, color: '#43DC80' }} />
+        </div>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>
+            Bilgi İşlem Talebi
+          </h1>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '2px 0 0' }}>
+            Bilgi İşlem Dairesi Başkanlığı
+          </p>
+        </div>
+      </div>
+
       <StepIndicator step={step} submitType={submitType} />
       {step === 1 && <Step1TypeSelect onSelect={selectType} />}
       {step === 2 && <Step2CategorySelect submitType={submitType} onSelect={selectCat} onBack={backToStep1} />}

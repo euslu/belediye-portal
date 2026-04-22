@@ -21,6 +21,13 @@ function authPost(path, body) {
 function authFetch(path) {
   return fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${authToken()}` } }).then(r => r.json());
 }
+function authGet(path) {
+  return fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${authToken()}` } }).then(async r => {
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Veri alınamadı');
+    return data;
+  });
+}
 
 // ─── ulakBELL Bilgi Kartı ─────────────────────────────────────────────────────
 function UlakbellCard({ ticket, isPrivileged, onRefresh }) {
@@ -136,7 +143,8 @@ function UlakbellCard({ ticket, isPrivileged, onRefresh }) {
         <span className="text-sm">ulakBELL'e henüz iletilmedi</span>
       </div>
       <button onClick={() => setModal(true)}
-        className="text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition font-medium">
+        className="portal-cta-btn portal-cta-btn--blue"
+        style={{ fontSize: 13, padding: '6px 14px' }}>
         ulakBELL'e İlet
       </button>
     </div>
@@ -229,6 +237,9 @@ const ACTION_LABELS = {
   GROUP_CHANGED:    'Grup değişti',
   APPROVED:         'Talep onaylandı',
   REJECTED:         'Talep reddedildi',
+  RETURN_REQUESTED: 'İade talebi',
+  RETURN_APPROVED:  'İade onaylandı',
+  RETURN_REJECTED:  'İade reddedildi',
 };
 
 // Sol border rengi (renk grubu)
@@ -242,6 +253,9 @@ const ACTION_BORDER = {
   COMMENTED:        'border-l-gray-300',
   APPROVED:         'border-l-green-500',
   REJECTED:         'border-l-red-500',
+  RETURN_REQUESTED: 'border-l-amber-500',
+  RETURN_APPROVED:  'border-l-green-500',
+  RETURN_REJECTED:  'border-l-red-500',
 };
 
 // Avatar arka plan rengi
@@ -255,7 +269,102 @@ const ACTION_AVATAR = {
   COMMENTED:        'bg-gray-100 text-gray-600',
   APPROVED:         'bg-green-100 text-green-700',
   REJECTED:         'bg-red-100 text-red-700',
+  RETURN_REQUESTED: 'bg-amber-100 text-amber-700',
+  RETURN_APPROVED:  'bg-green-100 text-green-700',
+  RETURN_REJECTED:  'bg-red-100 text-red-700',
 };
+
+const WORK_ORDER_STATUS_META = {
+  TODO: { label: 'Yapılacak', className: 'bg-slate-100 text-slate-700' },
+  IN_PROGRESS: { label: 'İşlemde', className: 'bg-blue-100 text-blue-700' },
+  REVIEW: { label: 'Kontrolde', className: 'bg-amber-100 text-amber-700' },
+  DONE: { label: 'Tamamlandı', className: 'bg-emerald-100 text-emerald-700' },
+  CANCELLED: { label: 'İptal', className: 'bg-red-100 text-red-700' },
+};
+
+function WorkOrdersPanel({ orders, loading, error, canCreate, creating, onCreate, onOpenList }) {
+  const activeCount = orders.filter((order) => !['DONE', 'CANCELLED'].includes(order.status)).length;
+  const completedCount = orders.filter((order) => order.status === 'DONE').length;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">İş Emirleri</h2>
+          <p className="text-xs text-gray-400 mt-1">Bu talepten türeyen operasyon iş akışları burada görünür.</p>
+          {!loading && !error && orders.length > 0 && (
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                {activeCount} aktif
+              </span>
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
+                {completedCount} tamamlandı
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onOpenList}
+            className="portal-pill-btn"
+            style={{ fontSize: 12, padding: '7px 14px' }}
+          >
+            Tümünü Aç
+          </button>
+          {canCreate && (
+            <button
+              onClick={onCreate}
+              disabled={creating}
+              className="portal-cta-btn portal-cta-btn--blue"
+              style={{ fontSize: 12, padding: '7px 14px', opacity: creating ? 0.6 : 1 }}
+            >
+              {creating ? 'Oluşturuluyor...' : 'İş Emri Oluştur'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loading && <div className="text-sm text-gray-400">İş emirleri yükleniyor...</div>}
+      {!loading && error && <div className="text-sm text-red-500">{error}</div>}
+
+      {!loading && !error && orders.length === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-200 px-4 py-5 text-sm text-gray-500">
+          Bu ticket için henüz iş emri oluşturulmamış.
+        </div>
+      )}
+
+      {!loading && !error && orders.length > 0 && (
+        <div className="space-y-3">
+          {orders.map((order) => {
+            const meta = WORK_ORDER_STATUS_META[order.status] || { label: order.status, className: 'bg-gray-100 text-gray-700' };
+            return (
+              <div key={order.id} className="rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-800 truncate">{order.title}</span>
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${meta.className}`}>{meta.label}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>#{order.id}</span>
+                    <span>Öncelik: {order.priority}</span>
+                    {order.assignedTo?.displayName && <span>Atanan: {order.assignedTo.displayName}</span>}
+                    {order.group?.name && <span>Grup: {order.group.name}</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={onOpenList}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 shrink-0"
+                >
+                  Gör
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ACTION_ICONS = {
   CREATED:          '✦',
@@ -267,6 +376,9 @@ const ACTION_ICONS = {
   GROUP_CHANGED:    '⊞',
   APPROVED:         '✓',
   REJECTED:         '✕',
+  RETURN_REQUESTED: '↩',
+  RETURN_APPROVED:  '✓',
+  RETURN_REJECTED:  '✕',
 };
 
 const STATUS_TR = {
@@ -662,15 +774,58 @@ export default function TicketDetail() {
   const [transferring, setTransferring]     = useState(false);
   const [transferError, setTransferError]   = useState('');
 
-  const canAssign   = ['admin', 'manager'].includes(user?.role);
+  // İade state
+  const [iadeModal, setIadeModal]             = useState(false);
+  const [iadeNeden, setIadeNeden]             = useState('');
+  const [iadeAciklama, setIadeAciklama]       = useState('');
+  const [iadeYonlendirId, setIadeYonlendirId] = useState(null);
+  const [iadeSaving, setIadeSaving]           = useState(false);
+  const [iadeNedenleri, setIadeNedenleri]     = useState([]);
+  const [workOrders, setWorkOrders]           = useState([]);
+  const [workOrdersLoading, setWorkOrdersLoading] = useState(false);
+  const [workOrderError, setWorkOrderError]   = useState('');
+  const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
+
+  const canAssign   = ['admin', 'manager'].includes(user?.role) || ['admin', 'daire_baskani', 'mudur'].includes(user?.sistemRol);
   const canApprove  = ['admin', 'manager'].includes(user?.role);
   const canTransfer = ['admin', 'manager'].includes(user?.role);
 
+  async function loadTicketDetail() {
+    const data = await getTicket(id);
+    setTicket(data);
+    return data;
+  }
+
+  async function loadWorkOrders() {
+    setWorkOrdersLoading(true);
+    setWorkOrderError('');
+    try {
+      const data = await authGet(`/api/work-orders?ticketId=${id}`);
+      setWorkOrders(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setWorkOrderError(e.message);
+    } finally {
+      setWorkOrdersLoading(false);
+    }
+  }
+
   useEffect(() => {
-    getTicket(id)
-      .then(setTicket)
+    setLoading(true);
+    setError('');
+    loadTicketDetail()
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    loadWorkOrders().catch(() => {});
+    // İade nedenleri yükle
+    authFetch('/api/settings').then(d => {
+      if (d.iade_nedenleri) {
+        setIadeNedenleri(d.iade_nedenleri.split('\n').map(s => s.trim()).filter(Boolean));
+      } else {
+        setIadeNedenleri(['Yanlış gruba atandı', 'Konu uzmanlık alanım dışında', 'İş yoğunluğu nedeniyle', 'Eksik/hatalı bilgi', 'Diğer']);
+      }
+    }).catch(() => {
+      setIadeNedenleri(['Yanlış gruba atandı', 'Konu uzmanlık alanım dışında', 'İş yoğunluğu nedeniyle', 'Eksik/hatalı bilgi', 'Diğer']);
+    });
   }, [id]);
 
   async function handleStatusChange(newStatus) {
@@ -678,7 +833,7 @@ export default function TicketDetail() {
       const updated = await updateTicket(id, { status: newStatus });
       setTicket((t) => ({ ...t, ...updated }));
       // Aktiviteleri yenilemek için ticket'ı yeniden çek
-      getTicket(id).then(setTicket).catch(() => {});
+      loadTicketDetail().catch(() => {});
     } catch (err) {
       alert(err.message);
     }
@@ -688,7 +843,7 @@ export default function TicketDetail() {
     setApproving(true);
     try {
       await authPost(`/api/tickets/${id}/approve`, {});
-      getTicket(id).then(setTicket).catch(() => {});
+      loadTicketDetail().catch(() => {});
     } catch (err) {
       alert(err.message);
     } finally {
@@ -724,7 +879,7 @@ export default function TicketDetail() {
         note:          transferForm.note.trim() || undefined,
       });
       setTransferModal(false);
-      getTicket(id).then(setTicket).catch(() => {});
+      loadTicketDetail().catch(() => {});
     } catch (err) {
       setTransferError(err.message);
     } finally {
@@ -740,11 +895,53 @@ export default function TicketDetail() {
       await authPost(`/api/tickets/${id}/reject`, { reason: rejectReason });
       setRejectModal(false);
       setRejectReason('');
-      getTicket(id).then(setTicket).catch(() => {});
+      loadTicketDetail().catch(() => {});
     } catch (err) {
       alert(err.message);
     } finally {
       setRejectSaving(false);
+    }
+  }
+
+  async function handleIadeTalebi() {
+    if (!iadeNeden) return;
+    const fullAciklama = iadeNeden === 'Diğer'
+      ? iadeAciklama.trim()
+      : iadeAciklama.trim() ? `${iadeNeden} — ${iadeAciklama.trim()}` : iadeNeden;
+    if (!fullAciklama) return;
+    setIadeSaving(true);
+    try {
+      await authPost(`/api/tickets/${id}/iade-talebi`, {
+        aciklama: fullAciklama,
+        yonlendirId: iadeYonlendirId || undefined,
+      });
+      setIadeModal(false);
+      setIadeNeden('');
+      setIadeAciklama('');
+      setIadeYonlendirId(null);
+      loadTicketDetail().catch(() => {});
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIadeSaving(false);
+    }
+  }
+
+  async function handleIadeOnayla() {
+    try {
+      await authPost(`/api/tickets/${id}/iade-onayla`, {});
+      loadTicketDetail().catch(() => {});
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function handleIadeReddet() {
+    try {
+      await authPost(`/api/tickets/${id}/iade-reddet`, {});
+      loadTicketDetail().catch(() => {});
+    } catch (err) {
+      alert(err.message);
     }
   }
 
@@ -758,7 +955,7 @@ export default function TicketDetail() {
       setComment('');
       setIsInternal(false);
       // Aktiviteleri yenilemek için ticket'ı yeniden çek
-      getTicket(id).then(setTicket).catch(() => {});
+      loadTicketDetail().catch(() => {});
     } catch (err) {
       alert(err.message);
     } finally {
@@ -773,6 +970,23 @@ export default function TicketDetail() {
   const nextStatuses = NEXT_STATUSES[ticket.status] || [];
   const isPendingApproval = ticket.status === 'PENDING_APPROVAL';
   const isRejected        = ticket.status === 'REJECTED';
+  const isAssignedToMe    = ticket.assignedTo?.username === user?.username;
+  const canIade           = isAssignedToMe && !['CLOSED', 'RESOLVED', 'REJECTED'].includes(ticket.status) && ticket.iadeDurumu !== 'PENDING';
+  const canApproveIade    = (canAssign || ['admin', 'manager'].includes(user?.role) || ['admin', 'daire_baskani', 'mudur', 'sef'].includes(user?.sistemRol));
+  const canCreateWorkOrder = isAssignedToMe || ['admin', 'manager'].includes(user?.role) || ['admin', 'daire_baskani', 'mudur', 'sef'].includes(user?.sistemRol);
+  const showWorkOrdersPanel = canCreateWorkOrder || workOrders.length > 0;
+
+  async function handleCreateWorkOrder() {
+    setCreatingWorkOrder(true);
+    try {
+      await authPost(`/api/tickets/${id}/work-orders`, {});
+      await Promise.all([loadTicketDetail(), loadWorkOrders()]);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setCreatingWorkOrder(false);
+    }
+  }
 
   return (
     <div className="p-8 space-y-5">
@@ -791,13 +1005,15 @@ export default function TicketDetail() {
               <button
                 onClick={handleApprove}
                 disabled={approving}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+                className="portal-cta-btn portal-cta-btn--green"
+                style={{ fontSize: 13, padding: '8px 16px', opacity: approving ? 0.5 : 1 }}
               >
                 {approving ? 'Onaylanıyor...' : 'Onayla'}
               </button>
               <button
                 onClick={() => setRejectModal(true)}
-                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+                className="portal-cta-btn portal-cta-btn--red"
+                style={{ fontSize: 13, padding: '8px 16px' }}
               >
                 Reddet
               </button>
@@ -824,6 +1040,93 @@ export default function TicketDetail() {
         </div>
       )}
 
+      {/* İade Talebi Bekliyor banner */}
+      {ticket.iadeDurumu === 'PENDING' && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">↩</span>
+            <div>
+              <p className="text-sm font-semibold text-orange-800">Görev İade Talebi Bekliyor</p>
+              <p className="text-xs text-orange-600 mt-0.5">{ticket.iadeAciklama}</p>
+              {ticket.iadeYonlendir && (
+                <p className="text-xs text-orange-500 mt-0.5">Yönlendirme önerisi: {ticket.iadeYonlendir.displayName}</p>
+              )}
+            </div>
+          </div>
+          {canApproveIade && (
+            <div className="flex gap-2 shrink-0">
+              <button onClick={handleIadeOnayla} className="portal-cta-btn portal-cta-btn--green" style={{ fontSize: 13, padding: '8px 16px' }}>
+                Onayla
+              </button>
+              <button onClick={handleIadeReddet} className="portal-cta-btn portal-cta-btn--red" style={{ fontSize: 13, padding: '8px 16px' }}>
+                Reddet
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* İade Modal */}
+      {iadeModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Görevi İade Et</h3>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                İade Nedeni <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={iadeNeden}
+                onChange={e => setIadeNeden(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+              >
+                <option value="">Neden seçin...</option>
+                {iadeNedenleri.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {iadeNeden === 'Diğer' ? <>Açıklama <span className="text-red-500">*</span></> : 'Ek Açıklama (opsiyonel)'}
+              </label>
+              <textarea
+                rows={3}
+                value={iadeAciklama}
+                onChange={e => setIadeAciklama(e.target.value)}
+                placeholder={iadeNeden === 'Diğer' ? 'İade nedenini açıklayın...' : 'Varsa ek bilgi ekleyin...'}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Yönlendirme Önerisi (opsiyonel)
+              </label>
+              <UserSearch
+                value={null}
+                onChange={(uid) => setIadeYonlendirId(uid)}
+              />
+              <p className="text-xs text-gray-400 mt-1">Görevi devralmasını önerdiğiniz kişi</p>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => { setIadeModal(false); setIadeNeden(''); setIadeAciklama(''); setIadeYonlendirId(null); }}
+                className="portal-pill-btn"
+                style={{ fontSize: 13, padding: '8px 18px' }}>
+                İptal
+              </button>
+              <button
+                onClick={handleIadeTalebi}
+                disabled={iadeSaving || !iadeNeden || (iadeNeden === 'Diğer' && !iadeAciklama.trim())}
+                style={{ fontSize: 13, padding: '8px 18px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', opacity: (iadeSaving || !iadeNeden || (iadeNeden === 'Diğer' && !iadeAciklama.trim())) ? 0.5 : 1 }}>
+                {iadeSaving ? 'Gönderiliyor...' : 'İade İsteği Gönder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Transfer Modal */}
       {transferModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -837,7 +1140,7 @@ export default function TicketDetail() {
                 <select
                   value={transferForm.targetDeptId}
                   onChange={e => setTransferForm(p => ({ ...p, targetDeptId: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
                 >
                   <option value="">Daire seçin</option>
                   {transferDepts.map(d => (
@@ -852,7 +1155,7 @@ export default function TicketDetail() {
                 <select
                   value={transferForm.targetGroupId}
                   onChange={e => setTransferForm(p => ({ ...p, targetGroupId: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
                 >
                   <option value="">Grup seçin (opsiyonel)</option>
                   {transferGroups.map(g => (
@@ -867,7 +1170,7 @@ export default function TicketDetail() {
                   value={transferForm.note}
                   onChange={e => setTransferForm(p => ({ ...p, note: e.target.value }))}
                   placeholder="Transfer gerekçesini açıklayın..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 resize-none"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                 />
               </div>
               {transferError && (
@@ -876,11 +1179,13 @@ export default function TicketDetail() {
               <div className="flex gap-2 justify-end pt-1">
                 <button type="button"
                   onClick={() => setTransferModal(false)}
-                  className="text-sm text-gray-500 border border-gray-200 rounded-lg px-4 py-2 hover:bg-gray-50 transition">
+                  className="portal-pill-btn"
+                  style={{ fontSize: 13, padding: '8px 18px' }}>
                   İptal
                 </button>
                 <button type="submit" disabled={transferring || !transferForm.targetDeptId}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+                  className="portal-cta-btn portal-cta-btn--violet"
+                  style={{ fontSize: 13, padding: '8px 18px', opacity: (transferring || !transferForm.targetDeptId) ? 0.5 : 1 }}>
                   {transferring ? 'Aktarılıyor...' : 'Aktar'}
                 </button>
               </div>
@@ -905,16 +1210,18 @@ export default function TicketDetail() {
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
                   placeholder="Talebin neden reddedildiğini açıklayın..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-200 resize-none"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => { setRejectModal(false); setRejectReason(''); }}
-                  className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition">
+                  className="portal-pill-btn"
+                  style={{ fontSize: 13, padding: '8px 18px' }}>
                   İptal
                 </button>
                 <button type="submit" disabled={rejectSaving || !rejectReason.trim()}
-                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+                  className="portal-cta-btn portal-cta-btn--red"
+                  style={{ fontSize: 13, padding: '8px 18px', opacity: (rejectSaving || !rejectReason.trim()) ? 0.5 : 1 }}>
                   {rejectSaving ? 'Kaydediliyor...' : 'Reddet'}
                 </button>
               </div>
@@ -926,7 +1233,7 @@ export default function TicketDetail() {
       {/* Breadcrumb + başlık */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <button onClick={() => navigate('/itsm')} className="text-xs text-gray-400 hover:text-gray-600 mb-2 block">
+          <button onClick={() => navigate('/itsm')} className="portal-pill-btn mb-2" style={{ fontSize: 12, padding: '4px 12px' }}>
             ← Talep Listesi
           </button>
           <div className="flex items-center gap-3 flex-wrap">
@@ -945,7 +1252,8 @@ export default function TicketDetail() {
             <button
               key={s.value}
               onClick={() => handleStatusChange(s.value)}
-              className="text-sm font-semibold px-4 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition"
+              className="portal-cta-btn portal-cta-btn--blue"
+              style={{ fontSize: 13, padding: '8px 16px' }}
             >
               {s.label}
             </button>
@@ -953,9 +1261,18 @@ export default function TicketDetail() {
           {canTransfer && !['CLOSED', 'REJECTED'].includes(ticket.status) && (
             <button
               onClick={openTransferModal}
-              className="text-sm font-semibold px-4 py-2 rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 transition"
+              className="portal-cta-btn portal-cta-btn--violet"
+              style={{ fontSize: 13, padding: '8px 16px' }}
             >
               Daireye Aktar
+            </button>
+          )}
+          {canIade && (
+            <button
+              onClick={() => { setIadeNeden(''); setIadeAciklama(''); setIadeYonlendirId(null); setIadeModal(true); }}
+              style={{ fontSize: 13, padding: '8px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
+            >
+              ↩ Görevi İade Et
             </button>
           )}
         </div>
@@ -1015,11 +1332,23 @@ export default function TicketDetail() {
             <p className="text-sm text-gray-600 whitespace-pre-wrap">{ticket.description}</p>
           </div>
 
+          {showWorkOrdersPanel && (
+            <WorkOrdersPanel
+              orders={workOrders}
+              loading={workOrdersLoading}
+              error={workOrderError}
+              canCreate={canCreateWorkOrder && !['PENDING_APPROVAL', 'REJECTED', 'CLOSED'].includes(ticket.status)}
+              creating={creatingWorkOrder}
+              onCreate={handleCreateWorkOrder}
+              onOpenList={() => navigate(`/work-orders?ticketId=${ticket.id}`)}
+            />
+          )}
+
           {/* ulakBELL Bilgi Kartı */}
           <UlakbellCard
             ticket={ticket}
             isPrivileged={['admin','manager'].includes(user?.role)}
-            onRefresh={() => getTicket(ticket.id).then(setTicket).catch(() => {})}
+            onRefresh={() => loadTicketDetail().catch(() => {})}
           />
 
           {/* Aktivite Zaman Çizelgesi */}

@@ -67,7 +67,7 @@ const DESTEK_DATA = {
     },
     {
       id: 'ihale-satin-alma',
-      ad: 'İhale, Satın Alma, Taşınır Mal ve Ambarlar Şube Müdürlüğü',
+      ad: 'İhale, Satın Alma, Taşınır Mal ve Ambarlar Şb. Md.',
       icon: '📦',
       birimler: [
         {
@@ -301,27 +301,32 @@ export default function DestekHizmetleriTicket() {
 
   if (done) {
     return (
-      <div className="p-8 max-w-3xl">
+      <div style={{ padding: '32px 20px', maxWidth: 1200, margin: '0 auto' }}>
         <SuccessScreen ticketId={done.ticketId} onNew={reset} />
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div style={{ padding: '32px 20px', maxWidth: 1200, margin: '0 auto' }}>
 
       {/* Sayfa başlığı */}
-      <div className="flex items-center gap-3 mb-6">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: 'rgba(67,220,128,0.12)', color: '#16a34a',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+          width: 48, height: 48, borderRadius: 12,
+          background: '#f0fdf4',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
         }}>
-          🔧
+          <i className="bi bi-wrench" style={{ fontSize: 22, color: '#43DC80' }} />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-gray-900 m-0">Destek Hizmetleri Talebi</h1>
-          <p className="text-xs text-gray-400 m-0">{DESTEK_DATA.daire}</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>
+            Destek Hizmetleri Talebi
+          </h1>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '2px 0 0' }}>
+            {DESTEK_DATA.daire}
+          </p>
         </div>
       </div>
 
@@ -330,34 +335,47 @@ export default function DestekHizmetleriTicket() {
       {/* ── ADIM 1: Birim seçimi ────────────────────────────────────────────── */}
       {step === 1 && (
         <div>
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Hangi birimle ilgili talebiniz var?</h2>
-            <p className="text-sm text-gray-500 mt-1">İlgili birimi seçin</p>
-          </div>
-
-          {DESTEK_DATA.mudürlükler.map(m => (
-            <div key={m.id} className="mb-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, alignItems: 'start' }}>
+            {/* Sol müdürlük — 2 sütun kaplar */}
+            <div style={{ gridColumn: 'span 2' }}>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">{m.icon}</span>
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{m.ad}</span>
+                <span className="text-base">{DESTEK_DATA.mudürlükler[0].icon}</span>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{DESTEK_DATA.mudürlükler[0].ad}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {m.birimler.map(b => (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {DESTEK_DATA.mudürlükler[0].birimler.map(b => (
                   <BirimKart
                     key={b.id}
                     birim={b}
-                    onClick={() => { setSelectedMudurluk(m); setSelectedBirim(b); setStep(2); }}
+                    onClick={() => { setSelectedMudurluk(DESTEK_DATA.mudürlükler[0]); setSelectedBirim(b); setStep(2); }}
                   />
                 ))}
               </div>
             </div>
-          ))}
+            {/* Sağ müdürlük — 1 sütun */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-base">{DESTEK_DATA.mudürlükler[1].icon}</span>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{DESTEK_DATA.mudürlükler[1].ad}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {DESTEK_DATA.mudürlükler[1].birimler.map(b => (
+                  <BirimKart
+                    key={b.id}
+                    birim={b}
+                    onClick={() => { setSelectedMudurluk(DESTEK_DATA.mudürlükler[1]); setSelectedBirim(b); setStep(2); }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
 
           <button
             onClick={() => navigate(-1)}
-            className="text-sm text-gray-400 hover:text-gray-600 mt-2 flex items-center gap-1.5 transition"
+            className="mt-4 px-5 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 hover:border-indigo-200 flex items-center gap-2 transition-all shadow-sm"
           >
-            ← Ana sayfaya dön
+            <i className="bi bi-arrow-left" />
+            Ana sayfaya dön
           </button>
         </div>
       )}

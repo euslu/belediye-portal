@@ -91,12 +91,6 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
       directorate = DESCRIPTION_DIR_MAP[descSlug];
     }
 
-    // Bu AD bilgisayarının atandığı kullanıcıyı bul
-    // Not: description daire slug'ı ise kullanıcı araması atlanır
-    const assignedTo = DESCRIPTION_DIR_MAP[descSlug]
-      ? null
-      : await resolveAssignedTo(adPC.description, adPC.managedBy, adPC.managedByDN, prisma);
-
     // İsim veya seri numarasına göre DB'de eşleştir
     const dbDevice = dbDevices.find(
       (d) =>
@@ -118,8 +112,8 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
             model:        adPC.os            || null,
             directorate:  directorate        || null,
             department:   department         || adPC.department || null,
-            assignedTo:   assignedTo         || null,
-            isShared:     !assignedTo,       // kullanıcı ataması yoksa ortak cihaz
+            assignedTo:   null,
+            isShared:     true,              // kullanıcı ataması eşleştirme ekranından yapılır
             lastSyncAt:   now,
           },
         });
@@ -127,7 +121,7 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
           type:       'NEW',
           deviceId:   newDevice.id,
           deviceName: adPC.name,
-          detail:     `AD'den yeni cihaz eklendi${assignedTo ? ` → ${assignedTo}` : ''}`,
+          detail:     `AD'den yeni cihaz eklendi`,
         });
       } catch (err) {
         console.warn(`[adDeviceSync] Yeni cihaz eklenemedi (${adPC.name}):`, err.message);
@@ -135,7 +129,8 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
       continue;
     }
 
-    // Karşılaştırılacak alanlar: [ DB field, AD değeri ]
+    // Karşılaştırılacak alanlar — assignedTo AD sync'ten ÇIKARILDI,
+    // kullanıcı ataması sadece eşleştirme ekranından yapılır
     const fieldsToCheck = [
       { field: 'name',         adValue: adPC.name         || null },
       { field: 'serialNumber', adValue: adPC.serialNumber  || null },
@@ -143,7 +138,6 @@ async function syncDevicesFromAD(prisma, triggeredBy = 'system') {
       { field: 'model',        adValue: adPC.os            || null },
       { field: 'directorate',  adValue: directorate        || null },
       { field: 'department',   adValue: department || adPC.department || null },
-      { field: 'assignedTo',   adValue: assignedTo         || null },
     ];
 
     const deviceChanges = fieldsToCheck

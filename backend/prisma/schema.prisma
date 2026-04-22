@@ -46,6 +46,8 @@ model Device {
   updatedAt    DateTime     @updatedAt
 
   changeLogs   DeviceChangeLog[]
+  licenses     DeviceLicense[]
+  userDevices  UserDevice[]
 }
 
 // ─── Kullanıcı ───────────────────────────────────────────────────────────────
@@ -91,8 +93,9 @@ model User {
   assigned          Ticket[]         @relation("AssignedTo")
   groups            UserGroup[]
   activities        TicketActivity[]
-  workOrdersCreated WorkOrder[]      @relation("WOCreatedBy")
+  workOrdersCreated  WorkOrder[]      @relation("WOCreatedBy")
   workOrdersAssigned WorkOrder[]     @relation("WOAssignedTo")
+  iadeYonlendirmeler Ticket[]        @relation("IadeYonlendir")
 }
 
 // ─── Grup ────────────────────────────────────────────────────────────────────
@@ -107,6 +110,7 @@ model Group {
   members         UserGroup[]
   tickets         Ticket[]
   subjectDefaults Subject[]   @relation("SubjectDefaultGroup")
+  categoryDefaults Category[] @relation("CategoryDefaultGroup")
   workOrders      WorkOrder[]
 }
 
@@ -163,6 +167,10 @@ model Category {
   submitType   SubmitType?  @relation(fields: [typeId], references: [id])
   departmentId Int?
   department   Department?  @relation(fields: [departmentId], references: [id])
+  assignedGroupId  Int?
+  assignedGroup    Group?   @relation("CategoryDefaultGroup", fields: [assignedGroupId], references: [id])
+  slaHours         Int?
+  slaWarningHours  Int?
 
   subjects   Subject[]
   tickets    Ticket[]
@@ -177,6 +185,8 @@ model Subject {
   defaultGroupId Int?
   defaultGroup   Group?   @relation("SubjectDefaultGroup", fields: [defaultGroupId], references: [id])
   active         Boolean  @default(true)
+  slaHours         Int?
+  slaWarningHours  Int?
 
   tickets Ticket[]
 }
@@ -227,6 +237,14 @@ model Ticket {
   transferNote String?
   transferAt   DateTime?
   transferBy   String?
+
+  // İade sistemi
+  iadeDurumu       String?    // PENDING | APPROVED | REJECTED
+  iadeAciklama     String?
+  iadeYonlendirId  Int?
+  iadeYonlendir    User?     @relation("IadeYonlendir", fields: [iadeYonlendirId], references: [id])
+  iadeOnayci       String?
+  iadeOnayTarih    DateTime?
 
   // ulakBELL entegrasyonu
   ulakbellToken  String?   // public_token from ulakBELL
@@ -399,6 +417,51 @@ model DeviceChangeLog {
   createdAt  DateTime @default(now())
 }
 
+// ─── Cihaz Lisansı ──────────────────────────────────────────────────────────
+model DeviceLicense {
+  id               Int       @id @default(autoincrement())
+  deviceId         Int
+  device           Device    @relation(fields: [deviceId], references: [id])
+  name             String
+  key              String?
+  baslangicTarihi  DateTime?
+  bitisTarihi      DateTime?
+  sinirsiz         Boolean   @default(false)
+  username         String?
+  deviceName       String?
+  createdAt        DateTime  @default(now())
+}
+
+// ─── Lisans Kaydı (kalıcı, eşleşme bağımsız snapshot) ────────────────────────
+// Device/UserDevice silinse bile bu kayıt korunur
+model LicenseRecord {
+  id               Int       @id @default(autoincrement())
+  deviceLicenseId  Int?      // DeviceLicense FK (silinirse null kalır)
+  deviceId         Int?      // Device FK (referans)
+  deviceName       String    // cihaz adı snapshot
+  username         String?   // atanmış kullanıcı snapshot
+  directorate      String?   // birim snapshot
+  department       String?   // şube snapshot
+  licenseName      String    // lisans adı
+  licenseKey       String?   // lisans anahtarı
+  baslangicTarihi  DateTime?
+  bitisTarihi      DateTime?
+  sinirsiz         Boolean   @default(false)
+  active           Boolean   @default(true) // false = lisans silindi
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// ─── Yazılım Kataloğu ─────────────────────────────────────────────────────────
+model SoftwareCatalog {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  category      String?
+  totalLicenses Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 // ─── AD Değişiklik Logu ───────────────────────────────────────────────────────
 model AdChangeLog {
   id          Int      @id @default(autoincrement())
@@ -435,15 +498,19 @@ model MuhtarbisEditLog {
   tarih        DateTime @default(now())
 }
 
-// ─── Kullanıcı Cihazları (eski, geriye dönük uyumluluk) ───────────────────────
+// ─── Kullanıcı-Cihaz Eşleştirme (kalıcı, AD sync korumalı) ─────────────────
 model UserDevice {
   id           Int      @id @default(autoincrement())
   username     String
   deviceName   String
   deviceType   String   @default("DIGER")
   serialNumber String?
+  deviceId     Int?
+  device       Device?  @relation(fields: [deviceId], references: [id])
   assignedAt   DateTime @default(now())
   active       Boolean  @default(true)
+
+  @@unique([username, deviceName])
 }
 
 // ─── Enum'lar ─────────────────────────────────────────────────────────────────
@@ -500,6 +567,9 @@ enum ActivityAction {
   GROUP_CHANGED
   APPROVED
   REJECTED
+  RETURN_REQUESTED
+  RETURN_APPROVED
+  RETURN_REJECTED
 }
 
 enum DeviceType {
@@ -636,6 +706,26 @@ model Muhtar {
   guncelleyen       String?
 
   @@unique([ilce, mahalle])
+}
+
+model MuhtarlikDuyuru {
+  id             Int      @id @default(autoincrement())
+  baslik         String
+  mesaj          String
+  kanallar       String
+  ilceler        String
+  mahalleler     String?
+  hedefSayisi    Int      @default(0)
+  smsBasarili    Int      @default(0)
+  smsBasarisiz   Int      @default(0)
+  emailBasarili  Int      @default(0)
+  emailBasarisiz Int      @default(0)
+  hata           String?
+  gonderen       String
+  gonderenAd     String?
+  olusturmaTarih DateTime @default(now())
+
+  @@index([olusturmaTarih])
 }
 
 model Basvuru {
@@ -775,6 +865,40 @@ model HatAtamasi {
   guncellenmeTarih DateTime  @updatedAt
 }
 
+// ─── ulakBELL: Konu → Daire Eşleştirme ──────────────────────────────────────
+model UlakbellKonuEslestirme {
+  id              Int      @id @default(autoincrement())
+  ulakbellKonuId  Int      @unique
+  konuAdi         String
+  konuTuru        String?
+  portalDaire     String?
+  portalMudurluk  String?
+  ulakbellBirim   String?
+  bildirimAktif   Boolean  @default(true)
+  aktif           Boolean  @default(true)
+}
+
+model UlakbellBildirim {
+  id              Int       @id @default(autoincrement())
+  konuId          Int
+  basvuruNo       Int
+  publicToken     String
+  basvuruTipi     String?
+  basvuranAd      String?
+  ilce            String?
+  mahalle         String?
+  portalDaire     String?
+  portalMudurluk  String?
+  durum           String   @default("YENI")
+  okundu          Boolean  @default(false)
+  okunmaTarih     DateTime?
+  olusturmaTarih  DateTime @default(now())
+
+  @@index([olusturmaTarih])
+  @@index([portalDaire])
+  @@index([okundu])
+}
+
 // ─── AR-GE: Cihaz Envanteri ──────────────────────────────────────────────────
 model CihazEnvanter {
   id               Int       @id @default(autoincrement())
@@ -794,4 +918,28 @@ model CihazEnvanter {
   notlar           String?
   olusturmaTarih   DateTime  @default(now())
   guncellenmeTarih DateTime  @updatedAt
+}
+
+// ─── Menü Yetkilendirme ─────────────────────────────────────────────────────
+model MenuPermission {
+  id          Int      @id @default(autoincrement())
+  menuKey     String   @unique
+  label       String
+  icon        String?
+  route       String
+  groupLabel  String?
+  groupOrder  Int      @default(0)
+  itemOrder   Int      @default(0)
+  herkes      Boolean  @default(false)
+  disabled    Boolean  @default(false)
+  exactEnd    Boolean  @default(false)
+  sistemRoller    String?
+  directorates    String?
+  departments     String?
+  grupIds         String?
+  usernames       String?
+  showApprovalBadge Boolean @default(false)
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
 }

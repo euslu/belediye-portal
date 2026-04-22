@@ -10,6 +10,8 @@ const { notifyTicketCreated, notifyTicketAssigned, notifyTicketResolved } = requ
 const upload  = require('../lib/upload');
 const ulakbell = require('../services/ulakbell');
 const logger = require('../utils/logger');
+const { logIslem } = require('../middleware/auditLog');
+const smsNotif = require('../services/smsNotification');
 
 router.use(authMiddleware);
 
@@ -32,6 +34,29 @@ async function requireTicketScopeAccess(id, user) {
   if (!ticket) return { error: 'not_found' };
   if (!canAccessTicket(user, ticket)) return { error: 'forbidden' };
   return { ticket };
+}
+
+function canCreateTicketWorkOrder(user, ticket) {
+  const isPrivileged = ['admin', 'manager'].includes(user.role) || hasMinRole(user, 'sef');
+  const isAssignee = ticket.assignedTo?.username === user.username;
+  return isPrivileged || isAssignee;
+}
+
+async function findDepartmentIdForTicket(ticket) {
+  const departmentName =
+    ticket.targetDepartment ||
+    ticket.group?.department ||
+    ticket.assignedTo?.department ||
+    ticket.createdBy?.department;
+
+  if (!departmentName) return null;
+
+  const department = await prisma.department.findFirst({
+    where: { name: departmentName },
+    select: { id: true },
+  });
+
+  return department?.id || null;
 }
 
 // ─── GET /api/categories ──────────────────────────────────────────────────────
@@ -190,9 +215,10 @@ router.get('/:id', async (req, res) => {
         createdBy:  { select: { id: true, displayName: true, username: true, directorate: true, department: true, office: true, city: true } },
         assignedTo: { select: { id: true, displayName: true, username: true, directorate: true, department: true } },
         group:      { select: { id: true, name: true, department: true } },
-        category:   true,
-        subject:    { include: { category: { select: { id: true, name: true, icon: true } }, defaultGroup: { select: { id: true, name: true } } } },
-        comments:   { orderBy: { createdAt: 'asc' } },
+        category:      true,
+        subject:       { include: { category: { select: { id: true, name: true, icon: true } }, defaultGroup: { select: { id: true, name: true } } } },
+        iadeYonlendir: { select: { id: true, displayName: true } },
+        comments:      { orderBy: { createdAt: 'asc' } },
         activities: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -211,6 +237,120 @@ router.get('/:id', async (req, res) => {
   } catch (err) {
     logger.error(err);
     res.status(500).json({ error: 'Ticket alınamadı' });
+  }
+});
+
+// ─── POST /api/tickets/:id/work-orders ───────────────────────────────────────
+router.post('/:id/work-orders', async (req, res) => {
+  const id = parseInt(req.params.id);
+
+  try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu ticket için iş emri oluşturma yetkiniz yok' });
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        createdBy: { select: { id: true, displayName: true, username: true, department: true } },
+        assignedTo: { select: { id: true, displayName: true, username: true, department: true } },
+        group: { select: { id: true, name: true, department: true } },
+        category: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (!canCreateTicketWorkOrder(req.user, ticket)) {
+      return res.status(403).json({ error: 'Bu ticket için iş emri oluşturma yetkiniz yok' });
+    }
+    if (['PENDING_APPROVAL', 'REJECTED', 'CLOSED'].includes(ticket.status)) {
+      return res.status(400).json({ error: 'Bu durumdaki ticket için iş emri oluşturulamaz' });
+    }
+
+    const actorUser = await prisma.user.upsert({
+      where: { username: req.user.username },
+      update: { displayName: req.user.displayName },
+      create: {
+        username: req.user.username,
+        displayName: req.user.displayName,
+        role: req.user.role || 'user',
+        department: req.user.department || null,
+        directorate: req.user.directorate || null,
+      },
+    });
+
+    const departmentId = await findDepartmentIdForTicket(ticket);
+
+    const workOrder = await prisma.workOrder.create({
+      data: {
+        title: `İş Emri · #${ticket.id} · ${ticket.title}`,
+        description: ticket.description
+          ? `Ticket #${ticket.id} için oluşturuldu.\n\n${ticket.description}`
+          : `Ticket #${ticket.id} için oluşturuldu.`,
+        priority: ticket.priority || 'MEDIUM',
+        status: 'TODO',
+        ticketId: ticket.id,
+        groupId: ticket.group?.id || null,
+        assignedToId: ticket.assignedTo?.id || null,
+        departmentId,
+        createdById: actorUser.id,
+      },
+      include: {
+        createdBy: { select: { id: true, displayName: true, username: true } },
+        assignedTo: { select: { id: true, displayName: true, username: true } },
+        group: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true, shortCode: true } },
+        ticket: { select: { id: true, title: true, status: true } },
+      },
+    });
+
+    await logActivity({
+      ticketId: ticket.id,
+      userId: actorUser.id,
+      action: 'COMMENTED',
+      description: `Ticket için iş emri oluşturuldu (#${workOrder.id})`,
+      comment: `${workOrder.title} iş akışına eklendi.`,
+    });
+
+    let updatedTicketStatus = ticket.status;
+    if (['OPEN', 'ASSIGNED'].includes(ticket.status)) {
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          status: 'IN_PROGRESS',
+          closedAt: null,
+        },
+      });
+      updatedTicketStatus = 'IN_PROGRESS';
+
+      await logActivity({
+        ticketId: ticket.id,
+        userId: actorUser.id,
+        action: 'STATUS_CHANGED',
+        fromValue: ticket.status,
+        toValue: 'IN_PROGRESS',
+        description: `İş emri oluşturulduğu için ticket işlemde durumuna alındı`,
+      });
+    }
+
+    logIslem({
+      kullanici: req.user.username,
+      kullaniciAd: req.user.displayName,
+      islem: 'CREATE',
+      modul: 'work-order',
+      kayitId: workOrder.id,
+      detay: { ticketId: ticket.id, fromTicket: true },
+      ip: req.ip,
+    });
+
+    res.status(201).json({
+      workOrder,
+      ticketStatus: updatedTicketStatus,
+      message: 'Ticket üzerinden iş emri oluşturuldu',
+    });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Ticket üzerinden iş emri oluşturulamadı' });
   }
 });
 
@@ -247,16 +387,45 @@ router.post('/', async (req, res) => {
     // Konu (Subject) seçildiyse otomatik grup belirle
     let autoGroupId   = null;
     let autoGroupName = null;
+    let slaHoursResolved = null;
     if (subjectId) {
       const subj = await prisma.subject.findUnique({
         where:  { id: parseInt(subjectId) },
-        select: { defaultGroupId: true, defaultGroup: { select: { name: true } } },
+        select: { defaultGroupId: true, defaultGroup: { select: { name: true } }, slaHours: true },
       });
       if (subj?.defaultGroupId) {
         autoGroupId   = subj.defaultGroupId;
         autoGroupName = subj.defaultGroup?.name || null;
       }
+      if (subj?.slaHours) slaHoursResolved = subj.slaHours;
     }
+
+    // Kategori fallback: grup ve SLA
+    if (categoryId) {
+      const cat = await prisma.category.findUnique({
+        where:  { id: parseInt(categoryId) },
+        select: { assignedGroupId: true, assignedGroup: { select: { name: true } }, slaHours: true },
+      });
+      if (!autoGroupId && cat?.assignedGroupId) {
+        autoGroupId   = cat.assignedGroupId;
+        autoGroupName = cat.assignedGroup?.name || null;
+      }
+      if (!slaHoursResolved && cat?.slaHours) slaHoursResolved = cat.slaHours;
+    }
+
+    // SLA fallback: Settings priority-based
+    if (!slaHoursResolved) {
+      const slaKey = `sla_${(priority || 'MEDIUM').toLowerCase()}_hours`;
+      const setting = await prisma.systemSetting.findUnique({ where: { key: slaKey } });
+      if (setting?.value) slaHoursResolved = parseInt(setting.value);
+    }
+
+    // dueDate hesapla
+    const resolvedDueDate = dueDate
+      ? new Date(dueDate)
+      : slaHoursResolved
+        ? new Date(Date.now() + slaHoursResolved * 3600000)
+        : null;
 
     // REQUEST tipi talepler yönetici onayına gider; INCIDENT doğrudan atanır
     const resolvedType = type || 'INCIDENT';
@@ -283,7 +452,7 @@ router.post('/', async (req, res) => {
         description,
         priority:          priority   || 'MEDIUM',
         type:              resolvedType,
-        dueDate:           dueDate    ? new Date(dueDate) : null,
+        dueDate:           resolvedDueDate,
         categoryId:        categoryId ? parseInt(categoryId) : null,
         subjectId:         subjectId  ? parseInt(subjectId)  : null,
         groupId:           resolvedType === 'REQUEST' ? null : autoGroupId,
@@ -355,6 +524,8 @@ router.post('/', async (req, res) => {
       });
     }
 
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'CREATE', modul: 'ticket', kayitId: ticket.id, detay: { title, priority: priority || 'MEDIUM', type: resolvedType }, ip: req.ip });
+
     res.status(201).json(ticket);
   } catch (err) {
     logger.error(err);
@@ -407,9 +578,16 @@ router.patch('/:id', async (req, res) => {
       },
     });
 
+    if (status !== undefined && status !== existing.status) {
+      logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'STATUS_CHANGED', modul: 'ticket', kayitId: id, detay: { from: existing.status, to: status }, ip: req.ip });
+    }
+
     if (assignedToId !== undefined && assignedToId !== existing.assignedToId && ticket.assignedTo) {
+      logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'ASSIGN', modul: 'ticket', kayitId: id, detay: { assignedTo: ticket.assignedTo.displayName }, ip: req.ip });
       const isReassign = existing.assignedToId !== null;
       notifyTicketAssigned(ticket, actorUser.displayName, isReassign).catch(() => {});
+      // SMS: atanan personele bildirim
+      smsNotif.smsTicketAtandi(ticket, ticket.assignedTo.id).catch(() => {});
 
       await logActivity({
         ticketId:    id,
@@ -441,6 +619,9 @@ router.patch('/:id', async (req, res) => {
           notifyTicketResolved(full, actorUser.displayName).catch(() => {});
         }
       }
+
+      // SMS: atanan personele durum değişikliği bildirimi
+      smsNotif.smsTicketDurumDegisti(ticket, status, ticket.assignedToId).catch(() => {});
     }
 
     if (priority !== undefined && priority !== existing.priority) {
@@ -655,6 +836,238 @@ router.post('/:id/transfer', async (req, res) => {
   } catch (err) {
     logger.error(err);
     res.status(500).json({ error: 'Aktarma yapılamadı' });
+  }
+});
+
+// ─── POST /api/tickets/:id/iade-talebi ────────────────��───────────────────────
+router.post('/:id/iade-talebi', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { aciklama, yonlendirId } = req.body;
+  if (!aciklama?.trim()) return res.status(400).json({ error: 'İade a��ıklaması zorunludur' });
+
+  try {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { assignedTo: { select: { username: true } } },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (ticket.assignedTo?.username !== req.user.username)
+      return res.status(403).json({ error: 'Sadece atanan personel iade talebi oluşturabilir' });
+    if (ticket.iadeDurumu === 'PENDING')
+      return res.status(400).json({ error: 'Zaten bekleyen bir iade talebi var' });
+
+    const actor = await prisma.user.upsert({
+      where: { username: req.user.username },
+      update: {},
+      create: { username: req.user.username, displayName: req.user.displayName, role: req.user.role || 'user' },
+    });
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: {
+        iadeDurumu:      'PENDING',
+        iadeAciklama:    aciklama.trim(),
+        iadeYonlendirId: yonlendirId ? parseInt(yonlendirId) : null,
+      },
+      include: {
+        assignedTo:    { select: { id: true, displayName: true, username: true } },
+        iadeYonlendir: { select: { id: true, displayName: true } },
+      },
+    });
+
+    await logActivity({
+      ticketId: id,
+      userId:   actor.id,
+      action:   'RETURN_REQUESTED',
+      description: `${actor.displayName} görevi iade etmek istiyor: "${aciklama.trim()}"${yonlendirId ? ` (yönlendirme önerisi var)` : ''}`,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'İade talebi oluşturulamadı' });
+  }
+});
+
+// ─── POST /api/tickets/:id/iade-onayla ────────────────────��──────────────────
+router.post('/:id/iade-onayla', async (req, res) => {
+  if (!hasMinRole(req.user, 'sef') && !['admin', 'manager'].includes(req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu ticket üzerinde iade onay yetkiniz yok' });
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { iadeYonlendir: { select: { id: true, displayName: true } } },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (ticket.iadeDurumu !== 'PENDING')
+      return res.status(400).json({ error: 'Bekleyen iade talebi yok' });
+
+    const actor = await prisma.user.upsert({
+      where: { username: req.user.username },
+      update: {},
+      create: { username: req.user.username, displayName: req.user.displayName, role: req.user.role || 'user' },
+    });
+
+    const data = {
+      iadeDurumu:    'APPROVED',
+      iadeOnayci:    req.user.username,
+      iadeOnayTarih: new Date(),
+    };
+
+    if (ticket.iadeYonlendirId) {
+      data.assignedToId = ticket.iadeYonlendirId;
+      data.status       = 'ASSIGNED';
+    } else {
+      data.assignedToId = null;
+      data.status       = 'OPEN';
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data,
+      include: {
+        assignedTo: { select: { id: true, displayName: true, username: true } },
+        group:      { select: { id: true, name: true } },
+      },
+    });
+
+    const yonDesc = ticket.iadeYonlendir
+      ? ` ve ${ticket.iadeYonlendir.displayName}'e yönlendirildi`
+      : ' ve havuza döndürüldü';
+    await logActivity({
+      ticketId: id,
+      userId:   actor.id,
+      action:   'RETURN_APPROVED',
+      description: `İade talebi ${actor.displayName} tarafından onaylandı${yonDesc}`,
+    });
+
+    if (ticket.iadeYonlendirId && updated.assignedTo) {
+      notifyTicketAssigned(updated, actor.displayName, true).catch(() => {});
+    }
+
+    res.json(updated);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'İade onaylanamadı' });
+  }
+});
+
+// ─── POST /api/tickets/:id/iade-reddet ────────────────────���─────────────────
+router.post('/:id/iade-reddet', async (req, res) => {
+  if (!hasMinRole(req.user, 'sef') && !['admin', 'manager'].includes(req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu ticket üzerinde iade red yetkiniz yok' });
+
+    const ticket = await prisma.ticket.findUnique({ where: { id } });
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (ticket.iadeDurumu !== 'PENDING')
+      return res.status(400).json({ error: 'Bekleyen iade talebi yok' });
+
+    const actor = await prisma.user.upsert({
+      where: { username: req.user.username },
+      update: {},
+      create: { username: req.user.username, displayName: req.user.displayName, role: req.user.role || 'user' },
+    });
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: {
+        iadeDurumu:    'REJECTED',
+        iadeOnayci:    req.user.username,
+        iadeOnayTarih: new Date(),
+      },
+      include: {
+        assignedTo: { select: { id: true, displayName: true, username: true } },
+      },
+    });
+
+    await logActivity({
+      ticketId: id,
+      userId:   actor.id,
+      action:   'RETURN_REJECTED',
+      description: `İade talebi ${actor.displayName} tarafından reddedildi`,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'İade reddedilemedi' });
+  }
+});
+
+// ─── POST /api/tickets/:id/reassign ────────────────────────────────────────
+router.post('/:id/reassign', async (req, res) => {
+  if (!hasMinRole(req.user, 'mudur') && !['admin', 'manager'].includes(req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  const { assignedToId } = req.body;
+  if (!assignedToId) return res.status(400).json({ error: 'Atanacak kişi zorunludur' });
+
+  try {
+    const scope = await requireTicketScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Ticket bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu ticket üzerinde yeniden atama yetkiniz yok' });
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { assignedTo: { select: { id: true, displayName: true } } },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Ticket bulunamadı' });
+
+    const actor = await prisma.user.upsert({
+      where: { username: req.user.username },
+      update: {},
+      create: { username: req.user.username, displayName: req.user.displayName, role: req.user.role || 'user' },
+    });
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: {
+        assignedToId:    parseInt(assignedToId),
+        status:          'ASSIGNED',
+        iadeDurumu:      null,
+        iadeAciklama:    null,
+        iadeYonlendirId: null,
+        iadeOnayci:      null,
+        iadeOnayTarih:   null,
+      },
+      include: {
+        assignedTo: { select: { id: true, displayName: true, username: true } },
+        group:      { select: { id: true, name: true } },
+        createdBy:  { select: { id: true, displayName: true } },
+      },
+    });
+
+    const oldName = ticket.assignedTo?.displayName || 'kimse';
+    await logActivity({
+      ticketId: id,
+      userId:   actor.id,
+      action:   'REASSIGNED',
+      fromValue: String(ticket.assignedToId || ''),
+      toValue:   String(assignedToId),
+      description: `${actor.displayName} tarafından ${oldName} -> ${updated.assignedTo.displayName} olarak yeniden atandı`,
+    });
+
+    notifyTicketAssigned(updated, actor.displayName, true).catch(() => {});
+    // SMS: yeniden atanan personele bildirim
+    smsNotif.smsTicketAtandi(updated, updated.assignedTo.id).catch(() => {});
+
+    res.json(updated);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Yeniden atama yapılamadı' });
   }
 });
 

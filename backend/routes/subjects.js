@@ -28,14 +28,16 @@ router.get('/', async (req, res) => {
 // ─── POST /api/subjects ───────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yetkisiz' });
-  const { name, categoryId, defaultGroupId } = req.body;
+  const { name, categoryId, defaultGroupId, slaHours, slaWarningHours } = req.body;
   if (!name?.trim() || !categoryId) return res.status(400).json({ error: 'Ad ve kategori zorunludur' });
   try {
     const subject = await prisma.subject.create({
       data: {
-        name:           name.trim(),
-        categoryId:     parseInt(categoryId),
-        defaultGroupId: defaultGroupId ? parseInt(defaultGroupId) : null,
+        name:            name.trim(),
+        categoryId:      parseInt(categoryId),
+        defaultGroupId:  defaultGroupId  ? parseInt(defaultGroupId)  : null,
+        slaHours:        slaHours != null ? parseInt(slaHours)       : null,
+        slaWarningHours: slaWarningHours != null ? parseInt(slaWarningHours) : null,
       },
       include: { defaultGroup: { select: { id: true, name: true } } },
     });
@@ -50,12 +52,14 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yetkisiz' });
   const id = parseInt(req.params.id);
-  const { name, categoryId, defaultGroupId, active } = req.body;
+  const { name, categoryId, defaultGroupId, active, slaHours, slaWarningHours } = req.body;
   const data = {};
-  if (name           !== undefined) data.name           = name.trim();
-  if (categoryId     !== undefined) data.categoryId     = parseInt(categoryId);
-  if (defaultGroupId !== undefined) data.defaultGroupId = defaultGroupId ? parseInt(defaultGroupId) : null;
-  if (active         !== undefined) data.active         = Boolean(active);
+  if (name            !== undefined) data.name            = name.trim();
+  if (categoryId      !== undefined) data.categoryId      = parseInt(categoryId);
+  if (defaultGroupId  !== undefined) data.defaultGroupId  = defaultGroupId ? parseInt(defaultGroupId) : null;
+  if (active          !== undefined) data.active          = Boolean(active);
+  if (slaHours        !== undefined) data.slaHours        = slaHours != null ? parseInt(slaHours)       : null;
+  if (slaWarningHours !== undefined) data.slaWarningHours = slaWarningHours != null ? parseInt(slaWarningHours) : null;
   try {
     const subject = await prisma.subject.update({
       where: { id },

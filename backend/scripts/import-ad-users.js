@@ -7,7 +7,7 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma  = new PrismaClient({ adapter });
 
 // AD'deki gruba göre portal rolü belirle
-const ADMIN_GROUP   = process.env.AD_ADMIN_GROUP   || 'Domain Admins';
+// NOT: Domain Admins → portal admin yapılmaz. Admin yetkisi sadece UserRole (RBAC) tablosundan gelir.
 const MANAGER_GROUP = process.env.AD_MANAGER_GROUP || 'paylasim_BI_yonetici_WR';
 
 function parseCN(dnList) {
@@ -17,7 +17,6 @@ function parseCN(dnList) {
 }
 
 function getRole(groups) {
-  if (groups.includes(ADMIN_GROUP))   return 'admin';
   if (groups.includes(MANAGER_GROUP)) return 'manager';
   return 'user';
 }
@@ -140,8 +139,8 @@ async function main() {
               department:   u.department,
               directorate:  u.directorate,
               title:        u.title,
-              // Rol: mevcut admin/manager ise koru, yoksa AD'den al
-              role: existing.role === 'admin' ? 'admin' : u.role,
+              // Rol: AD'den gelen rolü kullan (admin yetkisi UserRole tablosundan yönetilir)
+              role: u.role,
             },
           });
           updated++;

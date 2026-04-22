@@ -65,7 +65,7 @@ router.post('/', async (req, res) => {
 // PUT /api/gelistirme/:id
 router.put('/:id', async (req, res) => {
   try {
-    const rol = req.user?.role;
+    const rol = req.user?.sistemRol || req.user?.role;
     if (!['admin', 'mudur', 'daire_baskani'].includes(rol)) {
       return res.status(403).json({ error: 'Yetki yok' });
     }

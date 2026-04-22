@@ -4,14 +4,14 @@ const { getTlsOptions } = require('../utils/tls');
 
 // ── PBS_PERSONEL config (mevcut) ─────────────────────────────────────────────
 const PBS_CONFIG = {
-  sisUrl: process.env.FLEXCITY_SIS_URL || 'https://ybs.mugla.bel.tr:8081/FlexCityUi/rest/json/sis/RestDataset',
-  kbsUrl: process.env.FLEXCITY_KBS_URL || 'https://ybs.mugla.bel.tr:8081/FlexCityUi/rest/json/kbs/FindAllKbsOrgutDto',
+  sisUrl: process.env.FLEXCITY_SIS_URL || 'https://ybs.mugla.bel.tr:8071/FlexCityUi/rest/json/sis/RestDataset',
+  kbsUrl: process.env.FLEXCITY_KBS_URL || 'https://ybs.mugla.bel.tr:8071/FlexCityUi/rest/json/kbs/FindAllKbsOrgutDto',
   apiKey: process.env.FLEXCITY_API_KEY || 'njSVunfF3IrwRwQ0kK2eyMjHiswYWZSinNKPLQGLb1oqo2eJF4ujQ4UgzNqaQgp8NAwmW0RrhG83eklHMiIcq5cTLTJJjhguewKJAvS8HUkZBAYqZNbLmt2sgmboqC4Z',
   appKey: process.env.FLEXCITY_APP_KEY || 'PBS_PERSONEL',
 };
 
 // ── BASKAN config (yeni - BSK_ dataset'leri) ──────────────────────────────────
-const BSK_URL     = 'https://ybs.mugla.bel.tr:8081/FlexCityUi/rest/json/sis/RestDataset';
+const BSK_URL     = 'https://ybs.mugla.bel.tr:8071/FlexCityUi/rest/json/sis/RestDataset';
 const BSK_APP_KEY = 'BASKAN';
 const BSK_SEC     = 'PWMDLIFeSmJstN8ajtdsrPDgqfXah6vvhNyOrWUVAWWuv3s3UJWqeZHPQeVN9ir8a3SnDfRTEshxzDEOJBXxTvm90rRvtnHzPGItXk85S9w7fV0olahstdImheIo7Idp';
 

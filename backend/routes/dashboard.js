@@ -51,14 +51,15 @@ function isSlaBreached(ticket, slaHours) {
 
 // ─── GET /api/dashboard/manager-stats ────────────────────────────────────────
 router.get('/manager-stats', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  const rol = req.user.sistemRol || req.user.role;
+  if (!['admin', 'manager'].includes(rol))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const { period = 'month' } = req.query;
   const { start, end, prevStart, prevEnd } = periodRange(period);
 
   // Manager → kendi birimi; Admin → tüm birimler (case-insensitive)
-  const dirFilter = (req.user.role === 'manager' && req.user.directorate)
+  const dirFilter = (rol === 'manager' && req.user.directorate)
     ? { createdBy: { directorate: { equals: req.user.directorate, mode: 'insensitive' } } }
     : {};
 

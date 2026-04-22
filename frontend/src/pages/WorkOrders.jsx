@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
@@ -323,6 +324,7 @@ function WOModal({ initial, onSave, onClose, groups, departments }) {
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 export default function WorkOrders() {
   const { user }                      = useAuth();
+  const location                      = useLocation();
   const [orders, setOrders]           = useState([]);
   const [loading, setLoading]         = useState(true);
   const [groups, setGroups]           = useState([]);
@@ -331,6 +333,7 @@ export default function WorkOrders() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMine, setFilterMine]   = useState(false);
   const dragId = useRef(null);
+  const linkedTicketId = new URLSearchParams(location.search).get('ticketId') || '';
 
   async function load() {
     setLoading(true);
@@ -338,6 +341,7 @@ export default function WorkOrders() {
       const params = new URLSearchParams();
       if (filterStatus) params.set('status', filterStatus);
       if (filterMine)   params.set('myOrders', 'true');
+      if (linkedTicketId) params.set('ticketId', linkedTicketId);
       const r = await authFetch(`${API}/api/work-orders?${params}`);
       if (r.ok) setOrders(await r.json());
     } finally { setLoading(false); }
@@ -345,7 +349,7 @@ export default function WorkOrders() {
 
   useEffect(() => {
     load();
-  }, [filterStatus, filterMine]);
+  }, [filterStatus, filterMine, linkedTicketId]);
 
   useEffect(() => {
     authFetch(`${API}/api/groups`)
@@ -426,7 +430,9 @@ export default function WorkOrders() {
         <PageHeader
           icon={<i className="bi bi-kanban text-xl" />}
           title="İş Emirleri"
-          description="Görevleri kanban görünümünde izleyin, duruma göre sürükleyip bırakın ve ekip akışını tek ekranda yönetin."
+          description={linkedTicketId
+            ? `Ticket #${linkedTicketId} ile ilişkili iş emirlerini izleyin ve operasyon akışını tek yerden yönetin.`
+            : 'Görevleri kanban görünümünde izleyin, duruma göre sürükleyip bırakın ve ekip akışını tek ekranda yönetin.'}
           meta={`${orders.length} iş emri • ${openOrders} açık iş • ${overdueOrders} geciken iş`}
           actions={(
             <>

@@ -1,0 +1,2 @@
+[safe]
+	directory = %(prefix)///10.100.40.135/belediye-portal/

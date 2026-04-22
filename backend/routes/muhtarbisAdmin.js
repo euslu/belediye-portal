@@ -89,18 +89,33 @@ router.delete('/roller/:username', requireMuhtarlikRole('mudur'), async (req, re
 });
 
 // GET /api/muhtarbis/admin/daire-personel — AD'den personel listesi (müdür+)
+// ?q=arama (isim/username), ?daire=daire (isteğe bağlı)
 router.get('/daire-personel', requireMuhtarlikRole('mudur'), async (req, res) => {
   try {
     const daire = req.query.daire || '';
-    const where = daire
-      ? { directorate: { contains: daire, mode: 'insensitive' } }
-      : {};
+    const q     = req.query.q || '';
+
+    const where = {};
+    if (daire) {
+      where.directorate = { contains: daire, mode: 'insensitive' };
+    }
+    if (q && q.length >= 2) {
+      where.OR = [
+        { displayName: { contains: q, mode: 'insensitive' } },
+        { username:    { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    // En az bir filtre olmalı (tüm DB'yi çekmeyelim)
+    if (!daire && !q) {
+      return res.json([]);
+    }
 
     const personel = await prisma.user.findMany({
       where,
       select: { username: true, displayName: true, title: true, department: true, directorate: true },
       orderBy: { displayName: 'asc' },
-      take: 200,
+      take: 50,
     });
     res.json(personel);
   } catch (e) {

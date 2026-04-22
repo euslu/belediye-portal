@@ -54,26 +54,23 @@ function parseCN(dnList) {
 }
 
 function getRole(groups) {
-  const adminGroup   = process.env.AD_ADMIN_GROUP   || 'Domain Admins';
+  // NOT: Domain Admins → portal admin yapılmaz. Admin yetkisi sadece UserRole tablosundan gelir.
   const managerGroup = process.env.AD_MANAGER_GROUP || 'int_bislem';
-  if (groups.includes(adminGroup))   return 'admin';
   if (groups.includes(managerGroup)) return 'manager';
   return 'user';
 }
 
 // AD gruplarından sistemRol çıkar (UserRole tablosu yoksa fallback)
+// NOT: AD grupları en fazla 'mudur' seviyesi verebilir. Admin yetkisi sadece UserRole tablosundan gelir.
 function getADSistemRol(groups = []) {
-  // Sadece kesin bilinen portal grup adlarıyla eşleştir — substring match kullanma
-  if (groups.some(g => ['portal-admin', 'IT-Admin', 'Domain Admins'].includes(g)))
-    return 'admin';
   if (groups.some(g => ['portal-manager', 'int_bislem'].includes(g)))
     return 'mudur';
   return 'personel';
 }
 
 // Mevcut User.role → sistemRol mapping (UserRole tablosu yoksa)
+// NOT: User.role='admin' artık sistemRol='admin' vermez. Admin yetkisi sadece UserRole tablosundan gelir.
 function rolToSistemRol(role) {
-  if (role === 'admin')   return 'admin';
   if (role === 'manager') return 'mudur';
   return 'personel';
 }

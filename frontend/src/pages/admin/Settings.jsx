@@ -34,7 +34,13 @@ function Input({ value, onChange, type = 'text', placeholder, disabled }) {
     <input
       type={type} value={value ?? ''} onChange={e => onChange(e.target.value)}
       placeholder={placeholder} disabled={disabled}
-      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400"
+      style={{
+        width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '8px 12px',
+        fontSize: 14, outline: 'none', background: disabled ? '#f8fafc' : '#fff',
+        color: disabled ? '#9ca3af' : '#1e293b', transition: 'border-color 0.15s',
+      }}
+      onFocus={e => e.currentTarget.style.borderColor = '#34d399'}
+      onBlur={e => e.currentTarget.style.borderColor = '#e5e7eb'}
     />
   );
 }
@@ -42,14 +48,20 @@ function Input({ value, onChange, type = 'text', placeholder, disabled }) {
 function PasswordInput({ value, onChange, placeholder }) {
   const [show, setShow] = useState(false);
   return (
-    <div className="relative">
+    <div style={{ position: 'relative' }}>
       <input
         type={show ? 'text' : 'password'} value={value ?? ''} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        style={{
+          width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '8px 12px',
+          paddingRight: 36, fontSize: 14, outline: 'none', transition: 'border-color 0.15s',
+          boxSizing: 'border-box',
+        }}
+        onFocus={e => e.currentTarget.style.borderColor = '#34d399'}
+        onBlur={e => e.currentTarget.style.borderColor = '#e5e7eb'}
       />
       <button type="button" onClick={() => setShow(s => !s)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
+        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#94a3b8' }}>
         {show ? '🙈' : '👁️'}
       </button>
     </div>
@@ -79,24 +91,24 @@ function TestResult({ result }) {
 }
 
 const BTN = {
-  primary: { background:'#4f46e5', color:'#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
-  teal:    { background:'#0d9488', color:'#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
-  violet:  { background:'#7c3aed', color:'#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer' },
-  outline: { background:'#fff',    color:'#374151', border:'1px solid #d1d5db', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:500, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
-  sm:      { background:'#4f46e5', color:'#fff', border:'none', borderRadius:6, padding:'5px 12px', fontSize:12, fontWeight:600, cursor:'pointer' },
-  gray:    { background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:500, cursor:'pointer' },
+  primary: { background:'linear-gradient(135deg, #43DC80 0%, #34d399 100%)', color:'#fff', border:'none', borderRadius:14, padding:'9px 20px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
+  teal:    { background:'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)', color:'#fff', border:'none', borderRadius:14, padding:'9px 20px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
+  violet:  { background:'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)', color:'#fff', border:'none', borderRadius:14, padding:'9px 20px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
+  outline: { background:'#fff', color:'#374151', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'9px 20px', fontSize:13, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
+  sm:      { background:'linear-gradient(135deg, #43DC80 0%, #34d399 100%)', color:'#fff', border:'none', borderRadius:10, padding:'5px 14px', fontSize:12, fontWeight:600, cursor:'pointer' },
+  gray:    { background:'#fff', color:'#475569', border:'1.5px solid #e5e7eb', borderRadius:14, padding:'7px 14px', fontSize:12, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 },
 };
 
 function SaveButton({ onClick, loading }) {
   return (
-    <Button onClick={onClick} disabled={loading} color="blue">
+    <button onClick={onClick} disabled={loading} className="portal-cta-btn portal-cta-btn--green" style={{ opacity: loading ? 0.6 : 1 }}>
       {loading ? 'Kaydediliyor…' : (
         <>
-          <i className="bi bi-floppy mr-2" />
+          <i className="bi bi-floppy" style={{ marginRight: 6 }} />
           Kaydet
         </>
       )}
-    </Button>
+    </button>
   );
 }
 
@@ -433,7 +445,8 @@ function ServicesTab() {
                   <button
                     onClick={() => run(meta.runKey)}
                     disabled={!!running[meta.runKey]}
-                    style={{ background:'#eef2ff', color:'#4338ca', border:'1px solid #c7d2fe', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:600, cursor:'pointer', opacity:running[meta.runKey]?0.5:1 }}
+                    className="portal-pill-btn"
+                    style={{ padding:'6px 14px', fontSize:12, opacity:running[meta.runKey]?0.5:1 }}
                   >
                     {running[meta.runKey] ? 'Çalışıyor…' : '▶ Çalıştır'}
                   </button>
@@ -448,8 +461,10 @@ function ServicesTab() {
 }
 
 const TAB_GROUPS = [
+  // ─── Üst satır ───
   {
     title: 'SİSTEM',
+    row: 1,
     tabs: [
       { key: 'GENERAL', label: 'Genel' },
       { key: 'AD',      label: 'Aktif Dizin' },
@@ -457,16 +472,26 @@ const TAB_GROUPS = [
   },
   {
     title: 'ENTEGRASYONLAR',
+    row: 1,
     tabs: [
-      { key: 'SMTP',        label: 'E-Posta' },
-      { key: 'PDKS',        label: 'PDKS' },
-      { key: 'FLEXCITY',    label: 'FlexCity' },
-      { key: 'ULAKBELL',    label: 'ulakBELL' },
+      { key: 'SMTP',         label: 'E-Posta' },
+      { key: 'PDKS',         label: 'PDKS' },
+      { key: 'FLEXCITY',     label: 'FlexCity' },
+      { key: 'ULAKBELL',     label: 'ulakBELL' },
       { key: 'MANAGEENGINE', label: 'ManageEngine EPC' },
     ],
   },
   {
+    title: 'YETKİLER',
+    row: 1,
+    tabs: [
+      { key: 'RBAC', label: 'Kullanıcı Yetkileri' },
+    ],
+  },
+  // ─── Alt satır ───
+  {
     title: 'PORTAL',
+    row: 2,
     tabs: [
       { key: 'DASHBOARD',    label: 'Dashboard' },
       { key: 'GS_DASHBOARD', label: 'GS Paneli' },
@@ -477,13 +502,8 @@ const TAB_GROUPS = [
     ],
   },
   {
-    title: 'YETKİLER',
-    tabs: [
-      { key: 'RBAC', label: 'Kullanıcı Yetkileri' },
-    ],
-  },
-  {
     title: 'İZLEME',
+    row: 2,
     tabs: [
       { key: 'SERVICES', label: 'Servis Durumları' },
     ],
@@ -539,6 +559,9 @@ export default function Settings() {
   const [grupDaire, setGrupDaire]                 = useState('');
   const [grupDaireler, setGrupDaireler]           = useState([]);
   const [grupMudurlukleri, setGrupMudurlukleri]   = useState([]);
+  const [modalUyeler, setModalUyeler]             = useState([]);
+  const [modalUyeArama, setModalUyeArama]         = useState('');
+  const [duzenleGrupId, setDuzenleGrupId]         = useState(null);
   const [grupAcik, setGrupAcik]                   = useState({});
   const [uyeEkleArama, setUyeEkleArama]           = useState({});
   const [liderAtaAcik, setLiderAtaAcik]           = useState({});
@@ -685,16 +708,61 @@ export default function Settings() {
 
   const yeniGrupKaydet = async () => {
     if (!yeniGrup.ad.trim()) return;
+    const uyePayload = modalUyeler.map(u => ({ username: u.username, displayName: u.displayName, rol: 'uye' }));
     const r = await authFetch(`${API}/api/calisma-grubu`, {
-      method: 'POST', body: JSON.stringify(yeniGrup),
+      method: 'POST', body: JSON.stringify({ ...yeniGrup, directorate: grupDaire, uyeler: uyePayload }),
     });
     if (r.ok) {
       const grup = await r.json();
       setCalismaGruplari(prev => [grup, ...prev]);
-      setYeniGrupModal(false);
-      setYeniGrup({ ad: '', aciklama: '', department: '' });
-      setGrupDaire('');
-      setGrupMudurlukleri([]);
+      grupModalKapat();
+    }
+  };
+
+  const grupModalKapat = () => {
+    setYeniGrupModal(false);
+    setYeniGrup({ ad: '', aciklama: '', department: '' });
+    setGrupDaire('');
+    setGrupMudurlukleri([]);
+    setModalUyeler([]);
+    setModalUyeArama('');
+    setDuzenleGrupId(null);
+  };
+
+  const grupDuzenleAc = (grup) => {
+    setDuzenleGrupId(grup.id);
+    setYeniGrup({ ad: grup.ad, aciklama: grup.aciklama || '', department: grup.department || '' });
+    setGrupDaire(grup.directorate || '');
+    setModalUyeler(grup.uyeler || []);
+    setYeniGrupModal(true);
+  };
+
+  const grupGuncelle = async () => {
+    if (!yeniGrup.ad.trim() || !duzenleGrupId) return;
+    const r = await authFetch(`${API}/api/calisma-grubu/${duzenleGrupId}`, {
+      method: 'PUT', body: JSON.stringify({ ad: yeniGrup.ad, aciklama: yeniGrup.aciklama }),
+    });
+    if (r.ok) {
+      // Üye değişikliklerini senkronize et
+      const mevcut = calismaGruplari.find(g => g.id === duzenleGrupId);
+      const mevcutUsernames = (mevcut?.uyeler || []).map(u => u.username);
+      const yeniUsernames = modalUyeler.map(u => u.username);
+      // Eklenecekler
+      for (const u of modalUyeler) {
+        if (!mevcutUsernames.includes(u.username)) {
+          await authFetch(`${API}/api/calisma-grubu/${duzenleGrupId}/uye`, {
+            method: 'POST', body: JSON.stringify({ username: u.username, displayName: u.displayName, rol: 'uye' }),
+          });
+        }
+      }
+      // Çıkarılacaklar
+      for (const username of mevcutUsernames) {
+        if (!yeniUsernames.includes(username)) {
+          await authFetch(`${API}/api/calisma-grubu/${duzenleGrupId}/uye/${username}`, { method: 'DELETE' });
+        }
+      }
+      await loadCalismaGruplari();
+      grupModalKapat();
     }
   };
 
@@ -1086,6 +1154,21 @@ export default function Settings() {
       <Field label="SLA Bildirim Tekrarı (saat)" hint="SLA yaklaşırken kaç saatte bir bildirim gönderilsin">
         <Input value={get('notify_interval_hours', '2')} onChange={v => set('notify_interval_hours', v)} type="number" placeholder="2" />
       </Field>
+      <div className="border-t border-gray-100 my-5" />
+      <h4 className="text-sm font-semibold text-gray-700 mb-3">Görev İade Nedenleri</h4>
+      <Field label="İade Nedenleri" hint="Her satıra bir neden yazın. Personel iade talebi oluştururken bu listeden seçim yapar.">
+        <textarea
+          value={sla.iade_nedenleri ?? 'Yanlış gruba atandı\nKonu uzmanlık alanım dışında\nİş yoğunluğu nedeniyle\nEksik/hatalı bilgi\nDiğer'}
+          onChange={e => setSla(prev => ({ ...prev, iade_nedenleri: e.target.value }))}
+          rows={5}
+          style={{
+            width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '8px 12px',
+            fontSize: 14, outline: 'none', resize: 'vertical', transition: 'border-color 0.15s',
+          }}
+          onFocus={e => e.currentTarget.style.borderColor = '#34d399'}
+          onBlur={e => e.currentTarget.style.borderColor = '#e5e7eb'}
+        />
+      </Field>
       <div className="pt-2 flex items-center gap-3">
         <button onClick={saveSla} disabled={saving} style={{ ...BTN.primary, opacity: saving?0.6:1 }}>
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
@@ -1381,14 +1464,12 @@ export default function Settings() {
     return (
       <div>
         {/* Alt sekme bar */}
-        <div style={{ display:'flex', gap:4, marginBottom:20, borderBottom:'1px solid #e2e8f0', paddingBottom:0 }}>
+        <div style={{ display:'flex', gap:6, marginBottom:20 }}>
           {[['ROLLER','👥 Kullanıcı Rolleri'],['CALISMA_GRUPLARI','🏢 Çalışma Grupları']].map(([key, label]) => (
-            <button key={key} onClick={() => setRbacSubTab(key)} style={{
-              padding:'8px 18px', fontSize:13, fontWeight: rbacSubTab===key ? 600 : 400,
-              border:'none', background:'transparent', cursor:'pointer',
-              borderBottom: rbacSubTab===key ? '2.5px solid #6366f1' : '2.5px solid transparent',
-              color: rbacSubTab===key ? '#6366f1' : '#64748b', transition:'all .15s',
-            }}>{label}</button>
+            <button key={key} onClick={() => setRbacSubTab(key)}
+              className={`portal-pill-btn ${rbacSubTab===key ? 'portal-pill-btn--green' : ''}`}
+              style={{ fontSize: 13 }}
+            >{label}</button>
           ))}
         </div>
 
@@ -1487,7 +1568,7 @@ export default function Settings() {
                             <td style={{ padding:'9px 12px' }}>
                               {degisti && (
                                 <button onClick={() => rbacKullaniciKaydet(u.username)} disabled={rbacKaydediliyor[u.username]}
-                                  style={{ padding:'4px 12px', borderRadius:6, border:'none', background:'#6366f1', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer', opacity:rbacKaydediliyor[u.username]?0.6:1 }}>
+                                  style={{ padding:'4px 14px', borderRadius:10, border:'none', background:'linear-gradient(135deg, #43DC80, #34d399)', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer', opacity:rbacKaydediliyor[u.username]?0.6:1 }}>
                                   {rbacKaydediliyor[u.username] ? '…' : 'Kaydet'}
                                 </button>
                               )}
@@ -1518,18 +1599,19 @@ export default function Settings() {
                 <div style={{ fontWeight:700, fontSize:15, color:'#1e293b' }}>Çalışma Grupları</div>
                 <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Müdürlük bazlı çalışma grupları ve takım liderleri</div>
               </div>
-              <button onClick={() => setYeniGrupModal(true)}
-                style={{ padding:'8px 16px', borderRadius:8, border:'none', background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              <button onClick={() => setYeniGrupModal(true)} className="portal-cta-btn portal-cta-btn--green" style={{ fontSize: 13 }}>
                 + Yeni Grup
               </button>
             </div>
 
-            {/* Yeni grup modal */}
+            {/* Grup oluştur / düzenle modal */}
             {yeniGrupModal && (
               <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-                onClick={e => { if(e.target===e.currentTarget) setYeniGrupModal(false); }}>
-                <div style={{ background:'#fff', borderRadius:16, padding:28, width:420, boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
-                  <div style={{ fontWeight:700, fontSize:16, color:'#1e293b', marginBottom:16 }}>Yeni Çalışma Grubu</div>
+                onClick={e => { if(e.target===e.currentTarget) grupModalKapat(); }}>
+                <div style={{ background:'#fff', borderRadius:16, padding:28, width:520, maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+                  <div style={{ fontWeight:700, fontSize:16, color:'#1e293b', marginBottom:16 }}>
+                    {duzenleGrupId ? 'Çalışma Grubunu Düzenle' : 'Yeni Çalışma Grubu'}
+                  </div>
                   <div style={{ marginBottom:12 }}>
                     <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Grup Adı *</label>
                     <input value={yeniGrup.ad} onChange={e => setYeniGrup(p=>({...p,ad:e.target.value}))}
@@ -1542,26 +1624,85 @@ export default function Settings() {
                       placeholder="Kısa açıklama…"
                       style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:13, boxSizing:'border-box' }} />
                   </div>
-                  <div style={{ marginBottom:12 }}>
-                    <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Daire Başkanlığı</label>
-                    <select value={grupDaire} onChange={e => { setGrupDaire(e.target.value); setYeniGrup(p=>({...p,department:''})); }}
-                      style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
-                      <option value="">— Daire seçin —</option>
-                      {grupDaireler.map(d => <option key={d.ad} value={d.ad}>{d.ad}</option>)}
-                    </select>
+                  {!duzenleGrupId && (<>
+                    <div style={{ marginBottom:12 }}>
+                      <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Daire Başkanlığı</label>
+                      <select value={grupDaire} onChange={e => { setGrupDaire(e.target.value); setYeniGrup(p=>({...p,department:''})); }}
+                        style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
+                        <option value="">— Daire seçin —</option>
+                        {grupDaireler.map(d => <option key={d.ad} value={d.ad}>{d.ad}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ marginBottom:16 }}>
+                      <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Müdürlük</label>
+                      <select value={yeniGrup.department} onChange={e => setYeniGrup(p=>({...p,department:e.target.value}))}
+                        disabled={!grupDaire}
+                        style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:grupDaire?'#f8fafc':'#f1f5f9', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
+                        <option value="">— Müdürlük seçin (isteğe bağlı) —</option>
+                        {grupMudurlukleri.map(m => <option key={m.ad} value={m.ad}>{m.ad}</option>)}
+                      </select>
+                    </div>
+                  </>)}
+
+                  {/* Üyeler bölümü */}
+                  <div style={{ marginBottom:16 }}>
+                    <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:6 }}>
+                      Üyeler {modalUyeler.length > 0 && <span style={{ color:'#0ea5e9' }}>({modalUyeler.length})</span>}
+                    </label>
+                    {modalUyeler.length > 0 && (
+                      <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:8, maxHeight:160, overflowY:'auto' }}>
+                        {modalUyeler.map(u => (
+                          <div key={u.username} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'5px 10px', borderRadius:8, background:'#f8fafc', border:'1px solid #f1f5f9' }}>
+                            <div style={{ fontSize:13, color:'#374151' }}>
+                              {u.displayName || u.username}
+                              <span style={{ fontSize:11, color:'#94a3b8', marginLeft:6 }}>{u.username}</span>
+                            </div>
+                            <button onClick={() => setModalUyeler(prev => prev.filter(x => x.username !== u.username))}
+                              style={{ padding:'2px 8px', borderRadius:6, border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', fontSize:11, color:'#94a3b8' }}>
+                              &times;
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ position:'relative' }}>
+                      <input
+                        value={modalUyeArama}
+                        onChange={e => setModalUyeArama(e.target.value)}
+                        placeholder="Üye eklemek için isim ara (min 2 karakter)…"
+                        style={{ width:'100%', padding:'8px 12px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:13, boxSizing:'border-box' }}
+                      />
+                      {modalUyeArama.length >= 2 && (() => {
+                        const arama = modalUyeArama.toLowerCase();
+                        const sonuclar = rbacKullanicilar
+                          .filter(u => (u.displayName?.toLowerCase().includes(arama) || u.username?.toLowerCase().includes(arama))
+                            && !modalUyeler.find(m => m.username === u.username))
+                          .slice(0, 8);
+                        if (sonuclar.length === 0) return null;
+                        return (
+                          <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:10, background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.1)', marginTop:4, maxHeight:200, overflowY:'auto' }}>
+                            {sonuclar.map(u => (
+                              <div key={u.username}
+                                onClick={() => { setModalUyeler(prev => [...prev, { username: u.username, displayName: u.displayName }]); setModalUyeArama(''); }}
+                                style={{ padding:'7px 12px', cursor:'pointer', fontSize:13, color:'#374151', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between' }}
+                                onMouseEnter={e => e.currentTarget.style.background='#f0f9ff'}
+                                onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                                <span>{u.displayName}</span>
+                                <span style={{ fontSize:11, color:'#94a3b8' }}>{u.username}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
-                  <div style={{ marginBottom:20 }}>
-                    <label style={{ fontSize:12, fontWeight:600, color:'#64748b', display:'block', marginBottom:4 }}>Müdürlük</label>
-                    <select value={yeniGrup.department} onChange={e => setYeniGrup(p=>({...p,department:e.target.value}))}
-                      disabled={!grupDaire}
-                      style={{ width:'100%', padding:'9px 12px', fontSize:13, border:'1.5px solid #e2e8f0', borderRadius:8, background:grupDaire?'#f8fafc':'#f1f5f9', color:'#1e293b', outline:'none', boxSizing:'border-box' }}>
-                      <option value="">— Müdürlük seçin (isteğe bağlı) —</option>
-                      {grupMudurlukleri.map(m => <option key={m.ad} value={m.ad}>{m.ad}</option>)}
-                    </select>
-                  </div>
+
                   <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-                    <button onClick={() => setYeniGrupModal(false)} style={{ padding:'8px 16px', borderRadius:8, border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontSize:13 }}>İptal</button>
-                    <button onClick={yeniGrupKaydet} disabled={!yeniGrup.ad.trim()} style={{ padding:'8px 18px', borderRadius:8, border:'none', background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', opacity:!yeniGrup.ad.trim()?0.5:1 }}>Kaydet</button>
+                    <button onClick={grupModalKapat} className="portal-pill-btn" style={{ fontSize:13 }}>İptal</button>
+                    <button onClick={duzenleGrupId ? grupGuncelle : yeniGrupKaydet} disabled={!yeniGrup.ad.trim()}
+                      className="portal-cta-btn portal-cta-btn--green" style={{ fontSize:13, opacity:!yeniGrup.ad.trim()?0.5:1 }}>
+                      {duzenleGrupId ? 'Güncelle' : 'Kaydet'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1609,6 +1750,10 @@ export default function Settings() {
                           <span style={{ fontSize:11, color:'#64748b', background:'#f1f5f9', padding:'3px 10px', borderRadius:99 }}>
                             👥 {grup._count?.uyeler ?? grup.uyeler?.length ?? 0} üye
                           </span>
+                          <button onClick={() => grupDuzenleAc(grup)}
+                            style={{ padding:'5px 12px', borderRadius:8, border:'1px solid #bfdbfe', background:'#eff6ff', cursor:'pointer', fontSize:12, color:'#2563eb', fontWeight:500 }}>
+                            Düzenle
+                          </button>
                           <button onClick={() => setGrupAcik(p => ({ ...p, [grup.id]: !p[grup.id] }))}
                             style={{ padding:'5px 12px', borderRadius:8, border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontSize:12, color:'#64748b' }}>
                             {acik ? '▲ Kapat' : '▼ Üyeler'}
@@ -1726,35 +1871,65 @@ export default function Settings() {
           meta={isDaireBaskani ? 'Daire başkanı görünümü: yalnızca yetki alanları açık' : 'Yönetim paneli görünümü'}
         />
 
-        <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
-          <Surface className="p-3">
-            <nav>
-          {GORUNUR_TAB_GROUPS.map(group => (
-            <div key={group.title} className="mt-4 first:mt-0">
-              <p className="px-4 mb-2 text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase">
-                {group.title}
-              </p>
-              {group.tabs.map(t => {
-                const active = activeTab === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    onClick={() => setActiveTab(t.key)}
-                    className={`block w-full rounded-xl border text-left transition px-4 py-2.5 text-sm ${
-                      active
-                        ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-blue-50 font-semibold text-emerald-700 shadow-sm'
-                        : 'border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-            </nav>
-          </Surface>
+        {/* Sekme Satırları */}
+        {(() => {
+          const GROUP_COLORS = {
+            'SİSTEM':         { border: '#c7d2fe', bg: '#eef2ff', label: '#6366f1' },
+            'ENTEGRASYONLAR': { border: '#a7f3d0', bg: '#ecfdf5', label: '#059669' },
+            'YETKİLER':       { border: '#fde68a', bg: '#fffbeb', label: '#d97706' },
+            'PORTAL':         { border: '#bfdbfe', bg: '#eff6ff', label: '#2563eb' },
+            'İZLEME':         { border: '#e9d5ff', bg: '#faf5ff', label: '#7c3aed' },
+          };
+          return [1, 2].map(row => {
+            const rowGroups = GORUNUR_TAB_GROUPS.filter(g => g.row === row);
+            if (!rowGroups.length) return null;
+            return (
+              <div key={row} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: row === 1 ? 0 : undefined }}>
+                {rowGroups.map(group => {
+                  const gc = GROUP_COLORS[group.title] || { border: '#e2e8f0', bg: '#f8fafc', label: '#64748b' };
+                  return (
+                    <div key={group.title} style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      border: `1.5px solid ${gc.border}`, borderRadius: 12,
+                      background: gc.bg, padding: '8px 14px',
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: gc.label, marginRight: 6, whiteSpace: 'nowrap', opacity: 0.7 }}>
+                        {group.title}
+                      </span>
+                      {group.tabs.map(t => {
+                        const active = activeTab === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            onClick={() => setActiveTab(t.key)}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: 8,
+                              border: active ? '1.5px solid #34d399' : '1.5px solid rgba(0,0,0,0.06)',
+                              background: active ? '#fff' : 'rgba(255,255,255,0.7)',
+                              color: active ? '#059669' : '#475569',
+                              fontSize: 12, fontWeight: active ? 600 : 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                              whiteSpace: 'nowrap',
+                              boxShadow: active ? '0 0 0 3px rgba(52,211,153,0.12), 0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                            }}
+                            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+                            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}}
+                          >
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          });
+        })()}
 
+        <div>
           <Surface className="min-w-0 p-8">
             {activeTab === 'SUBJECTS' ? <AdminCategoriesPage /> :
              activeTab === 'AD_CHANGES' ? <AdChangesPage /> :

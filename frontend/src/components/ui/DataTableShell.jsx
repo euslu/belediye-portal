@@ -30,17 +30,21 @@ export default function DataTableShell({
           title={title}
           description={description}
           meta={meta}
-          actions={actions}
         />
 
-        {tabs?.length > 0 && (
+        {(tabs?.length > 0 || actions) && (
           <Surface className="p-4">
-            <FilterTabs
-              tabs={tabs}
-              value={activeTab}
-              onChange={onTabChange}
-              getCount={getTabCount}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              {tabs?.length > 0 && (
+                <FilterTabs
+                  tabs={tabs}
+                  value={activeTab}
+                  onChange={onTabChange}
+                  getCount={getTabCount}
+                />
+              )}
+              {actions && <div style={{ flexShrink: 0 }}>{actions}</div>}
+            </div>
           </Surface>
         )}
 

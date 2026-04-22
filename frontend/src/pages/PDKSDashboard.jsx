@@ -15,6 +15,33 @@ function authFetch(url, opts = {}) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+const PER_PAGE = 50;
+
+// ─── Sayfalama ───────────────────────────────────────────────────────────────
+function Pagination({ page, totalPages, total, onPage }) {
+  if (totalPages <= 1) return null;
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) pages.push(i);
+    else if (pages[pages.length - 1] !== '...') pages.push('...');
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f1f5f9' }}>
+      <span style={{ fontSize: 12, color: '#9ca3af' }}>Toplam {total} kayıt</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button onClick={() => onPage(page - 1)} disabled={page <= 1}
+          style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: page <= 1 ? '#d1d5db' : '#374151', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
+        {pages.map((p, i) => p === '...'
+          ? <span key={`d${i}`} style={{ padding: '4px 6px', fontSize: 12, color: '#9ca3af' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)}
+              style={{ padding: '4px 10px', fontSize: 12, borderRadius: 6, border: '1px solid', borderColor: p === page ? '#4f46e5' : '#e2e8f0', background: p === page ? '#4f46e5' : '#fff', color: p === page ? '#fff' : '#374151', cursor: 'pointer', fontWeight: p === page ? 600 : 400 }}>{p}</button>
+        )}
+        <button onClick={() => onPage(page + 1)} disabled={page >= totalPages}
+          style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: page >= totalPages ? '#d1d5db' : '#374151', cursor: page >= totalPages ? 'default' : 'pointer' }}>›</button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Stat Kartı ───────────────────────────────────────────────────────────────
 function StatCard({ label, value, total, color, icon }) {
@@ -69,6 +96,7 @@ function SearchInput({ value, onChange, placeholder }) {
 function TabDevam({ date, directorate, externalFilter, externalSearch }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(1);
   const search = externalSearch || '';
   const filter = externalFilter || 'TUMU';
 
@@ -83,12 +111,18 @@ function TabDevam({ date, directorate, externalFilter, externalSearch }) {
       .finally(() => setLoading(false));
   }, [date, directorate]);
 
+  // Filtre/arama değişince sayfa 1'e dön
+  useEffect(() => { setPage(1); }, [filter, search]);
+
   const filtered = useMemo(() => {
     let list = rows;
     if (filter !== 'TUMU') list = list.filter(r => r.durum === filter);
     if (search) list = list.filter(r => r.adSoyad?.toLowerCase().includes(search.toLowerCase()));
     return list;
   }, [rows, filter, search]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const counts = useMemo(() => ({
     TUMU: rows.length,
@@ -119,7 +153,7 @@ function TabDevam({ date, directorate, externalFilter, externalSearch }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((r, i) => (
+                {paged.map((r, i) => (
                   <tr key={i} className={`hover:bg-gray-50 ${r.durum === 'GELMEDI' ? 'bg-red-50/30' : ''}`}>
                     <td className="px-5 py-2.5 font-medium text-gray-800">{r.adSoyad}</td>
                     <td className="px-4 py-2.5 text-gray-500 text-xs max-w-[200px] truncate">{r.birim || '—'}</td>
@@ -132,6 +166,7 @@ function TabDevam({ date, directorate, externalFilter, externalSearch }) {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} total={filtered.length} onPage={setPage} />
         </div>
       )}
     </div>
@@ -142,9 +177,11 @@ function TabDevam({ date, directorate, externalFilter, externalSearch }) {
 function TabGecKalanlar({ date, directorate }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(1);
 
   useEffect(() => {
     setLoading(true);
+    setPage(1);
     const params = new URLSearchParams({ date });
     if (directorate) params.set('directorate', directorate);
     authFetch(`${API}/api/pdks/late?${params}`)
@@ -153,6 +190,9 @@ function TabGecKalanlar({ date, directorate }) {
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, [date, directorate]);
+
+  const totalPages = Math.ceil(rows.length / PER_PAGE);
+  const paged = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   if (loading) return <div className="text-center py-16 text-sm text-gray-400">Yükleniyor…</div>;
   if (!rows.length) return <div className="text-center py-12 text-sm text-gray-400">Geç kalan personel yok</div>;
@@ -170,7 +210,7 @@ function TabGecKalanlar({ date, directorate }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
-          {rows.map((r, i) => {
+          {paged.map((r, i) => {
             const [h, m] = (r.ilkGiris || '08:35').split(':').map(Number);
             const diff = (h * 60 + m) - (8 * 60 + 30);
             return (
@@ -187,6 +227,7 @@ function TabGecKalanlar({ date, directorate }) {
           })}
         </tbody>
       </table>
+      <Pagination page={page} totalPages={totalPages} total={rows.length} onPage={setPage} />
     </div>
   );
 }
@@ -196,9 +237,11 @@ function TabIzinler({ date, directorate }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
+  const [page, setPage]       = useState(1);
 
   useEffect(() => {
     setLoading(true);
+    setPage(1);
     const params = new URLSearchParams({ date });
     if (directorate) params.set('directorate', directorate);
     authFetch(`${API}/api/pdks/leaves?${params}`)
@@ -208,9 +251,14 @@ function TabIzinler({ date, directorate }) {
       .finally(() => setLoading(false));
   }, [date, directorate]);
 
+  useEffect(() => { setPage(1); }, [search]);
+
   const filtered = search
     ? rows.filter(r => r.adSoyad?.toLowerCase().includes(search.toLowerCase()))
     : rows;
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   if (loading) return <div className="text-center py-16 text-sm text-gray-400">Yükleniyor…</div>;
 
@@ -235,7 +283,7 @@ function TabIzinler({ date, directorate }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map((r, i) => (
+              {paged.map((r, i) => (
                 <tr key={i} className="hover:bg-gray-50">
                   <td className="px-5 py-2.5 font-medium text-gray-800">{r.adSoyad}</td>
                   <td className="px-4 py-2.5 text-gray-500 text-xs max-w-[200px] truncate">{r.birim || '—'}</td>
@@ -254,6 +302,7 @@ function TabIzinler({ date, directorate }) {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={filtered.length} onPage={setPage} />
         </div>
       )}
     </div>
@@ -371,8 +420,10 @@ export default function PDKSDashboard() {
 
   const tabs = [
     { key: 'devam',   label: 'Devam Listesi',  icon: 'bi-list-check' },
-    { key: 'gec',     label: 'Geç Kalanlar',   icon: 'bi-clock-history' },
-    { key: 'izin',    label: 'İzinler',         icon: 'bi-calendar-minus' },
+    { key: 'geldi',   label: 'Geldi',           icon: 'bi-check-circle' },
+    { key: 'gelmedi', label: 'Gelmedi',         icon: 'bi-x-circle' },
+    { key: 'gec',     label: 'Geç Kalanlar',    icon: 'bi-clock-history' },
+    { key: 'izin',    label: 'İzinliler',       icon: 'bi-calendar-minus' },
     ...(isAdmin ? [{ key: 'ozet', label: 'Daire Özeti', icon: 'bi-building' }] : []),
   ];
 
@@ -469,23 +520,20 @@ export default function PDKSDashboard() {
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); if (t.key !== 'devam') { setDevamFilter('TUMU'); setDevamSearch(''); } }}
+            onClick={() => {
+              setTab(t.key);
+              if (t.key === 'geldi') setDevamFilter('GELDI');
+              else if (t.key === 'gelmedi') setDevamFilter('GELMEDI');
+              else { setDevamFilter('TUMU'); setDevamSearch(''); }
+            }}
             className={`portal-pill-btn text-sm ${tab === t.key ? 'portal-pill-btn--active' : ''}`}
           >
             <i className={`bi ${t.icon}`} />
             {t.label}
           </button>
         ))}
-        {/* Gelmedi kısayol butonu */}
-        <button
-          onClick={() => { setTab('devam'); setDevamFilter('GELMEDI'); }}
-          className={`portal-pill-btn text-sm ${tab === 'devam' && devamFilter === 'GELMEDI' ? 'portal-pill-btn--red' : ''}`}
-        >
-          <i className="bi bi-x-circle" />
-          Gelmedi{overview ? ` (${overview.gelmedi ?? 0})` : ''}
-        </button>
-        {/* Arama — sadece devam tabında */}
-        {tab === 'devam' && (
+        {/* Arama — devam, geldi, gelmedi tablarında */}
+        {['devam', 'geldi', 'gelmedi'].includes(tab) && (
           <div style={{ marginLeft: 'auto' }}>
             <SearchInput value={devamSearch} onChange={setDevamSearch} placeholder="Personel ara…" />
           </div>
@@ -493,9 +541,11 @@ export default function PDKSDashboard() {
       </div>
 
       {/* Tab İçerikleri */}
-      {tab === 'devam' && <TabDevam date={date} directorate={activeDir} externalFilter={devamFilter} externalSearch={devamSearch} />}
-      {tab === 'gec'   && <TabGecKalanlar date={date} directorate={activeDir} />}
-      {tab === 'izin'  && <TabIzinler date={date} directorate={activeDir} />}
+      {tab === 'devam'   && <TabDevam date={date} directorate={activeDir} externalFilter={devamFilter} externalSearch={devamSearch} />}
+      {tab === 'geldi'   && <TabDevam date={date} directorate={activeDir} externalFilter="GELDI" externalSearch={devamSearch} />}
+      {tab === 'gelmedi' && <TabDevam date={date} directorate={activeDir} externalFilter="GELMEDI" externalSearch={devamSearch} />}
+      {tab === 'gec'     && <TabGecKalanlar date={date} directorate={activeDir} />}
+      {tab === 'izin'    && <TabIzinler date={date} directorate={activeDir} />}
       {tab === 'ozet'  && isAdmin && (
         <TabOzet
           date={date}

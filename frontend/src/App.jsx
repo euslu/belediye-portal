@@ -29,6 +29,11 @@ import FlexCityPage             from './pages/FlexCityPage';
 import PersonelDashboard        from './pages/PersonelDashboard';
 import GsmHat                  from './pages/arge/GsmHat';
 import TutanakOlustur          from './pages/arge/TutanakOlustur';
+import Gelistirme              from './pages/Gelistirme';
+import IslemGecmisi            from './pages/IslemGecmisi';
+import LisansYonetimi          from './pages/admin/LisansYonetimi';
+import MenuYetkilendirme       from './pages/admin/MenuYetkilendirme';
+import EnvanterCihazlar        from './pages/admin/EnvanterCihazlar';
 
 
 // Giriş yapılmamışsa /login'e yönlendir
@@ -100,7 +105,8 @@ export default function App() {
             <Route path="admin/categories"  element={<AdminCategories />} />
             <Route path="admin/settings"    element={<AdminSettings />} />
             <Route path="admin/ad-changes"  element={<AdChanges />} />
-            <Route path="admin/envanter"     element={<Envanter />} />
+            <Route path="admin/envanter"          element={<Envanter />} />
+            <Route path="admin/envanter/cihazlar" element={<EnvanterCihazlar />} />
             <Route path="admin/departments" element={<Departments />} />
             <Route path="home"              element={<PersonelDashboard />} />
             <Route path="work-orders"           element={<WorkOrders />} />
@@ -112,6 +118,10 @@ export default function App() {
             <Route path="flexcity"        element={<FlexCityPage />} />
             <Route path="arge/gsm-hat"   element={<GsmHat />} />
             <Route path="arge/tutanak"   element={<TutanakOlustur />} />
+            <Route path="gelistirme"     element={<Gelistirme />} />
+            <Route path="islem-gecmisi"  element={<IslemGecmisi />} />
+            <Route path="admin/lisans-yonetimi" element={<LisansYonetimi />} />
+            <Route path="admin/menu-yetkilendirme" element={<MenuYetkilendirme />} />
 
             <Route path="genel-sekreter" element={
               <GenelSekreterRoute><GenelSekreterDashboard /></GenelSekreterRoute>

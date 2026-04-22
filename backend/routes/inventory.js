@@ -2,12 +2,18 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
+const { getSistemRol } = require('../middleware/rbac');
 
 router.use(authMiddleware);
 
 const logger = require('../utils/logger');
 const { fetchAdComputers, MOCK_COMPUTERS } = require('../lib/adComputers');
 const { syncDevicesFromAD } = require('../lib/adDeviceSync');
+const { matchOwner, runMatchAll, applySelectedMatches } = require('../services/deviceUserMatch');
+const { logIslem } = require('../middleware/auditLog');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const VALID_TYPES = [
   'BILGISAYAR', 'DIZUSTU', 'IPAD_TABLET', 'IP_TELEFON', 'MONITOR',
@@ -15,10 +21,73 @@ const VALID_TYPES = [
 ];
 const VALID_STATUSES = ['ACTIVE', 'PASSIVE', 'BROKEN', 'TRANSFERRED'];
 
+const DEVICE_ACCESS_INCLUDE = {
+  assignedUser: { select: { username: true, displayName: true, directorate: true, department: true } },
+};
+
+function getEffectiveDeviceDirectorate(device) {
+  return device?.directorate || device?.assignedUser?.directorate || null;
+}
+
+function getEffectiveDeviceDepartment(device) {
+  return device?.department || device?.assignedUser?.department || null;
+}
+
+function canAccessDevice(user, device) {
+  const rol = getSistemRol(user);
+  const deviceDirectorate = getEffectiveDeviceDirectorate(device);
+  const deviceDepartment = getEffectiveDeviceDepartment(device);
+
+  if (rol === 'admin') return true;
+
+  if (rol === 'daire_baskani') {
+    if (!user.directorate) return false;
+    return deviceDirectorate === user.directorate;
+  }
+
+  if (rol === 'mudur') {
+    if (user.department && deviceDepartment === user.department) return true;
+    if (user.directorate && !deviceDepartment && deviceDirectorate === user.directorate) return true;
+    return false;
+  }
+
+  return device?.assignedTo === user.username;
+}
+
+async function getDeviceAccessContext(id) {
+  return prisma.device.findUnique({
+    where: { id },
+    include: DEVICE_ACCESS_INCLUDE,
+  });
+}
+
+async function requireDeviceScopeAccess(id, user) {
+  const device = await getDeviceAccessContext(id);
+  if (!device) return { error: 'not_found' };
+  if (!canAccessDevice(user, device)) return { error: 'forbidden' };
+  return { device };
+}
+
+async function requireLicenseScopeAccess(licenseId, user) {
+  const license = await prisma.deviceLicense.findUnique({
+    where: { id: licenseId },
+    include: {
+      device: {
+        include: DEVICE_ACCESS_INCLUDE,
+      },
+    },
+  });
+
+  if (!license) return { error: 'not_found' };
+  if (!license.device) return { error: 'device_not_found' };
+  if (!canAccessDevice(user, license.device)) return { error: 'forbidden' };
+  return { license, device: license.device };
+}
+
 // ─── GET /api/inventory/ad-computers ─────────────────────────────────────────
 // AD'deki bilgisayar nesnelerini çeker, DB ile karşılaştırır
 router.get('/ad-computers', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   try {
@@ -163,6 +232,415 @@ router.get('/by-directorate', async (req, res) => {
   }
 });
 
+// ─── GET /api/inventory/license-management ───────────────────────────────────
+// Lisans yönetimi sayfası: assignedTo olan cihazları lisanslarıyla getir
+router.get('/license-management', async (req, res) => {
+  try {
+    const { search, sayfa = 1, limit = 30 } = req.query;
+    const pg = Math.max(1, +sayfa);
+    const lm = Math.min(100, Math.max(1, +limit));
+
+    const where = {
+      active: true,
+      type: { in: ['BILGISAYAR', 'DIZUSTU'] },
+      OR: [
+        { assignedTo: { not: null } },
+        { userDevices: { some: { active: true } } },
+      ],
+    };
+
+    if (search?.trim()) {
+      const s = search.trim();
+      where.AND = [
+        {
+          OR: [
+            { name: { contains: s, mode: 'insensitive' } },
+            { assignedTo: { contains: s, mode: 'insensitive' } },
+            { directorate: { contains: s, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
+
+    const [toplam, devices] = await Promise.all([
+      prisma.device.count({ where }),
+      prisma.device.findMany({
+        where,
+        select: {
+          id: true, name: true, type: true, assignedTo: true,
+          directorate: true, department: true,
+          licenses: { orderBy: { createdAt: 'desc' } },
+        },
+        orderBy: [{ assignedTo: 'asc' }, { name: 'asc' }],
+        skip: (pg - 1) * lm,
+        take: lm,
+      }),
+    ]);
+
+    res.json({ devices, toplam, sayfa: pg, toplamSayfa: Math.ceil(toplam / lm) });
+  } catch (err) {
+    logger.error('[license-management]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/inventory/license-records ────────────────────────────────────────
+// Kalıcı lisans kayıtları — eşleşme bağımsız snapshot tablosu
+router.get('/license-records', async (req, res) => {
+  try {
+    const { search, sayfa = 1, limit = 30, showInactive } = req.query;
+    const pg = Math.max(1, +sayfa);
+    const lm = Math.min(100, Math.max(1, +limit));
+
+    const where = showInactive === 'true' ? {} : { active: true };
+
+    if (search?.trim()) {
+      const s = search.trim();
+      where.OR = [
+        { deviceName: { contains: s, mode: 'insensitive' } },
+        { username: { contains: s, mode: 'insensitive' } },
+        { directorate: { contains: s, mode: 'insensitive' } },
+        { licenseName: { contains: s, mode: 'insensitive' } },
+      ];
+    }
+
+    const [toplam, records] = await Promise.all([
+      prisma.licenseRecord.count({ where }),
+      prisma.licenseRecord.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (pg - 1) * lm,
+        take: lm,
+      }),
+    ]);
+
+    res.json({ records, toplam, sayfa: pg, toplamSayfa: Math.ceil(toplam / lm) });
+  } catch (err) {
+    logger.error('[license-records]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/inventory/match-preview ─────────────────────────────────────────
+// EPC owner → Portal user eşleştirme önizlemesi (dry run)
+router.get('/match-preview', async (req, res) => {
+  const rol = req.user.sistemRol || req.user.role;
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(rol))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  try {
+    const sonuc = await runMatchAll({ dryRun: true });
+    // Sadece eşleşen + birim eşleşenleri döndür (önce yüksek confidence)
+    sonuc.detay = sonuc.detay
+      .filter(d => d.confidence > 0)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, parseInt(req.query.limit || '100'));
+    res.json(sonuc);
+  } catch (err) {
+    logger.error('[match-preview]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/inventory/match-run ───────────────────────────────────────────
+// EPC owner → Portal user eşleştirmesini uygula (gerçek güncelleme) — eski uyumluluk
+router.post('/match-run', async (req, res) => {
+  if (!['admin'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Sadece admin' });
+
+  try {
+    const sonuc = await runMatchAll({ dryRun: false });
+    sonuc.detay = sonuc.detay
+      .filter(d => d.confidence > 0)
+      .sort((a, b) => b.confidence - a.confidence);
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'MATCH_RUN', modul: 'inventory', detay: { matched: sonuc.detay.length }, ip: req.ip });
+    res.json(sonuc);
+  } catch (err) {
+    logger.error('[match-run]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/inventory/match-apply ────────────────────────────────────────
+// Seçili eşleştirmeleri uygula — [{cihazId, username}]
+router.post('/match-apply', async (req, res) => {
+  if (!['admin'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Sadece admin' });
+
+  const { matches } = req.body;
+  if (!Array.isArray(matches) || matches.length === 0)
+    return res.status(400).json({ error: 'En az bir eşleştirme seçilmeli' });
+
+  try {
+    const result = await applySelectedMatches(matches);
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'MATCH_RUN', modul: 'inventory', detay: { applied: result.applied, total: matches.length }, ip: req.ip });
+    res.json(result);
+  } catch (err) {
+    logger.error('[match-apply]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DELETE /api/inventory/licenses/:licenseId ───────────────────────────────
+router.delete('/licenses/:licenseId', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const licenseId = parseInt(req.params.licenseId);
+  try {
+    const scope = await requireLicenseScopeAccess(licenseId, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Lisans bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu lisans üzerinde işlem yetkiniz yok' });
+
+    // LicenseRecord'da pasifleştir (snapshot korunur)
+    await prisma.licenseRecord.updateMany({
+      where: { deviceLicenseId: licenseId },
+      data: { active: false },
+    });
+
+    await prisma.deviceLicense.delete({ where: { id: licenseId } });
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'LICENSE_DELETE', modul: 'inventory', kayitId: licenseId, ip: req.ip });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Lisans bulunamadı' });
+    logger.error(err);
+    res.status(500).json({ error: 'Lisans silinemedi' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── YAZILIM KATALOĞU ENDPOINT'LERİ ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/inventory/software-catalog — Tüm katalog + kullanılan/kalan
+router.get('/software-catalog', async (req, res) => {
+  try {
+    const catalog = await prisma.softwareCatalog.findMany({ orderBy: { name: 'asc' } });
+
+    const usageCounts = await prisma.deviceLicense.groupBy({
+      by: ['name'],
+      _count: { name: true },
+    });
+    const usageMap = {};
+    for (const u of usageCounts) usageMap[u.name] = u._count.name;
+
+    const result = catalog.map(sw => {
+      const usedCount = usageMap[sw.name] || 0;
+      return {
+        id: sw.id,
+        name: sw.name,
+        category: sw.category,
+        totalLicenses: sw.totalLicenses,
+        usedCount,
+        remaining: sw.totalLicenses - usedCount,
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Katalog alınamadı' });
+  }
+});
+
+// POST /api/inventory/software-catalog/import — Excel'den toplu import
+router.post('/software-catalog/import', upload.single('file'), async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  if (!req.file) return res.status(400).json({ error: 'Dosya yüklenmedi' });
+
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    let created = 0, skipped = 0, errors = [];
+
+    for (const row of rows) {
+      const name = (row['Yazılım Adı'] || row['name'] || row['Name'] || row['YAZILIM'] || '').toString().trim();
+      if (!name) continue;
+
+      const category = (row['Kategori'] || row['category'] || row['Category'] || '').toString().trim() || null;
+      const totalLicenses = parseInt(row['Toplam Lisans'] || row['totalLicenses'] || row['Total'] || 0) || 0;
+
+      try {
+        await prisma.softwareCatalog.upsert({
+          where: { name },
+          update: { category: category || undefined, totalLicenses },
+          create: { name, category, totalLicenses },
+        });
+        created++;
+      } catch (err) {
+        skipped++;
+        errors.push(name);
+      }
+    }
+
+    res.json({ created, skipped, errors, total: rows.length });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Excel import başarısız' });
+  }
+});
+
+// POST /api/inventory/software-catalog — Tekil yazılım ekle
+router.post('/software-catalog', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const { name, category, totalLicenses } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Yazılım adı zorunlu' });
+
+  try {
+    const sw = await prisma.softwareCatalog.create({
+      data: {
+        name: name.trim(),
+        category: category?.trim() || null,
+        totalLicenses: parseInt(totalLicenses) || 0,
+      },
+    });
+    res.status(201).json(sw);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Bu yazılım zaten katalogda' });
+    logger.error(err);
+    res.status(500).json({ error: 'Yazılım eklenemedi' });
+  }
+});
+
+// PUT /api/inventory/software-catalog/:id — Güncelle
+router.put('/software-catalog/:id', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  const { name, category, totalLicenses } = req.body;
+
+  try {
+    const data = {};
+    if (name !== undefined) data.name = name.trim();
+    if (category !== undefined) data.category = category?.trim() || null;
+    if (totalLicenses !== undefined) data.totalLicenses = parseInt(totalLicenses) || 0;
+
+    const sw = await prisma.softwareCatalog.update({ where: { id }, data });
+    res.json(sw);
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Yazılım bulunamadı' });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Bu isimde yazılım zaten var' });
+    logger.error(err);
+    res.status(500).json({ error: 'Güncelleme başarısız' });
+  }
+});
+
+// DELETE /api/inventory/software-catalog/:id — Sil
+router.delete('/software-catalog/:id', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  try {
+    await prisma.softwareCatalog.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Yazılım bulunamadı' });
+    logger.error(err);
+    res.status(500).json({ error: 'Silme başarısız' });
+  }
+});
+
+// ─── POST /api/inventory/:id/assign ──────────────────────────────────────────
+// Manuel kullanıcı atama
+router.post('/:id/assign', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  const { username } = req.body;
+  if (!username?.trim()) return res.status(400).json({ error: 'Username zorunlu' });
+
+  try {
+    const scope = await requireDeviceScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaz üzerinde işlem yetkiniz yok' });
+
+    const user = await prisma.user.findUnique({
+      where: { username: username.trim().toLowerCase() },
+      select: { username: true, displayName: true, directorate: true, department: true },
+    });
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+
+    const device = await prisma.device.update({
+      where: { id },
+      data: {
+        assignedTo:  user.username,
+        directorate: user.directorate,
+        department:  user.department,
+      },
+    });
+
+    // Kalıcı UserDevice kaydı
+    await prisma.userDevice.upsert({
+      where: { username_deviceName: { username: user.username, deviceName: device.name } },
+      create: {
+        username: user.username,
+        deviceName: device.name,
+        deviceId: device.id,
+        deviceType: device.type || 'DIGER',
+        serialNumber: device.serialNumber,
+        active: true,
+      },
+      update: {
+        deviceId: device.id,
+        deviceType: device.type || 'DIGER',
+        serialNumber: device.serialNumber,
+        active: true,
+      },
+    });
+
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'ASSIGN', modul: 'inventory', kayitId: id, detay: { assignedTo: user.username, displayName: user.displayName }, ip: req.ip });
+    res.json({ ok: true, device, user });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    logger.error(err);
+    res.status(500).json({ error: 'Atama başarısız' });
+  }
+});
+
+// ─── DELETE /api/inventory/:id/unassign ───────────────────────────────────────
+// Kullanıcı atamasını kaldır
+router.delete('/:id/unassign', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const id = parseInt(req.params.id);
+  try {
+    const scope = await requireDeviceScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaz üzerinde işlem yetkiniz yok' });
+
+    const device = scope.device;
+
+    // UserDevice kaydını pasifleştir
+    if (device.assignedTo && device.name) {
+      await prisma.userDevice.updateMany({
+        where: { username: device.assignedTo, deviceName: device.name, active: true },
+        data: { active: false },
+      });
+    }
+
+    const updated = await prisma.device.update({
+      where: { id },
+      data: { assignedTo: null, isShared: true },
+    });
+
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'UNASSIGN', modul: 'inventory', kayitId: id, detay: { previousAssignedTo: device.assignedTo }, ip: req.ip });
+    res.json({ ok: true, device: updated });
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Atama kaldırma başarısız' });
+  }
+});
+
 // ─── GET /api/inventory ───────────────────────────────────────────────────────
 // Raw SQL — Prisma ORM'nin LEFT JOIN + OR kısıtlamasını aşmak için
 router.get('/', async (req, res) => {
@@ -207,8 +685,9 @@ router.get('/', async (req, res) => {
     }
 
     if (assignedTo) {
+      const assignedVal = assignedTo === 'me' ? req.user.username : assignedTo;
       base += ` AND LOWER(d."assignedTo") = $${pi}`;
-      params.push(assignedTo.toLowerCase().trim()); pi++;
+      params.push(assignedVal.toLowerCase().trim()); pi++;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -244,6 +723,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   try {
+    const scope = await requireDeviceScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaza erişim yetkiniz yok' });
+
     const device = await prisma.device.findUnique({
       where: { id },
       include: {
@@ -261,7 +744,7 @@ router.get('/:id', async (req, res) => {
 
 // ─── POST /api/inventory ──────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const {
@@ -302,6 +785,7 @@ router.post('/', async (req, res) => {
         assignedUser: { select: { id: true, username: true, displayName: true } },
       },
     });
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'CREATE', modul: 'inventory', kayitId: device.id, detay: { name: name.trim(), type }, ip: req.ip });
     res.status(201).json(device);
   } catch (err) {
     if (err.code === 'P2003') return res.status(400).json({ error: 'Geçersiz lokasyon veya kullanıcı' });
@@ -312,7 +796,7 @@ router.post('/', async (req, res) => {
 
 // ─── PATCH /api/inventory/:id ─────────────────────────────────────────────────
 router.patch('/:id', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const id = parseInt(req.params.id);
@@ -347,6 +831,10 @@ router.patch('/:id', async (req, res) => {
   if (notes        !== undefined) data.notes        = notes?.trim()       || null;
 
   try {
+    const scope = await requireDeviceScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaz üzerinde işlem yetkiniz yok' });
+
     const device = await prisma.device.update({
       where: { id },
       data,
@@ -355,6 +843,7 @@ router.patch('/:id', async (req, res) => {
         assignedUser: { select: { id: true, username: true, displayName: true } },
       },
     });
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'UPDATE', modul: 'inventory', kayitId: id, detay: Object.keys(data), ip: req.ip });
     res.json(device);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Cihaz bulunamadı' });
@@ -367,7 +856,7 @@ router.patch('/:id', async (req, res) => {
 // ─── DELETE /api/inventory/:id ────────────────────────────────────────────────
 // ─── POST /api/inventory/sync-ad ─────────────────────────────────────────────
 router.post('/sync-ad', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   // 30sn timeout ile sarmal
@@ -389,7 +878,7 @@ router.post('/sync-ad', async (req, res) => {
 
 // ─── GET /api/inventory/sync-logs ────────────────────────────────────────────
 router.get('/sync-logs', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const { deviceName, from, to, limit = '100' } = req.query;
@@ -421,20 +910,100 @@ router.get('/sync-logs', async (req, res) => {
 // ─── DELETE /api/inventory/:id ────────────────────────────────────────────────
 // Gerçek silme yok — pasife al
 router.delete('/:id', async (req, res) => {
-  if (!['admin', 'manager'].includes(req.user.role))
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
     return res.status(403).json({ error: 'Yetkiniz yok' });
 
   const id = parseInt(req.params.id);
   try {
+    const scope = await requireDeviceScopeAccess(id, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaz üzerinde işlem yetkiniz yok' });
+
     const device = await prisma.device.update({
       where: { id },
       data:  { active: false, status: 'PASSIVE' },
     });
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'DELETE', modul: 'inventory', kayitId: id, detay: { name: device.name }, ip: req.ip });
     res.json({ ok: true, device });
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Cihaz bulunamadı' });
     logger.error(err);
     res.status(500).json({ error: 'Cihaz pasife alınamadı' });
+  }
+});
+
+
+// ─── GET /api/inventory/:id/licenses ─────────────────────────────────────────
+router.get('/:id/licenses', async (req, res) => {
+  const deviceId = parseInt(req.params.id);
+  try {
+    const scope = await requireDeviceScopeAccess(deviceId, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihazın lisanslarına erişim yetkiniz yok' });
+
+    const licenses = await prisma.deviceLicense.findMany({
+      where: { deviceId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(licenses);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Lisanslar alınamadı' });
+  }
+});
+
+// ─── POST /api/inventory/:id/licenses ────────────────────────────────────────
+router.post('/:id/licenses', async (req, res) => {
+  if (!['admin', 'manager', 'daire_baskani', 'mudur'].includes(req.user.sistemRol || req.user.role))
+    return res.status(403).json({ error: 'Yetkiniz yok' });
+
+  const deviceId = parseInt(req.params.id);
+  const { name, key, baslangicTarihi, bitisTarihi, sinirsiz } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Lisans adı zorunlu' });
+
+  try {
+    const scope = await requireDeviceScopeAccess(deviceId, req.user);
+    if (scope.error === 'not_found') return res.status(404).json({ error: 'Cihaz bulunamadı' });
+    if (scope.error === 'forbidden') return res.status(403).json({ error: 'Bu cihaz için lisans ekleme yetkiniz yok' });
+
+    const device = await prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) return res.status(404).json({ error: 'Cihaz bulunamadı' });
+
+    const license = await prisma.deviceLicense.create({
+      data: {
+        deviceId,
+        name: name.trim(),
+        key: key?.trim() || null,
+        baslangicTarihi: baslangicTarihi ? new Date(baslangicTarihi) : null,
+        bitisTarihi: sinirsiz ? null : (bitisTarihi ? new Date(bitisTarihi) : null),
+        sinirsiz: !!sinirsiz,
+        username: device.assignedTo || null,
+        deviceName: device.name || null,
+      },
+    });
+
+    // Kalıcı LicenseRecord snapshot
+    await prisma.licenseRecord.create({
+      data: {
+        deviceLicenseId: license.id,
+        deviceId,
+        deviceName: device.name || 'Bilinmiyor',
+        username: device.assignedTo || null,
+        directorate: device.directorate || null,
+        department: device.department || null,
+        licenseName: name.trim(),
+        licenseKey: key?.trim() || null,
+        baslangicTarihi: baslangicTarihi ? new Date(baslangicTarihi) : null,
+        bitisTarihi: sinirsiz ? null : (bitisTarihi ? new Date(bitisTarihi) : null),
+        sinirsiz: !!sinirsiz,
+      },
+    });
+
+    logIslem({ kullanici: req.user.username, kullaniciAd: req.user.displayName, islem: 'LICENSE_ADD', modul: 'inventory', kayitId: deviceId, detay: { licenseName: name.trim() }, ip: req.ip });
+    res.status(201).json(license);
+  } catch (err) {
+    logger.error(err);
+    res.status(500).json({ error: 'Lisans eklenemedi' });
   }
 });
 

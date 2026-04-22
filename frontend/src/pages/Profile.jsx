@@ -33,6 +33,7 @@ export default function Profile() {
   const [adUser,          setAdUser]          = useState(null);
   const [createdTickets,  setCreatedTickets]  = useState([]);
   const [assignedTickets, setAssignedTickets] = useState([]);
+  const [myDevices,       setMyDevices]       = useState([]);
   const [loading,         setLoading]         = useState(true);
 
   useEffect(() => {
@@ -40,11 +41,13 @@ export default function Profile() {
       fetch(`${API}/api/users/me`,               { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
       fetch(`${API}/api/tickets?createdBy=me`,   { headers: authHeaders() }).then(r => r.json()),
       fetch(`${API}/api/tickets?assignedTo=me`,  { headers: authHeaders() }).then(r => r.json()),
+      fetch(`${API}/api/inventory?assignedTo=me&limit=50`, { headers: authHeaders() }).then(r => r.ok ? r.json() : { devices: [] }),
     ])
-      .then(([adData, created, assigned]) => {
+      .then(([adData, created, assigned, inv]) => {
         setAdUser(adData);
         setCreatedTickets(Array.isArray(created) ? created : []);
         setAssignedTickets(Array.isArray(assigned) ? assigned : []);
+        setMyDevices(inv.devices || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -139,6 +142,42 @@ export default function Profile() {
           ))}
         </div>
       </div>
+
+      {/* ── Cihazlarim ── */}
+      {myDevices.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #e8ede9', borderRadius: 14, padding: '18px 22px' }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a2e23', margin: '0 0 14px' }}>Cihazlarim</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myDevices.map(d => {
+              const typeIcons = { BILGISAYAR: '🖥️', DIZUSTU: '💻', IP_TELEFON: '📞', YAZICI: '🖨️', SWITCH: '🔀', ACCESS_POINT: '📡', SUNUCU: '🗄️', MONITOR: '🖵', IPAD_TABLET: '📱', UPS: '🔋' };
+              const icon = typeIcons[d.type] || '📦';
+              const now = Date.now();
+              const diff = d.lastSyncAt ? (now - new Date(d.lastSyncAt).getTime()) / 86400000 : null;
+              const epcLabel = diff === null ? 'Bilinmiyor' : diff < 1 ? 'Cevrimici' : diff < 7 ? 'Pasif' : 'Cevrimdisi';
+              const epcColor = diff === null ? '#94a3b8' : diff < 1 ? '#16a34a' : diff < 7 ? '#d97706' : '#dc2626';
+              const epcBg = diff === null ? '#f1f5f9' : diff < 1 ? '#dcfce7' : diff < 7 ? '#fef3c7' : '#fee2e2';
+              return (
+                <div key={d.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  borderRadius: 10, border: '1px solid #f1f5f9', background: '#fafafa',
+                }}>
+                  <span style={{ fontSize: 20 }}>{icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{d.name}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                      {[d.ipAddress, d.model].filter(Boolean).join(' · ') || d.type}
+                    </div>
+                  </div>
+                  <span style={{
+                    background: epcBg, color: epcColor, padding: '3px 8px',
+                    borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                  }}>{epcLabel}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
 {/* ── Biletler ── */}
       {createdTickets.slice(0, 5).length > 0 && (

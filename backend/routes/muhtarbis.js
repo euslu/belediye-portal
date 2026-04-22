@@ -142,7 +142,7 @@ const ekDosyaUpload = multer({
     },
   }),
   fileFilter: (req, file, cb) => cb(null, /pdf|image/.test(file.mimetype)),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 // POST /api/muhtarbis/basvuru  — yeni başvuru (multipart destekli)
@@ -401,6 +401,54 @@ router.get('/yatirimlar/liste', (req, res) => {
   }
 });
 
+// GET /api/muhtarbis/yatirimlar/top-mahalleler — ilçe başına en çok yatırımlı mahalleler
+router.get('/yatirimlar/top-mahalleler', (req, res) => {
+  try {
+    const data = require('../data/yatirimlar.json');
+    const izinliIlceler = filterIlce(req, req.query.ilce);
+    const topN = Math.min(5, Math.max(1, parseInt(req.query.top) || 3));
+    const result = [];
+
+    for (const [il, mahalleler] of Object.entries(data)) {
+      if (Array.isArray(izinliIlceler) && !izinliIlceler.includes(il)) continue;
+      if (!Array.isArray(izinliIlceler) && req.query.ilce && il !== req.query.ilce) continue;
+
+      const mahalleList = [];
+      for (const [mah, d] of Object.entries(mahalleler)) {
+        const talepler = Array.isArray(d[3]) ? d[3] : [];
+        const durumSay = { tamamlandi: 0, islemde: 0, yanitlandi: 0, diger: 0 };
+        talepler.forEach(t => {
+          const durum = (t[5] || '').trim();
+          if (durum === 'Tamamlandı') durumSay.tamamlandi++;
+          else if (durum === 'İşlemde') durumSay.islemde++;
+          else if (durum === 'Yanıtlandı') durumSay.yanitlandi++;
+          else durumSay.diger++;
+        });
+        mahalleList.push({
+          mahalle: mah,
+          muhtar: d[0] || '',
+          toplam: talepler.length,
+          ...durumSay,
+          fotoUrl: `/api/muhtarbis/muhtar-foto/${encodeURIComponent(il)}/${encodeURIComponent(mah.replace(/ MAHALLESİ$/i, '').replace(/ MAHALLESI$/i, ''))}`,
+        });
+      }
+
+      mahalleList.sort((a, b) => b.toplam - a.toplam);
+      result.push({
+        ilce: il,
+        topMahalleler: mahalleList.slice(0, topN),
+        toplamMahalle: mahalleList.length,
+        toplamYatirim: mahalleList.reduce((s, m) => s + m.toplam, 0),
+      });
+    }
+
+    result.sort((a, b) => b.toplamYatirim - a.toplamYatirim);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Muhtarlar listesi ────────────────────────────────────────────────────
 
 // GET /api/muhtarbis/muhtarlar?ilce=&sayfa=1&limit=50&q=
@@ -475,7 +523,7 @@ router.get('/muhtar-foto/:ilce/:mahalle', async (req, res) => {
       return res.send(buffer);
     }
   } catch (e) {
-    logger.error('MSSQL foto hatası:', e.message);
+    logger.error(`MSSQL foto hatası [${ilce}/${mahalle}]: ${e.message}`, { stack: e.stack });
   }
 
   // 2. Statik dosya fallback

@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const authMiddleware = require('../middleware/authMiddleware');
 const { logActivity } = require('../lib/activity');
 const { notifyTicketAssigned } = require('../lib/notifications');
+const { hasMinRole } = require('../middleware/rbac');
 const logger = require('../utils/logger');
 
 router.use(authMiddleware);
@@ -257,7 +258,7 @@ router.post('/tickets/:id/assign', async (req, res) => {
   const ticketId  = parseInt(req.params.id);
   const { groupId, assignedToId } = req.body;
 
-  if (!['admin', 'manager'].includes(req.user.role)) {
+  if (!['admin', 'manager'].includes(req.user.role) && !hasMinRole(req.user, 'mudur')) {
     return res.status(403).json({ error: 'Bu işlem için yetkiniz yok' });
   }
 

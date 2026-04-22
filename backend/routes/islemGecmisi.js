@@ -5,8 +5,12 @@ const auth    = require('../middleware/authMiddleware');
 
 router.use(auth);
 
-// GET /api/islem-gecmisi
+// GET /api/islem-gecmisi (admin + daire_baskani)
 router.get('/', async (req, res) => {
+  const rol = req.user?.sistemRol || req.user?.role;
+  if (!['admin', 'daire_baskani'].includes(rol)) {
+    return res.status(403).json({ error: 'Bu sayfaya erişim yetkiniz yok' });
+  }
   try {
     const { modul, kullanici, islem, baslangic, bitis, sayfa = 1, limit = 50 } = req.query;
     const where = {};

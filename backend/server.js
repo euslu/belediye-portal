@@ -23,13 +23,15 @@ const dashboardRoutes       = require('./routes/dashboard');
 const departmentRoutes      = require('./routes/departments');
 const dashboardConfigRoutes = require('./routes/dashboardConfig');
 const systemSettingsRoutes  = require('./routes/systemSettings');
-const ulakbellRoutes        = require('./routes/ulakbell');
+const ulakbellRoutes              = require('./routes/ulakbell');
+const ulakbellBildirimlerRoutes  = require('./routes/ulakbellBildirimler');
 const pdksRoutes            = require('./routes/pdks');
 const servicedeskRoutes     = require('./routes/servicedesk');
 const servicesRoutes        = require('./routes/services');
 const flexcityRoutes        = require('./routes/flexcity');
 const muhtarbisRoutes       = require('./routes/muhtarbis');
 const muhtarbisAdminRoutes  = require('./routes/muhtarbisAdmin');
+const muhtarbisDuyuruRoutes = require('./routes/muhtarbisDuyuru');
 const randevuRoutes         = require('./routes/randevu');
 const toplantiRoutes        = require('./routes/toplanti');
 const gelistirmeRoutes      = require('./routes/gelistirme');
@@ -38,9 +40,14 @@ const calismaGrubuRoutes    = require('./routes/calismaGrubu');
 const rbacRoutes            = require('./routes/rbac');
 const lokasyonRoutes        = require('./routes/lokasyon');
 const argeRoutes            = require('./routes/arge');
+const menuPermissionRoutes  = require('./routes/menuPermission');
 
 // Zamanlanmış görevler (AD senkronizasyonu)
 require('./lib/scheduler');
+
+// SLA kontrol servisi (30dk'da bir SMS bildirimi)
+const { startSlaChecker } = require('./services/slaChecker');
+startSlaChecker();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -50,6 +57,8 @@ app.use('/muhtar-foto', express.static(path.join(__dirname, 'public/muhtar-fotol
 // İmzalı tutanaklar (auth korumalı)
 const authMiddleware = require('./middleware/authMiddleware');
 app.use('/tutanaklar', authMiddleware, express.static(path.join(__dirname, 'public/tutanaklar')));
+// Başvuru ek dosyaları (auth korumalı)
+app.use('/basvuru-eklentileri', authMiddleware, express.static(path.join(__dirname, 'public/basvuru-eklentileri')));
 
 const ALLOWED_ORIGINS = Array.from(new Set(
   (process.env.FRONTEND_URL || 'http://localhost:5173')
@@ -119,12 +128,14 @@ app.use('/api/dashboard',       dashboardRoutes);
 app.use('/api/dashboard',       dashboardConfigRoutes);
 app.use('/api/system-settings', systemSettingsRoutes);
 app.use('/api/departments',     departmentRoutes);
-app.use('/api/ulakbell',        ulakbellRoutes);
+app.use('/api/ulakbell',              ulakbellRoutes);
+app.use('/api/ulakbell-bildirimler', ulakbellBildirimlerRoutes);
 app.use('/api/pdks',            pdksRoutes);
 app.use('/api/servicedesk',     servicedeskRoutes);
 app.use('/api/services',        servicesRoutes);
 app.use('/api/flexcity',        flexcityRoutes);
 app.use('/api/muhtarbis',       muhtarbisRoutes);
+app.use('/api/muhtarbis/duyuru', muhtarbisDuyuruRoutes);
 app.use('/api/muhtarbis/admin', muhtarbisAdminRoutes);
 app.use('/api/muhtarbis/auth',  muhtarbisAdminRoutes);
 app.use('/api/randevu',         randevuRoutes);
@@ -135,11 +146,21 @@ app.use('/api/calisma-grubu',   calismaGrubuRoutes);
 app.use('/api/rbac',            rbacRoutes);
 app.use('/api/lokasyon',        lokasyonRoutes);
 app.use('/api/arge',            argeRoutes);
+app.use('/api/menu-permission', menuPermissionRoutes);
 app.use('/api/tutanak',        require('./routes/tutanak'));
 // Ticket assign endpoint groups router altında
 app.use('/api',                 groupRoutes);
 
 app.use(require('./middleware/errorHandler'));
+
+// ulakBELL polling servisi
+const { startPoller } = require('./services/ulakbellPoller');
+startPoller();
+
+// Audit log temizliği — günde 1 kez (90 günden eski kayıtları sil)
+const { cleanupOldAuditLogs } = require('./utils/auditCleanup');
+cleanupOldAuditLogs(); // başlangıçta bir kez çalıştır
+setInterval(cleanupOldAuditLogs, 24 * 60 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

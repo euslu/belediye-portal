@@ -42,11 +42,11 @@ router.get('/', auth, async (req, res) => {
 // POST /api/calisma-grubu
 router.post('/', auth, yetkiKontrol, async (req, res) => {
   try {
-    const { ad, aciklama, department, uyeler } = req.body;
+    const { ad, aciklama, directorate, department, uyeler } = req.body;
     const grup = await prisma.calismaGrubu.create({
       data: {
         ad, aciklama,
-        directorate: req.user.directorate || '',
+        directorate: directorate || req.user.directorate || '',
         department: department || req.user.department,
         olusturan: req.user.username,
         uyeler: uyeler?.length ? {

@@ -38,11 +38,12 @@ router.get('/kullanicilar', auth, adminOrDaireBaskani, async (req, res) => {
 
     const rolMap = Object.fromEntries(userRoles.map(r => [r.username, r]));
 
+    // Admin yetkisi sadece UserRole tablosundan gelir, User.role fallback'i admin vermez
     const rolFallback = (u) => {
-      if (u.role === 'admin') return 'admin';
       if (u.role === 'manager') return 'mudur';
       const t = (u.title || '').toLowerCase();
-      if (t.includes('daire başkanı') || t.includes('daire baskani') || t.includes('başkan')) return 'daire_baskani';
+      if (t.includes('daire başkanı') || t.includes('daire baskani')) return 'daire_baskani';
+      if (t.includes('dairesi başkan')) return 'daire_baskani';
       if (t.includes('müdür') || t.includes('mudur')) return 'mudur';
       if (t.includes('şef') || t.includes('sef')) return 'sef';
       return 'personel';

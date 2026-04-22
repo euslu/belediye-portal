@@ -18,8 +18,9 @@ router.get('/', async (req, res) => {
       where,
       orderBy: { name: 'asc' },
       include: {
-        submitType:  { select: { id: true, name: true, key: true, color: true } },
-        _count:      { select: { subjects: true, tickets: true } },
+        submitType:     { select: { id: true, name: true, key: true, color: true } },
+        assignedGroup:  { select: { id: true, name: true } },
+        _count:         { select: { subjects: true, tickets: true } },
       },
     });
     res.json(categories);
@@ -32,16 +33,22 @@ router.get('/', async (req, res) => {
 // ─── POST /api/categories ────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yetkisiz' });
-  const { name, icon, typeId } = req.body;
+  const { name, icon, typeId, assignedGroupId, slaHours, slaWarningHours } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Kategori adı zorunludur' });
   try {
     const category = await prisma.category.create({
       data: {
-        name:   name.trim(),
-        icon:   icon || null,
-        typeId: typeId ? parseInt(typeId) : null,
+        name:            name.trim(),
+        icon:            icon || null,
+        typeId:          typeId          ? parseInt(typeId)          : null,
+        assignedGroupId: assignedGroupId ? parseInt(assignedGroupId) : null,
+        slaHours:        slaHours != null ? parseInt(slaHours)       : null,
+        slaWarningHours: slaWarningHours != null ? parseInt(slaWarningHours) : null,
       },
-      include: { submitType: { select: { id: true, name: true, key: true, color: true } } },
+      include: {
+        submitType:    { select: { id: true, name: true, key: true, color: true } },
+        assignedGroup: { select: { id: true, name: true } },
+      },
     });
     res.status(201).json(category);
   } catch (err) {
@@ -55,17 +62,23 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yetkisiz' });
   const id = parseInt(req.params.id);
-  const { name, active, icon, typeId } = req.body;
+  const { name, active, icon, typeId, assignedGroupId, slaHours, slaWarningHours } = req.body;
   const data = {};
-  if (name   !== undefined) data.name   = name.trim();
-  if (active !== undefined) data.active = active;
-  if (icon   !== undefined) data.icon   = icon;
-  if (typeId !== undefined) data.typeId = typeId ? parseInt(typeId) : null;
+  if (name            !== undefined) data.name            = name.trim();
+  if (active          !== undefined) data.active          = active;
+  if (icon            !== undefined) data.icon            = icon;
+  if (typeId          !== undefined) data.typeId          = typeId          ? parseInt(typeId)          : null;
+  if (assignedGroupId !== undefined) data.assignedGroupId = assignedGroupId ? parseInt(assignedGroupId) : null;
+  if (slaHours        !== undefined) data.slaHours        = slaHours != null ? parseInt(slaHours)       : null;
+  if (slaWarningHours !== undefined) data.slaWarningHours = slaWarningHours != null ? parseInt(slaWarningHours) : null;
   try {
     const category = await prisma.category.update({
       where: { id },
       data,
-      include: { submitType: { select: { id: true, name: true, key: true, color: true } } },
+      include: {
+        submitType:    { select: { id: true, name: true, key: true, color: true } },
+        assignedGroup: { select: { id: true, name: true } },
+      },
     });
     res.json(category);
   } catch (err) {
